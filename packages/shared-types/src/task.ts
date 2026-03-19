@@ -1,0 +1,50 @@
+import type { TaskType, Priority, AssignmentType, TaskStatus } from './enums';
+
+export interface CreateTaskDto {
+  title: string;
+  detail?: string;
+  task_type: TaskType;
+  priority: Priority;
+  assignee_user_id: string;
+  due_at: string;
+  start_at?: string;
+  assignment_type?: AssignmentType;
+  boss_attention_flag?: boolean;
+}
+
+export interface UpdateTaskDto {
+  version: number;
+  title?: string;
+  detail?: string;
+  status?: TaskStatus;
+  progress_percent?: number;
+  latest_progress?: string;
+  due_at?: string;
+  completed_at?: string;
+  blocked_reason?: string;
+  delay_reason?: string;
+}
+
+export interface AssignTaskDto {
+  assignee_user_id: string;
+  assignment_type: AssignmentType;
+  reason?: string;
+}
+
+export interface CompleteTaskDto {
+  latest_progress?: string;
+  completed_at?: string;
+}
+
+export interface DelayTaskDto {
+  new_due_at: string;
+  delay_reason: string;
+}
+
+export interface TaskListQuery {
+  status?: TaskStatus;
+  bucket?: string;
+  priority?: Priority;
+  page?: number;
+  page_size?: number;
+}

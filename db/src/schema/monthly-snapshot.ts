@@ -1,0 +1,31 @@
+import {
+  bigserial,
+  boolean,
+  decimal,
+  integer,
+  pgTable,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core';
+
+export const monthlySnapshot = pgTable('monthly_snapshot', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  snapshotUid: varchar('snapshot_uid', { length: 64 }).notNull().unique(),
+  snapshotRunId: varchar('snapshot_run_id', { length: 64 }).notNull(),
+  snapshotVersion: integer('snapshot_version').notNull().default(1),
+  isLatest: boolean('is_latest').notNull().default(true),
+  snapshotMonth: varchar('snapshot_month', { length: 7 }).notNull(),
+  roleScope: varchar('role_scope', { length: 16 }).notNull(),
+  ownerUserId: varchar('owner_user_id', { length: 128 }),
+  ownerName: varchar('owner_name', { length: 128 }),
+  monthOpenCount: integer('month_open_count').notNull(),
+  monthNewCount: integer('month_new_count').notNull(),
+  monthDueCount: integer('month_due_count').notNull(),
+  monthDoneCount: integer('month_done_count').notNull(),
+  monthOverdueCount: integer('month_overdue_count').notNull(),
+  monthCarryOverCount: integer('month_carry_over_count').notNull(),
+  doneRate: decimal('done_rate', { precision: 5, scale: 4 }).notNull(),
+  overdueRate: decimal('overdue_rate', { precision: 5, scale: 4 }).notNull(),
+  generatedAt: timestamp('generated_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
