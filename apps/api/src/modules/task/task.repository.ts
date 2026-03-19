@@ -1,0 +1,86 @@
+import { Injectable, Inject } from '@nestjs/common';
+import { DATABASE_TOKEN } from '../../database.module';
+import type { Database } from '@leader-sync/db';
+import { task, taskProgressLog, orgCache } from '@leader-sync/db';
+import { eq, and, or, sql, desc } from 'drizzle-orm';
+
+@Injectable()
+export class TaskRepository {
+  constructor(@Inject(DATABASE_TOKEN) private readonly db: Database) {}
+
+  async insert(values: typeof task.$inferInsert) {
+    const [result] = await this.db.insert(task).values(values).returning();
+    return result;
+  }
+
+  async findByUid(taskUid: string) {
+    const [result] = await this.db
+      .select()
+      .from(task)
+      .where(and(eq(task.taskUid, taskUid), sql`${task.deletedAt} IS NULL`));
+    return result || null;
+  }
+
+  async updateWithVersion(
+    taskUid: string,
+    version: number,
+    values: Partial<typeof task.$inferInsert>,
+  ) {
+    const result = await this.db
+      .update(task)
+      .set({ ...values, updatedAt: new Date(), version: version + 1 })
+      .where(and(eq(task.taskUid, taskUid), eq(task.version, version)))
+      .returning();
+    return result[0] || null;
+  }
+
+  async listByUser(
+    userId: string,
+    filters: { status?: string; bucket?: string; priority?: string },
+    page: number,
+    pageSize: number,
+  ) {
+    const conditions = [
+      sql`${task.deletedAt} IS NULL`,
+      or(
+        eq(task.assigneeUserId, userId),
+        eq(task.issuerUserId, userId),
+        sql`${task.collaborators}::jsonb @> ${JSON.stringify([userId])}::jsonb`,
+      ),
+    ];
+
+    if (filters.status) conditions.push(eq(task.status, filters.status));
+    if (filters.bucket) conditions.push(eq(task.monthBucket, filters.bucket));
+    if (filters.priority) conditions.push(eq(task.priority, filters.priority));
+
+    const where = and(...conditions);
+
+    const [items, countResult] = await Promise.all([
+      this.db
+        .select()
+        .from(task)
+        .where(where)
+        .orderBy(desc(task.createdAt))
+        .limit(pageSize)
+        .offset((page - 1) * pageSize),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(task)
+        .where(where),
+    ]);
+
+    return { items, total: countResult[0]?.count || 0 };
+  }
+
+  async insertProgressLog(values: typeof taskProgressLog.$inferInsert) {
+    await this.db.insert(taskProgressLog).values(values);
+  }
+
+  async findOrgUser(userId: string) {
+    const [result] = await this.db
+      .select()
+      .from(orgCache)
+      .where(eq(orgCache.userId, userId));
+    return result || null;
+  }
+}

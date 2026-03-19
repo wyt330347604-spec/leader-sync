@@ -5,6 +5,8 @@ import { TraceIdInterceptor } from './common/interceptors/trace-id.interceptor';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HealthModule } from './modules/health/health.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { TaskModule } from './modules/task/task.module';
 import { DatabaseModule } from './database.module';
 
 @Module({
@@ -12,6 +14,8 @@ import { DatabaseModule } from './database.module';
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
     HealthModule,
+    AuthModule,
+    TaskModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: TraceIdInterceptor },
