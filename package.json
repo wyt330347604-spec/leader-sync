@@ -1,0 +1,20 @@
+{
+  "name": "leader-sync",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "db:generate": "pnpm --filter @leader-sync/db generate",
+    "db:migrate": "pnpm --filter @leader-sync/db migrate",
+    "db:seed": "pnpm --filter @leader-sync/db seed"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "turbo": "^2.8.19",
+    "typescript": "^5.9.3"
+  }
+}
