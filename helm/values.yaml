@@ -1,0 +1,44 @@
+api:
+  replicaCount: 1
+  image:
+    repository: ""
+    tag: "latest"
+    pullPolicy: Always
+  port: 3001
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+web:
+  replicaCount: 1
+  image:
+    repository: ""
+    tag: "latest"
+    pullPolicy: Always
+  port: 3000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+ingress:
+  enabled: true
+  className: "traefik"
+  host: ""
+  tls: true
+  certIssuer: "letsencrypt-prod"
+
+env:
+  DATABASE_URL: "postgresql://leader_sync:leader_sync@47.84.35.154:5432/leader_sync"
+  REDIS_URL: "redis://47.84.35.154:6379"
+  JWT_SECRET: ""
+  JWT_EXPIRES_IN: "8h"
+  APP_ENV: "test"
+  API_PORT: "3001"

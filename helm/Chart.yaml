@@ -1,0 +1,5 @@
+apiVersion: v2
+name: leader-sync
+description: 飞书领导月度督办系统 — API + Web dual deployment
+version: 0.1.0
+appVersion: "1.0.0"

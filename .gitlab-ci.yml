@@ -1,0 +1,137 @@
+variables:
+  AWS_REGION: "ap-southeast-1"
+  ECR_REGISTRY: "426315020006.dkr.ecr.ap-southeast-1.amazonaws.com"
+  ECR_REPO_NAME: "$CI_PROJECT_PATH"
+  IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+  DOCKER_TLS_CERTDIR: ""
+  NAMESPACE: "$CI_PROJECT_NAMESPACE"
+  RELEASE_NAME: "$CI_PROJECT_NAME"
+
+stages:
+  - test
+  - prepare
+  - build
+  - deploy
+
+# ── Stage 1: Test ────────────────────────────────────────────────────────────
+test:
+  stage: test
+  image: node:22-slim
+  cache:
+    key: "$CI_PROJECT_PATH-pnpm"
+    paths:
+      - .pnpm-store/
+  before_script:
+    - npm install -g pnpm@10
+    - pnpm config set store-dir .pnpm-store
+    - pnpm install --frozen-lockfile
+  script:
+    - pnpm --filter @leader-sync/shared-types lint
+    - pnpm --filter @leader-sync/domain-core lint
+    - pnpm --filter @leader-sync/domain-core test -- --reporter=junit --outputFile=report-domain.xml
+    - pnpm --filter @leader-sync/api lint
+  artifacts:
+    when: always
+    reports:
+      junit: packages/domain-core/report-domain.xml
+    expire_in: 7 days
+
+# ── Stage 2: ECR Prepare ─────────────────────────────────────────────────────
+prepare:
+  stage: prepare
+  image:
+    name: amazon/aws-cli:2.34.16
+    entrypoint: [""]
+  script:
+    - aws sts get-caller-identity
+    - |
+      for SUFFIX in api web; do
+        REPO="${ECR_REPO_NAME}-${SUFFIX}"
+        if aws ecr describe-repositories --repository-names "${REPO}" --region "${AWS_REGION}" > /dev/null 2>&1; then
+          echo "ECR repo '${REPO}' exists."
+        else
+          aws ecr create-repository --repository-name "${REPO}" --region "${AWS_REGION}" --image-scanning-configuration scanOnPush=true --image-tag-mutability MUTABLE
+        fi
+      done
+    - ECR_PASSWORD=$(aws ecr get-login-password --region "${AWS_REGION}")
+    - echo "ECR_PASSWORD=${ECR_PASSWORD}" >> ecr.env
+  artifacts:
+    reports:
+      dotenv: ecr.env
+    expire_in: 15 minutes
+
+# ── Stage 3: Build & Push ────────────────────────────────────────────────────
+build-api:
+  stage: build
+  needs:
+    - job: prepare
+      artifacts: true
+  image: docker:27.5.1-cli
+  services:
+    - name: docker:27.5.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: "tcp://localhost:2375"
+  script:
+    - echo "${ECR_PASSWORD}" | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+    - |
+      docker buildx build \
+        --push \
+        --file Dockerfile.api \
+        --tag "${ECR_REGISTRY}/${ECR_REPO_NAME}-api:${IMAGE_TAG}" \
+        --tag "${ECR_REGISTRY}/${ECR_REPO_NAME}-api:latest" \
+        .
+  after_script:
+    - docker logout "${ECR_REGISTRY}"
+
+build-web:
+  stage: build
+  needs:
+    - job: prepare
+      artifacts: true
+  image: docker:27.5.1-cli
+  services:
+    - name: docker:27.5.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: "tcp://localhost:2375"
+  script:
+    - echo "${ECR_PASSWORD}" | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+    - |
+      docker buildx build \
+        --push \
+        --file Dockerfile.web \
+        --tag "${ECR_REGISTRY}/${ECR_REPO_NAME}-web:${IMAGE_TAG}" \
+        --tag "${ECR_REGISTRY}/${ECR_REPO_NAME}-web:latest" \
+        .
+  after_script:
+    - docker logout "${ECR_REGISTRY}"
+
+# ── Stage 4: Deploy to k3s (main only) ──────────────────────────────────────
+deploy:
+  stage: deploy
+  needs:
+    - job: build-api
+    - job: build-web
+    - job: prepare
+      artifacts: true
+  image:
+    name: dtzar/helm-kubectl:4.1.1
+    entrypoint: [""]
+  only:
+    - main
+  script:
+    - kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+    - |
+      helm upgrade --install "${RELEASE_NAME}" ./helm \
+        --namespace "${NAMESPACE}" \
+        --set api.image.repository="${ECR_REGISTRY}/${ECR_REPO_NAME}-api" \
+        --set api.image.tag="${IMAGE_TAG}" \
+        --set web.image.repository="${ECR_REGISTRY}/${ECR_REPO_NAME}-web" \
+        --set web.image.tag="${IMAGE_TAG}" \
+        --set ingress.host="${CI_PROJECT_NAME}.${TEST_DOMAIN}" \
+        --wait \
+        --timeout 5m
+    - kubectl rollout status deployment/${RELEASE_NAME}-api -n ${NAMESPACE} --timeout=3m
+    - kubectl rollout status deployment/${RELEASE_NAME}-web -n ${NAMESPACE} --timeout=3m
+    - kubectl get pods -n ${NAMESPACE} -l app.kubernetes.io/instance=${RELEASE_NAME}
