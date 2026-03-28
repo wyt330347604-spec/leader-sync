@@ -57,7 +57,7 @@ interface MonthlyStats {
   readonly total: number;
   readonly done: number;
   readonly overdue: number;
-  readonly carry_over: number;
+  readonly carryOver: number;
 }
 
 function pct(part: number, total: number): string {
@@ -70,7 +70,7 @@ function StatsBar({ stats }: { readonly stats: MonthlyStats }) {
     { label: '总任务', count: stats.total, bg: 'bg-blue-50 text-blue-700', extra: '' },
     { label: '已完成', count: stats.done, bg: 'bg-green-50 text-green-700', extra: pct(stats.done, stats.total) },
     { label: '已延期', count: stats.overdue, bg: 'bg-red-50 text-red-700', extra: pct(stats.overdue, stats.total) },
-    { label: '继承任务', count: stats.carry_over, bg: 'bg-orange-50 text-orange-700', extra: pct(stats.carry_over, stats.total) },
+    { label: '继承任务', count: stats.carryOver, bg: 'bg-orange-50 text-orange-700', extra: pct(stats.carryOver, stats.total) },
   ] as const;
 
   return (
@@ -91,12 +91,12 @@ function StatsBar({ stats }: { readonly stats: MonthlyStats }) {
 /* ---------- Section C: Leader summary cards ---------- */
 
 interface LeaderSummary {
-  readonly leader_name: string;
+  readonly leaderName: string;
   readonly total: number;
   readonly done: number;
   readonly overdue: number;
-  readonly carry_over: number;
-  readonly completion_rate: number;
+  readonly carryOver: number;
+  readonly doneRate: number;
 }
 
 function LeaderCards({ leaders }: { readonly leaders: readonly LeaderSummary[] }) {
@@ -109,8 +109,8 @@ function LeaderCards({ leaders }: { readonly leaders: readonly LeaderSummary[] }
       <h3 className="mb-4 text-lg font-semibold">负责人概览</h3>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {leaders.map((l) => (
-          <div key={l.leader_name} className="rounded-xl border bg-white p-4 shadow-sm">
-            <p className="text-base font-semibold">{l.leader_name}</p>
+          <div key={l.leaderName} className="rounded-xl border bg-white p-4 shadow-sm">
+            <p className="text-base font-semibold">{l.leaderName}</p>
             <div className="mt-3 grid grid-cols-2 gap-y-2 text-sm">
               <span className="text-gray-500">总任务</span>
               <span className="text-right font-medium">{l.total}</span>
@@ -121,9 +121,9 @@ function LeaderCards({ leaders }: { readonly leaders: readonly LeaderSummary[] }
                 {l.overdue}
               </span>
               <span className="text-gray-500">继承任务</span>
-              <span className="text-right font-medium text-orange-600">{l.carry_over}</span>
+              <span className="text-right font-medium text-orange-600">{l.carryOver}</span>
               <span className="text-gray-500">完成率</span>
-              <span className="text-right font-medium">{Math.round(l.completion_rate * 100)}%</span>
+              <span className="text-right font-medium">{l.doneRate}%</span>
             </div>
           </div>
         ))}
@@ -136,18 +136,19 @@ function LeaderCards({ leaders }: { readonly leaders: readonly LeaderSummary[] }
 
 interface RiskTask {
   readonly title: string;
-  readonly assignee_name: string;
+  readonly assigneeName: string;
   readonly status: string;
   readonly priority: string;
-  readonly due_at: string | null;
-  readonly overdue_days: number;
-  readonly carry_over_count: number;
+  readonly dueAt: string | null;
+  readonly daysToDue: number;
+  readonly isOverdue: boolean;
+  readonly carryOverCount: number;
 }
 
 function riskIndicator(task: RiskTask): string {
   const indicators: string[] = [];
-  if (task.overdue_days > 0) indicators.push('\uD83D\uDEA8');
-  if (task.carry_over_count >= 2) indicators.push('\uD83D\uDD04');
+  if (task.isOverdue) indicators.push('\uD83D\uDEA8');
+  if (task.carryOverCount >= 2) indicators.push('\uD83D\uDD04');
   return indicators.join(' ');
 }
 
@@ -180,17 +181,17 @@ function RiskTable({ tasks }: { readonly tasks: readonly RiskTask[] }) {
                     {riskIndicator(t) && <span className="mr-1">{riskIndicator(t)}</span>}
                     {t.title}
                   </td>
-                  <td className="px-4 py-3">{t.assignee_name || '-'}</td>
+                  <td className="px-4 py-3">{t.assigneeName || '-'}</td>
                   <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
                   <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
                   <td className="whitespace-nowrap px-4 py-3 text-gray-500">
-                    {t.due_at ? new Date(t.due_at).toLocaleDateString('zh-CN') : '-'}
+                    {t.dueAt ? new Date(t.dueAt).toLocaleDateString('zh-CN') : '-'}
                   </td>
-                  <td className={`px-4 py-3 ${t.overdue_days > 0 ? 'font-semibold text-red-600' : ''}`}>
-                    {t.overdue_days > 0 ? `${t.overdue_days}天` : '-'}
+                  <td className={`px-4 py-3 ${t.isOverdue ? 'font-semibold text-red-600' : ''}`}>
+                    {t.daysToDue && t.daysToDue < 0 ? `${Math.abs(t.daysToDue)}天` : '-'}
                   </td>
-                  <td className={`px-4 py-3 ${t.carry_over_count >= 2 ? 'font-semibold text-orange-600' : ''}`}>
-                    {t.carry_over_count}
+                  <td className={`px-4 py-3 ${t.carryOverCount >= 2 ? 'font-semibold text-orange-600' : ''}`}>
+                    {t.carryOverCount}
                   </td>
                 </tr>
               ))}
@@ -233,14 +234,14 @@ function DashboardContent() {
         <>
           <StatsBar
             stats={{
-              total: data.total ?? 0,
-              done: data.done ?? 0,
-              overdue: data.overdue ?? 0,
-              carry_over: data.carry_over ?? 0,
+              total: data.stats?.total ?? 0,
+              done: data.stats?.done ?? 0,
+              overdue: data.stats?.overdue ?? 0,
+              carryOver: data.stats?.carryOver ?? 0,
             }}
           />
-          <LeaderCards leaders={data.leaders ?? []} />
-          <RiskTable tasks={data.risk_tasks ?? []} />
+          <LeaderCards leaders={data.leaderSummary ?? []} />
+          <RiskTable tasks={data.riskTasks ?? []} />
         </>
       ) : null}
     </div>
