@@ -1,0 +1,27 @@
+{
+  "name": "@leader-sync/worker",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "build": "tsc",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@leader-sync/db": "workspace:*",
+    "@leader-sync/shared-types": "workspace:*",
+    "@leader-sync/domain-core": "workspace:*",
+    "drizzle-orm": "^0.44.0",
+    "node-cron": "^3.0.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/node-cron": "^3.0.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  }
+}

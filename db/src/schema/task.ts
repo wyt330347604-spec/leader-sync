@@ -54,6 +54,7 @@ export const task = pgTable(
     carryOverCount: integer('carry_over_count').default(0),
     monthlyCommitmentFlag: boolean('monthly_commitment_flag').default(false),
     bossAttentionFlag: boolean('boss_attention_flag').default(false),
+    overdueNotifiedLeaderAt: timestamp('overdue_notified_leader_at', { withTimezone: true }),
     monthlyCloseLocked: boolean('monthly_close_locked').default(false),
     version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
