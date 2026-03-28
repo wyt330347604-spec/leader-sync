@@ -4,7 +4,7 @@ import { TaskRepository } from './task.repository';
 import {
   validateTransition,
   InvalidTransitionError,
-  MissingBlockedReasonError,
+  MissingStallReasonError,
   generateTaskUid,
   generateLogUid,
 } from '@leader-sync/domain-core';
@@ -31,7 +31,7 @@ export class TaskService {
     const assignee = await this.taskRepository.findOrgUser(dto.assignee_user_id);
 
     const monthBucket = dto.due_at.slice(0, 7);
-    const status = dto.assignee_user_id ? TaskStatus.ASSIGNED : TaskStatus.DRAFT;
+    const status = dto.assignee_user_id ? TaskStatus.NOT_STARTED : TaskStatus.PENDING;
 
     const created = await this.taskRepository.insert({
       taskUid,
@@ -86,7 +86,7 @@ export class TaskService {
     if (dto.status) {
       try {
         validateTransition(current.status, dto.status, {
-          blocked_reason: dto.blocked_reason,
+          stall_reason: dto.stall_reason,
         });
       } catch (error) {
         if (error instanceof InvalidTransitionError) {
@@ -95,10 +95,10 @@ export class TaskService {
             error.message,
           );
         }
-        if (error instanceof MissingBlockedReasonError) {
+        if (error instanceof MissingStallReasonError) {
           throw new BusinessException(
             ErrorCode.INVALID_PARAMS,
-            'blocked_reason required',
+            'stall_reason required',
           );
         }
         throw error;
@@ -113,7 +113,7 @@ export class TaskService {
     if (dto.progress_percent !== undefined) updateValues.progressPercent = dto.progress_percent;
     if (dto.latest_progress !== undefined) updateValues.latestProgress = dto.latest_progress;
     if (dto.due_at !== undefined) updateValues.dueAt = new Date(dto.due_at);
-    if (dto.blocked_reason !== undefined) updateValues.blockedReason = dto.blocked_reason;
+    if (dto.stall_reason !== undefined) updateValues.stallReason = dto.stall_reason;
     if (dto.delay_reason !== undefined) updateValues.delayReason = dto.delay_reason;
 
     if (dto.status === TaskStatus.DONE) {

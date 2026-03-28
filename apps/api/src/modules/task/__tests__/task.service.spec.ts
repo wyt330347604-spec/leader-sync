@@ -22,8 +22,8 @@ function makeFakeTask(overrides: Record<string, unknown> = {}) {
     taskUid: 'task_abc123',
     title: 'Test Task',
     detail: null,
-    taskType: 'operation',
-    priority: 'p1',
+    taskType: 'new',
+    priority: 'urgent_important',
     status: TaskStatus.IN_PROGRESS,
     progressPercent: 50,
     latestProgress: null,
@@ -44,7 +44,7 @@ function makeFakeTask(overrides: Record<string, unknown> = {}) {
     startAt: null,
     dueAt: new Date('2026-04-15'),
     completedAt: null,
-    blockedReason: null,
+    stallReason: null,
     delayReason: null,
     daysToDue: null,
     isOverdue: false,
@@ -88,14 +88,14 @@ describe('TaskService', () => {
       };
       repo.findOrgUser.mockResolvedValue(orgUser);
 
-      const insertedTask = makeFakeTask({ status: TaskStatus.ASSIGNED });
+      const insertedTask = makeFakeTask({ status: TaskStatus.NOT_STARTED });
       repo.insert.mockResolvedValue(insertedTask);
       repo.insertProgressLog.mockResolvedValue(undefined);
 
       const result = await service.createTask('user_issuer', {
         title: 'New Task',
-        task_type: 'operation',
-        priority: 'p1',
+        task_type: 'new',
+        priority: 'urgent_important',
         assignee_user_id: 'user_assignee',
         due_at: '2026-04-15',
       });
@@ -110,7 +110,7 @@ describe('TaskService', () => {
       expect(insertArg.assigneeName).toBe('Assignee Name');
       expect(insertArg.leaderUserId).toBe('user_manager');
       expect(insertArg.monthBucket).toBe('2026-04');
-      expect(insertArg.status).toBe(TaskStatus.ASSIGNED);
+      expect(insertArg.status).toBe(TaskStatus.NOT_STARTED);
       expect(insertArg.version).toBe(1);
       expect(insertArg.createdBy).toBe('user_issuer');
 
@@ -118,7 +118,7 @@ describe('TaskService', () => {
       const logArg = repo.insertProgressLog.mock.calls[0][0];
       expect(logArg.logUid).toMatch(/^log_/);
       expect(logArg.sourceType).toBe('api');
-      expect(logArg.newStatus).toBe(TaskStatus.ASSIGNED);
+      expect(logArg.newStatus).toBe(TaskStatus.NOT_STARTED);
     });
   });
 
@@ -191,7 +191,7 @@ describe('TaskService', () => {
     });
 
     it('throws INVALID_STATUS_TRANSITION for invalid transition', async () => {
-      const current = makeFakeTask({ status: TaskStatus.DRAFT, version: 1 });
+      const current = makeFakeTask({ status: TaskStatus.PENDING, version: 1 });
       repo.findByUid.mockResolvedValue(current);
 
       try {

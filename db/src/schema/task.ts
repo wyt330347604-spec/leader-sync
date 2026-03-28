@@ -22,7 +22,7 @@ export const task = pgTable(
     titleCopy: varchar('title_copy', { length: 500 }),
     detail: text('detail'),
     taskType: varchar('task_type', { length: 32 }).notNull(),
-    priority: varchar('priority', { length: 8 }).notNull(),
+    priority: varchar('priority', { length: 32 }).notNull(),
     status: varchar('status', { length: 32 }).notNull().default('draft'),
     progressPercent: integer('progress_percent').default(0),
     latestProgress: text('latest_progress'),

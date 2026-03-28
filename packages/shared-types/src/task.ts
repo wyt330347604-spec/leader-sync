@@ -21,7 +21,7 @@ export interface UpdateTaskDto {
   latest_progress?: string;
   due_at?: string;
   completed_at?: string;
-  blocked_reason?: string;
+  stall_reason?: string;
   delay_reason?: string;
 }
 

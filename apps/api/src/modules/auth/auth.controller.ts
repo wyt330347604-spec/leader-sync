@@ -45,17 +45,38 @@ export class AuthController {
   @Get('feishu/callback')
   async oauthCallback(
     @Query('code') code: string,
+    @Query('state') state: string,
     @Query('redirect') redirect: string,
     @Res() res: Response,
   ) {
-    const { token } = await this.authService.loginWithCode(code);
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: this.config.get('APP_ENV') === 'production',
-      sameSite: 'lax',
-      maxAge: 8 * 60 * 60 * 1000,
-    });
-    res.redirect(redirect || '/tasks');
+    // No code = user hasn't authorized yet, redirect to Feishu OAuth page
+    // Use state param to carry redirect path (keeps redirect_uri clean for Feishu matching)
+    if (!code) {
+      const baseUrl = this.config.get('APP_BASE_URL', 'http://localhost:3000');
+      const callbackUrl = `${baseUrl}/api/v1/auth/feishu/callback`;
+      const authUrl = this.feishuAuth.getOAuthRedirectUrl(callbackUrl, redirect || '/tasks');
+      res.redirect(authUrl);
+      return;
+    }
+
+    // Feishu sends back: ?code=xxx&state=<redirect_path>
+    const redirectPath = state || redirect || '/tasks';
+
+    try {
+      const { token } = await this.authService.loginWithCode(code);
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: this.config.get('APP_ENV') === 'production',
+        sameSite: 'lax',
+        maxAge: 8 * 60 * 60 * 1000,
+      });
+      // Validate redirect is internal path
+      const safePath = redirectPath.startsWith('/') && !redirectPath.startsWith('//') ? redirectPath : '/tasks';
+      res.redirect(safePath);
+    } catch (error) {
+      console.error('OAuth callback error:', error);
+      res.redirect('/tasks?error=auth_failed');
+    }
   }
 
   @Get('me')

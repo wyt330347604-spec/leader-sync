@@ -37,7 +37,7 @@ export class UpdateTaskRequestDto implements UpdateTaskDto {
 
   @IsString()
   @IsOptional()
-  blocked_reason?: string;
+  stall_reason?: string;
 
   @IsString()
   @IsOptional()

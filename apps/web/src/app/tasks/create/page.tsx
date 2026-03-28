@@ -6,21 +6,15 @@ import { apiFetch } from '@/lib/api-client';
 import { ensureAuth } from '@/lib/auth';
 
 const TASK_TYPES = [
-  { value: 'strategy', label: '战略事项' },
-  { value: 'operation', label: '运营事项' },
-  { value: 'project', label: '项目事项' },
-  { value: 'report', label: '汇报事项' },
-  { value: 'meeting', label: '会议事项' },
-  { value: 'collaboration', label: '协同事项' },
-  { value: 'follow_up', label: '督办事项' },
-  { value: 'other', label: '其他' },
+  { value: 'carry_over', label: '上月遗留' },
+  { value: 'new', label: '本月新增' },
 ];
 
 const PRIORITIES = [
-  { value: 'p0', label: 'P0 极高' },
-  { value: 'p1', label: 'P1 高' },
-  { value: 'p2', label: 'P2 中' },
-  { value: 'p3', label: 'P3 低' },
+  { value: 'urgent_important', label: '重要紧急' },
+  { value: 'important_not_urgent', label: '重要不紧急' },
+  { value: 'urgent_not_important', label: '紧急不重要' },
+  { value: 'not_urgent_not_important', label: '不紧急不重要' },
 ];
 
 const inputClass =
@@ -35,8 +29,8 @@ export default function TaskCreatePage() {
   const [error, setError] = useState('');
 
   const [title, setTitle] = useState('');
-  const [taskType, setTaskType] = useState('project');
-  const [priority, setPriority] = useState('p2');
+  const [taskType, setTaskType] = useState('new');
+  const [priority, setPriority] = useState('urgent_important');
   const [assigneeUserId, setAssigneeUserId] = useState('');
   const [dueAt, setDueAt] = useState('');
   const [detail, setDetail] = useState('');

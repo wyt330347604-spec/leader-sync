@@ -1,21 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { canTransition, validateTransition, InvalidTransitionError, MissingBlockedReasonError } from '../task-state-machine';
+import { canTransition, validateTransition, InvalidTransitionError, MissingStallReasonError } from '../task-state-machine';
 
 describe('canTransition', () => {
   const validCases: [string, string][] = [
-    ['draft', 'assigned'],
-    ['assigned', 'in_progress'],
-    ['assigned', 'cancelled'],
-    ['in_progress', 'blocked'],
-    ['blocked', 'in_progress'],
-    ['in_progress', 'pending_review'],
-    ['pending_review', 'done'],
-    ['pending_review', 'in_progress'],
+    ['pending', 'not_started'],
+    ['pending', 'shelved'],
+    ['not_started', 'in_progress'],
+    ['not_started', 'shelved'],
+    ['in_progress', 'stalled'],
     ['in_progress', 'done'],
+    ['stalled', 'in_progress'],
+    ['stalled', 'shelved'],
     ['done', 'reopened'],
-    ['reopened', 'in_progress'],
     ['done', 'closed'],
-    ['cancelled', 'closed'],
+    ['reopened', 'in_progress'],
+    ['shelved', 'closed'],
   ];
 
   it.each(validCases)('%s → %s should be valid', (from, to) => {
@@ -23,15 +22,29 @@ describe('canTransition', () => {
   });
 
   const invalidCases: [string, string][] = [
-    ['draft', 'done'],
-    ['draft', 'in_progress'],
+    ['pending', 'done'],
+    ['pending', 'in_progress'],
+    ['pending', 'stalled'],
+    ['not_started', 'done'],
+    ['not_started', 'pending'],
+    ['in_progress', 'pending'],
+    ['in_progress', 'shelved'],
     ['done', 'in_progress'],
-    ['closed', 'draft'],
+    ['done', 'pending'],
+    ['closed', 'pending'],
+    ['closed', 'not_started'],
     ['closed', 'in_progress'],
+    ['closed', 'stalled'],
+    ['closed', 'done'],
     ['closed', 'reopened'],
-    ['cancelled', 'in_progress'],
-    ['blocked', 'done'],
-    ['assigned', 'done'],
+    ['closed', 'shelved'],
+    ['closed', 'closed'],
+    ['shelved', 'in_progress'],
+    ['shelved', 'pending'],
+    ['reopened', 'done'],
+    ['reopened', 'pending'],
+    ['stalled', 'done'],
+    ['stalled', 'pending'],
   ];
 
   it.each(invalidCases)('%s → %s should be invalid', (from, to) => {
@@ -39,31 +52,31 @@ describe('canTransition', () => {
   });
 
   it('should return false for unknown status', () => {
-    expect(canTransition('unknown', 'draft')).toBe(false);
+    expect(canTransition('unknown', 'pending')).toBe(false);
   });
 });
 
 describe('validateTransition', () => {
   it('should not throw for valid transition', () => {
-    expect(() => validateTransition('draft', 'assigned')).not.toThrow();
+    expect(() => validateTransition('pending', 'not_started')).not.toThrow();
   });
 
   it('should throw InvalidTransitionError for invalid transition', () => {
-    expect(() => validateTransition('draft', 'done')).toThrow(InvalidTransitionError);
+    expect(() => validateTransition('pending', 'done')).toThrow(InvalidTransitionError);
   });
 
-  it('should throw MissingBlockedReasonError when transitioning to blocked without reason', () => {
-    expect(() => validateTransition('in_progress', 'blocked')).toThrow(MissingBlockedReasonError);
-    expect(() => validateTransition('in_progress', 'blocked', { blocked_reason: '' })).toThrow(MissingBlockedReasonError);
-    expect(() => validateTransition('in_progress', 'blocked', { blocked_reason: '  ' })).toThrow(MissingBlockedReasonError);
+  it('should throw MissingStallReasonError when transitioning to stalled without reason', () => {
+    expect(() => validateTransition('in_progress', 'stalled')).toThrow(MissingStallReasonError);
+    expect(() => validateTransition('in_progress', 'stalled', { stall_reason: '' })).toThrow(MissingStallReasonError);
+    expect(() => validateTransition('in_progress', 'stalled', { stall_reason: '  ' })).toThrow(MissingStallReasonError);
   });
 
-  it('should not throw when transitioning to blocked with reason', () => {
-    expect(() => validateTransition('in_progress', 'blocked', { blocked_reason: 'Waiting for data' })).not.toThrow();
+  it('should not throw when transitioning to stalled with reason', () => {
+    expect(() => validateTransition('in_progress', 'stalled', { stall_reason: '等待数据' })).not.toThrow();
   });
 
-  it('should throw for any transition from closed', () => {
-    const allStatuses = ['draft', 'assigned', 'in_progress', 'blocked', 'pending_review', 'done', 'reopened', 'cancelled', 'closed'];
+  it('should throw for any transition from closed (terminal state)', () => {
+    const allStatuses = ['pending', 'not_started', 'in_progress', 'stalled', 'done', 'reopened', 'shelved', 'closed'];
     for (const to of allStatuses) {
       expect(canTransition('closed', to)).toBe(false);
     }

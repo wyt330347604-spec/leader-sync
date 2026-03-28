@@ -1,8 +1,8 @@
 const PRIORITY_CONFIG: Record<string, { label: string; className: string }> = {
-  p0: { label: 'P0 极高', className: 'bg-red-100 text-red-700' },
-  p1: { label: 'P1 高', className: 'bg-orange-100 text-orange-700' },
-  p2: { label: 'P2 中', className: 'bg-blue-100 text-blue-700' },
-  p3: { label: 'P3 低', className: 'bg-gray-100 text-gray-600' },
+  urgent_important: { label: '重要紧急', className: 'bg-red-100 text-red-700' },
+  important_not_urgent: { label: '重要不紧急', className: 'bg-orange-100 text-orange-700' },
+  urgent_not_important: { label: '紧急不重要', className: 'bg-blue-100 text-blue-700' },
+  not_urgent_not_important: { label: '不紧急不重要', className: 'bg-gray-100 text-gray-600' },
 };
 
 export function PriorityBadge({ priority }: { priority: string }) {
