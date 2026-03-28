@@ -32,7 +32,7 @@ export class DashboardService {
     for (const t of tasks) {
       const leaderId = t.leaderUserId || t.assigneeManagerUserId || 'unknown';
       const prev = leaderMap.get(leaderId) ?? {
-        name: '',
+        name: t.leaderName || t.assigneeManagerName || '',
         total: 0,
         done: 0,
         overdue: 0,
@@ -40,7 +40,7 @@ export class DashboardService {
       };
 
       leaderMap.set(leaderId, {
-        name: prev.name,
+        name: prev.name || t.leaderName || t.assigneeManagerName || '',
         total: prev.total + 1,
         done: prev.done + (t.status === 'done' ? 1 : 0),
         overdue:
