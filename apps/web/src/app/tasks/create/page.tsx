@@ -18,9 +18,9 @@ const PRIORITIES = [
 ];
 
 const inputClass =
-  'block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+  'block w-full rounded-xl bg-[#f5f5f7] px-4 py-3 text-sm text-[#1d1d1f] placeholder-[#86868b] transition-all duration-300 ease-out focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071e3]/40 focus:shadow-[0_0_0_4px_rgba(0,113,227,0.1)]';
 
-const labelClass = 'mb-1 block text-sm font-medium text-gray-700';
+const labelClass = 'mb-1.5 block text-xs font-medium text-[#6e6e73]';
 
 export default function TaskCreatePage() {
   const router = useRouter();
@@ -73,25 +73,31 @@ export default function TaskCreatePage() {
   }
 
   if (!authed) {
-    return <div className="py-12 text-center text-gray-500">正在验证登录状态...</div>;
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-[#86868b]">正在验证登录状态...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <div className="mb-6 flex items-center gap-4">
-        <Link href="/tasks" className="text-sm text-blue-600 hover:underline">
-          &larr; 返回任务列表
-        </Link>
-        <h2 className="text-xl font-semibold">新建任务</h2>
-      </div>
+    <div className="mx-auto max-w-xl pb-16 pt-8">
+      <Link
+        href="/tasks"
+        className="inline-block text-sm text-[#0071e3] transition-all duration-300 ease-out hover:text-[#0077ed]"
+      >
+        &larr; 返回任务列表
+      </Link>
+
+      <h2 className="mt-4 mb-8 text-3xl font-bold tracking-tight text-[#1d1d1f]">新建任务</h2>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-6 rounded-2xl bg-[#ff3b30]/5 px-5 py-4 text-sm text-[#ff3b30]">
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border bg-white p-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {/* Title */}
         <div>
           <label htmlFor="title" className={labelClass}>标题 *</label>
@@ -189,35 +195,45 @@ export default function TaskCreatePage() {
         </div>
 
         {/* Boss attention flag */}
-        <div className="flex items-center gap-2">
-          <input
-            id="boss_attention"
-            type="checkbox"
-            checked={bossAttentionFlag}
-            onChange={(e) => setBossAttentionFlag(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
-          <label htmlFor="boss_attention" className="text-sm text-gray-700">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={bossAttentionFlag}
+            onClick={() => setBossAttentionFlag(!bossAttentionFlag)}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-out ${
+              bossAttentionFlag ? 'bg-[#0071e3]' : 'bg-[#e5e5ea]'
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 translate-y-0.5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.15)] transition-all duration-300 ease-out ${
+                bossAttentionFlag ? 'translate-x-[22px]' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+          <label
+            onClick={() => setBossAttentionFlag(!bossAttentionFlag)}
+            className="cursor-pointer text-sm text-[#1d1d1f]"
+          >
             老板关注
           </label>
         </div>
 
         {/* Submit */}
-        <div className="flex justify-end gap-3">
-          <Link
-            href="/tasks"
-            className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            取消
-          </Link>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {submitting ? '提交中...' : '创建任务'}
-          </button>
-        </div>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full rounded-full bg-[#0071e3] py-3.5 text-base font-medium text-white transition-all duration-300 ease-out hover:bg-[#0077ed] hover:shadow-[0_4px_16px_rgba(0,113,227,0.3)] disabled:opacity-50"
+        >
+          {submitting ? '提交中...' : '创建任务'}
+        </button>
+
+        <Link
+          href="/tasks"
+          className="block text-center text-sm text-[#6e6e73] transition-all duration-300 ease-out hover:text-[#1d1d1f]"
+        >
+          取消
+        </Link>
       </form>
     </div>
   );

@@ -31,20 +31,11 @@ const TASK_TYPE_LABELS: Record<string, string> = {
 };
 
 const inputClass =
-  'block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+  'block w-full rounded-xl bg-[#f5f5f7] px-4 py-3 text-sm text-[#1d1d1f] placeholder-[#86868b] transition-all duration-300 ease-out focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071e3]/40 focus:shadow-[0_0_0_4px_rgba(0,113,227,0.1)]';
 
 function formatDate(val: string | null | undefined): string {
   if (!val) return '-';
   return new Date(val).toLocaleString('zh-CN');
-}
-
-function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-4 gap-2 border-b py-3 last:border-b-0">
-      <dt className="text-sm font-medium text-gray-500">{label}</dt>
-      <dd className="col-span-3 text-sm text-gray-900">{children}</dd>
-    </div>
-  );
 }
 
 export default function TaskDetailPage({ params }: { params: Promise<{ task_uid: string }> }) {
@@ -161,91 +152,145 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
   }
 
   if (!authed) {
-    return <div className="py-12 text-center text-gray-500">正在验证登录状态...</div>;
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-[#86868b]">正在验证登录状态...</p>
+      </div>
+    );
   }
 
   if (isLoading) {
-    return <div className="py-12 text-center text-gray-500">加载中...</div>;
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-[#86868b]">加载中...</p>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="py-12 text-center text-red-500">加载失败: {error.message}</div>;
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-[#ff3b30]">加载失败: {error.message}</p>
+      </div>
+    );
   }
 
   if (!task) {
-    return <div className="py-12 text-center text-gray-400">任务不存在</div>;
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-[#86868b]">任务不存在</p>
+      </div>
+    );
   }
 
-  return (
-    <div className="mx-auto max-w-3xl">
-      <div className="mb-6">
-        <Link href="/tasks" className="text-sm text-blue-600 hover:underline">
-          &larr; 返回任务列表
-        </Link>
-      </div>
+  const currentProgress = task.progress_percent ?? task.progressPercent ?? 0;
 
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">{task.title}</h2>
-          <div className="mt-2 flex gap-2">
-            <StatusBadge status={task.status} />
-            <PriorityBadge priority={task.priority} />
-            {(task.boss_attention_flag ?? task.bossAttentionFlag) && (
-              <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-600">
-                老板关注
-              </span>
-            )}
-          </div>
+  return (
+    <div className="mx-auto max-w-3xl pb-16 pt-8">
+      {/* Back */}
+      <Link
+        href="/tasks"
+        className="inline-block text-sm text-[#0071e3] transition-all duration-300 ease-out hover:text-[#0077ed]"
+      >
+        &larr; 返回
+      </Link>
+
+      {/* Hero title */}
+      <div className="mt-4 mb-8">
+        <h2 className="text-2xl font-bold tracking-tight text-[#1d1d1f]">{task.title}</h2>
+        <div className="mt-3 flex items-center gap-2">
+          <StatusBadge status={task.status} />
+          <PriorityBadge priority={task.priority} />
+          {(task.boss_attention_flag ?? task.bossAttentionFlag) && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ff3b30]/5 px-2.5 py-1 text-xs font-medium text-[#ff3b30]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#ff3b30]" />
+              老板关注
+            </span>
+          )}
         </div>
       </div>
 
       {saveError && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-6 rounded-2xl bg-[#ff3b30]/5 px-5 py-4 text-sm text-[#ff3b30]">
           {saveError}
         </div>
       )}
 
-      {/* Info card */}
-      <div className="mb-6 rounded-lg border bg-white p-6">
-        <dl>
-          <InfoRow label="任务类型">
-            {TASK_TYPE_LABELS[task.task_type || task.taskType] || task.task_type || task.taskType || '-'}
-          </InfoRow>
-          <InfoRow label="负责人">{task.assignee_name || task.assigneeName || '-'}</InfoRow>
-          <InfoRow label="创建人">{task.creator_name || task.creatorName || '-'}</InfoRow>
-          <InfoRow label="截止时间">{formatDate(task.due_at || task.dueAt)}</InfoRow>
-          <InfoRow label="开始时间">{formatDate(task.start_at || task.startAt)}</InfoRow>
-          <InfoRow label="进度">{task.progress_percent ?? task.progressPercent ?? 0}%</InfoRow>
-          <InfoRow label="最新进展">{task.latest_progress || task.latestProgress || '-'}</InfoRow>
-          {(task.detail) && (
-            <InfoRow label="详细描述">
-              <div className="whitespace-pre-wrap">{task.detail}</div>
-            </InfoRow>
-          )}
-          <InfoRow label="创建时间">{formatDate(task.created_at || task.createdAt)}</InfoRow>
-          <InfoRow label="更新时间">{formatDate(task.updated_at || task.updatedAt)}</InfoRow>
-        </dl>
+      {/* Progress section */}
+      <div className="mb-6 rounded-2xl bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-[#6e6e73]">完成进度</p>
+          <p className="tabular-nums text-2xl font-bold text-[#1d1d1f]">{currentProgress}%</p>
+        </div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#f5f5f7]">
+          <div
+            className="h-full rounded-full bg-[#34c759] transition-all duration-500 ease-out"
+            style={{ width: `${Math.min(currentProgress, 100)}%` }}
+          />
+        </div>
+        {(task.latest_progress || task.latestProgress) && (
+          <p className="mt-3 text-sm text-[#6e6e73]">
+            {task.latest_progress || task.latestProgress}
+          </p>
+        )}
       </div>
 
-      {/* Actions */}
+      {/* Info cards grid */}
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
+          <p className="text-xs font-medium text-[#86868b]">任务类型</p>
+          <p className="mt-1 text-sm font-medium text-[#1d1d1f]">
+            {TASK_TYPE_LABELS[task.task_type || task.taskType] || task.task_type || task.taskType || '-'}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
+          <p className="text-xs font-medium text-[#86868b]">负责人</p>
+          <p className="mt-1 text-sm font-medium text-[#1d1d1f]">{task.assignee_name || task.assigneeName || '-'}</p>
+        </div>
+        <div className="rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
+          <p className="text-xs font-medium text-[#86868b]">创建人</p>
+          <p className="mt-1 text-sm font-medium text-[#1d1d1f]">{task.creator_name || task.creatorName || '-'}</p>
+        </div>
+        <div className="rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
+          <p className="text-xs font-medium text-[#86868b]">截止时间</p>
+          <p className="mt-1 tabular-nums text-sm font-medium text-[#1d1d1f]">{formatDate(task.due_at || task.dueAt)}</p>
+        </div>
+        <div className="rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
+          <p className="text-xs font-medium text-[#86868b]">开始时间</p>
+          <p className="mt-1 tabular-nums text-sm font-medium text-[#1d1d1f]">{formatDate(task.start_at || task.startAt)}</p>
+        </div>
+        <div className="rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
+          <p className="text-xs font-medium text-[#86868b]">创建时间</p>
+          <p className="mt-1 tabular-nums text-sm font-medium text-[#1d1d1f]">{formatDate(task.created_at || task.createdAt)}</p>
+        </div>
+      </div>
+
+      {/* Detail section */}
+      {task.detail && (
+        <div className="mb-6 rounded-2xl bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
+          <p className="mb-2 text-xs font-medium text-[#86868b]">详细描述</p>
+          <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#1d1d1f]">{task.detail}</div>
+        </div>
+      )}
+
+      {/* Action buttons */}
       <div className="mb-6 flex gap-3">
         <button
           onClick={() => setEditingProgress((v) => !v)}
-          className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          className="rounded-full bg-[#0071e3] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#0077ed] hover:shadow-[0_4px_16px_rgba(0,113,227,0.3)]"
         >
           {editingProgress ? '取消编辑' : '更新进展'}
         </button>
         <button
           onClick={handleMarkDone}
           disabled={saving}
-          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+          className="rounded-full bg-[#34c759] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#2db84e] hover:shadow-[0_4px_16px_rgba(52,199,89,0.3)] disabled:opacity-50"
         >
           提交完成
         </button>
         <button
           onClick={() => setShowDelayForm((v) => !v)}
-          className="rounded-lg border border-orange-300 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50"
+          className="rounded-full border-0 bg-white px-6 py-2.5 text-sm font-medium text-[#ff9500] shadow-[0_2px_12px_rgba(0,0,0,0.08)] transition-all duration-300 ease-out hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
         >
           {showDelayForm ? '取消延期' : '申请延期'}
         </button>
@@ -253,11 +298,11 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
 
       {/* Edit progress form */}
       {editingProgress && (
-        <div className="mb-6 rounded-lg border bg-white p-6">
-          <h3 className="mb-4 font-medium">更新进展</h3>
-          <div className="space-y-4">
+        <div className="mb-6 rounded-2xl bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
+          <h3 className="mb-5 text-lg font-semibold text-[#1d1d1f]">更新进展</h3>
+          <div className="space-y-5">
             <div>
-              <label htmlFor="edit_status" className="mb-1 block text-sm font-medium text-gray-700">状态</label>
+              <label htmlFor="edit_status" className="mb-1.5 block text-xs font-medium text-[#6e6e73]">状态</label>
               <select
                 id="edit_status"
                 value={newStatus}
@@ -270,22 +315,25 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               </select>
             </div>
             <div>
-              <label htmlFor="edit_percent" className="mb-1 block text-sm font-medium text-gray-700">
-                进度百分比: {progressPercent}%
+              <label htmlFor="edit_percent" className="mb-1.5 block text-xs font-medium text-[#6e6e73]">
+                进度百分比
               </label>
-              <input
-                id="edit_percent"
-                type="range"
-                min={0}
-                max={100}
-                step={5}
-                value={progressPercent}
-                onChange={(e) => setProgressPercent(Number(e.target.value))}
-                className="w-full"
-              />
+              <div className="flex items-center gap-4">
+                <input
+                  id="edit_percent"
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={progressPercent}
+                  onChange={(e) => setProgressPercent(Number(e.target.value))}
+                  className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[#f5f5f7] accent-[#0071e3]"
+                />
+                <span className="tabular-nums text-sm font-semibold text-[#1d1d1f]">{progressPercent}%</span>
+              </div>
             </div>
             <div>
-              <label htmlFor="edit_progress" className="mb-1 block text-sm font-medium text-gray-700">最新进展</label>
+              <label htmlFor="edit_progress" className="mb-1.5 block text-xs font-medium text-[#6e6e73]">最新进展</label>
               <textarea
                 id="edit_progress"
                 rows={3}
@@ -299,7 +347,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               <button
                 onClick={handleUpdateProgress}
                 disabled={saving}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-full bg-[#0071e3] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#0077ed] hover:shadow-[0_4px_16px_rgba(0,113,227,0.3)] disabled:opacity-50"
               >
                 {saving ? '保存中...' : '保存'}
               </button>
@@ -310,11 +358,11 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
 
       {/* Delay form */}
       {showDelayForm && (
-        <div className="mb-6 rounded-lg border border-orange-200 bg-orange-50 p-6">
-          <h3 className="mb-4 font-medium text-orange-700">申请延期</h3>
-          <div className="space-y-4">
+        <div className="mb-6 rounded-2xl bg-[#ff9500]/5 p-6">
+          <h3 className="mb-5 text-lg font-semibold text-[#ff9500]">申请延期</h3>
+          <div className="space-y-5">
             <div>
-              <label htmlFor="new_due_at" className="mb-1 block text-sm font-medium text-gray-700">新截止时间 *</label>
+              <label htmlFor="new_due_at" className="mb-1.5 block text-xs font-medium text-[#6e6e73]">新截止时间 *</label>
               <input
                 id="new_due_at"
                 type="datetime-local"
@@ -325,7 +373,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               />
             </div>
             <div>
-              <label htmlFor="delay_reason" className="mb-1 block text-sm font-medium text-gray-700">延期原因 *</label>
+              <label htmlFor="delay_reason" className="mb-1.5 block text-xs font-medium text-[#6e6e73]">延期原因 *</label>
               <textarea
                 id="delay_reason"
                 rows={3}
@@ -340,7 +388,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               <button
                 onClick={handleDelay}
                 disabled={delaySubmitting || !newDueAt || !delayReason.trim()}
-                className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+                className="rounded-full bg-[#ff9500] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#e68600] hover:shadow-[0_4px_16px_rgba(255,149,0,0.3)] disabled:opacity-50"
               >
                 {delaySubmitting ? '提交中...' : '提交延期申请'}
               </button>

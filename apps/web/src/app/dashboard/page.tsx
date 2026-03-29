@@ -22,6 +22,14 @@ function buildMonthOptions(): readonly { label: string; value: string }[] {
   return options;
 }
 
+function getMonthLabel(month: string): string {
+  const parts = month.split('-');
+  if (parts.length === 2) {
+    return `${parseInt(parts[1], 10)}月`;
+  }
+  return month;
+}
+
 /* ---------- Section A: Month selector ---------- */
 
 function MonthSelector({
@@ -33,15 +41,15 @@ function MonthSelector({
 }) {
   const options = buildMonthOptions();
   return (
-    <div className="mb-6 flex items-center gap-2">
+    <div className="flex items-center gap-2">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+          className={`rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 ease-out ${
             value === o.value
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              ? 'bg-[#0071e3] text-white shadow-[0_2px_12px_rgba(0,113,227,0.3)]'
+              : 'bg-white text-[#6e6e73] shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)]'
           }`}
         >
           {o.label}
@@ -51,7 +59,7 @@ function MonthSelector({
   );
 }
 
-/* ---------- Section B: Monthly stats bar ---------- */
+/* ---------- Section B: Hero stats ---------- */
 
 interface MonthlyStats {
   readonly total: number;
@@ -65,25 +73,35 @@ function pct(part: number, total: number): string {
   return `${Math.round((part / total) * 100)}%`;
 }
 
-function StatsBar({ stats }: { readonly stats: MonthlyStats }) {
+function HeroStats({ stats, month }: { readonly stats: MonthlyStats; readonly month: string }) {
   const cards = [
-    { label: '总任务', count: stats.total, bg: 'bg-blue-50 text-blue-700', extra: '' },
-    { label: '已完成', count: stats.done, bg: 'bg-green-50 text-green-700', extra: pct(stats.done, stats.total) },
-    { label: '已延期', count: stats.overdue, bg: 'bg-red-50 text-red-700', extra: pct(stats.overdue, stats.total) },
-    { label: '继承任务', count: stats.carryOver, bg: 'bg-orange-50 text-orange-700', extra: pct(stats.carryOver, stats.total) },
+    { label: '总任务', count: stats.total, extra: '' },
+    { label: '已完成', count: stats.done, extra: pct(stats.done, stats.total) },
+    { label: '已延期', count: stats.overdue, extra: pct(stats.overdue, stats.total) },
+    { label: '继承', count: stats.carryOver, extra: pct(stats.carryOver, stats.total) },
   ] as const;
 
   return (
-    <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-      {cards.map((c) => (
-        <div key={c.label} className={`rounded-xl p-4 ${c.bg}`}>
-          <p className="text-sm font-medium opacity-80">{c.label}</p>
-          <p className="mt-1 text-2xl font-bold">
-            {c.count}
-            {c.extra && <span className="ml-2 text-sm font-normal opacity-70">{c.extra}</span>}
-          </p>
+    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-[#000000] to-[#1d1d1f] px-8 py-16 sm:px-12">
+      <div className="relative z-10">
+        <p className="mb-1 text-sm font-medium tracking-wide text-white/50">督办概览</p>
+        <h2 className="mb-10 text-4xl font-bold tracking-tight text-white">
+          {getMonthLabel(month)} 督办概览
+        </h2>
+        <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+          {cards.map((c) => (
+            <div key={c.label} className="text-center">
+              <p className="tabular-nums text-5xl font-bold text-white">{c.count}</p>
+              <p className="mt-2 text-sm text-white/50">
+                {c.label}
+                {c.extra && <span className="ml-1.5 text-white/30">{c.extra}</span>}
+              </p>
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
+      {/* Subtle decorative gradient orb */}
+      <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#0071e3]/10 blur-3xl" />
     </div>
   );
 }
@@ -112,71 +130,89 @@ function LeaderCard({ leader }: { readonly leader: LeaderSummary }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="rounded-xl border bg-white shadow-sm">
+    <div className="group rounded-2xl bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.08)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full p-4 text-left"
+        className="w-full text-left"
       >
         <div className="flex items-center justify-between">
-          <p className="text-base font-semibold">{leader.leaderName}</p>
-          <span className="text-xs text-gray-400">{expanded ? '收起 ▲' : '展开 ▼'}</span>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-y-2 text-sm">
-          <span className="text-gray-500">总任务</span>
-          <span className="text-right font-medium">{leader.total}</span>
-          <span className="text-gray-500">已完成</span>
-          <span className="text-right font-medium text-green-600">{leader.done}</span>
-          <span className="text-gray-500">已延期</span>
-          <span className={`text-right font-medium ${leader.overdue > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-            {leader.overdue}
+          <p className="text-xl font-semibold text-[#1d1d1f]">{leader.leaderName}</p>
+          <span className="text-xs text-[#86868b] transition-all duration-300 ease-out">
+            {expanded ? '收起' : '展开'}
           </span>
-          <span className="text-gray-500">继承任务</span>
-          <span className="text-right font-medium text-orange-600">{leader.carryOver}</span>
-          <span className="text-gray-500">完成率</span>
-          <span className="text-right font-medium">{leader.doneRate}%</span>
+        </div>
+        <div className="mt-4 flex items-center gap-5 text-sm">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-[#0071e3]" />
+            <span className="tabular-nums text-[#1d1d1f]">{leader.total}</span>
+            <span className="text-[#86868b]">总计</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-[#34c759]" />
+            <span className="tabular-nums text-[#1d1d1f]">{leader.done}</span>
+            <span className="text-[#86868b]">完成</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-[#ff3b30]" />
+            <span className="tabular-nums text-[#1d1d1f]">{leader.overdue}</span>
+            <span className="text-[#86868b]">延期</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-[#ff9500]" />
+            <span className="tabular-nums text-[#1d1d1f]">{leader.carryOver}</span>
+            <span className="text-[#86868b]">继承</span>
+          </span>
+        </div>
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-xs text-[#86868b]">
+            <span>完成率</span>
+            <span className="tabular-nums font-medium text-[#1d1d1f]">{leader.doneRate}%</span>
+          </div>
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#f5f5f7]">
+            <div
+              className="h-full rounded-full bg-[#34c759] transition-all duration-500 ease-out"
+              style={{ width: `${Math.min(leader.doneRate, 100)}%` }}
+            />
+          </div>
         </div>
       </button>
 
-      {expanded && leader.members.length > 0 && (
-        <div className="border-t px-4 pb-4 pt-3">
-          <p className="mb-2 text-xs font-medium text-gray-500">团队成员明细</p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-gray-400">
-                <th className="pb-1 text-left font-medium">成员</th>
-                <th className="pb-1 text-right font-medium">总数</th>
-                <th className="pb-1 text-right font-medium">完成</th>
-                <th className="pb-1 text-right font-medium">延期</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leader.members.map((m) => (
-                <tr key={m.userId} className="border-t border-gray-50">
-                  <td className="py-1.5 font-medium">{m.name}</td>
-                  <td className="py-1.5 text-right">{m.total}</td>
-                  <td className="py-1.5 text-right text-green-600">{m.done}</td>
-                  <td className={`py-1.5 text-right ${m.overdue > 0 ? 'font-semibold text-red-600' : ''}`}>
-                    {m.overdue}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-out ${
+          expanded && leader.members.length > 0 ? 'mt-5 max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
+        <div className="border-t border-[#f5f5f7] pt-4">
+          <p className="mb-3 text-xs font-medium text-[#86868b]">团队成员明细</p>
+          <div className="space-y-2">
+            {leader.members.map((m) => (
+              <div key={m.userId} className="flex items-center justify-between rounded-xl bg-[#f5f5f7] px-4 py-2.5">
+                <span className="text-sm font-medium text-[#1d1d1f]">{m.name}</span>
+                <div className="flex items-center gap-4 text-xs tabular-nums">
+                  <span className="text-[#6e6e73]">总 {m.total}</span>
+                  <span className="text-[#34c759]">完 {m.done}</span>
+                  <span className={m.overdue > 0 ? 'font-semibold text-[#ff3b30]' : 'text-[#6e6e73]'}>
+                    延 {m.overdue}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
 function LeaderCards({ leaders }: { readonly leaders: readonly LeaderSummary[] }) {
   if (leaders.length === 0) {
-    return <p className="py-6 text-center text-gray-400">暂无负责人数据</p>;
+    return <p className="py-12 text-center text-[#86868b]">暂无负责人数据</p>;
   }
 
   return (
-    <div className="mb-8">
-      <h3 className="mb-4 text-lg font-semibold">Leader 概览</h3>
-      <div className="grid gap-4 sm:grid-cols-2">
+    <div className="mt-12">
+      <h3 className="mb-6 text-2xl font-semibold tracking-tight text-[#1d1d1f]">Leader 概览</h3>
+      <div className="grid gap-5 sm:grid-cols-2">
         {leaders.map((l) => (
           <LeaderCard key={l.leaderName} leader={l} />
         ))}
@@ -208,45 +244,45 @@ function riskIndicator(t: RiskTask): string {
 
 function RiskTable({ tasks }: { readonly tasks: readonly RiskTask[] }) {
   if (tasks.length === 0) {
-    return <p className="py-6 text-center text-gray-400">暂无风险任务</p>;
+    return <p className="py-12 text-center text-[#86868b]">暂无风险任务</p>;
   }
 
   return (
-    <div>
-      <h3 className="mb-4 text-lg font-semibold">风险任务</h3>
-      <div className="overflow-hidden rounded-lg border bg-white">
+    <div className="mt-12">
+      <h3 className="mb-6 text-2xl font-semibold tracking-tight text-[#1d1d1f]">风险任务</h3>
+      <div className="overflow-hidden rounded-2xl bg-white shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b bg-gray-50">
-              <tr>
-                <th className="whitespace-nowrap px-4 py-3 font-medium">标题</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium">负责人</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium">Leader</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium">状态</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium">优先级</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium">截止时间</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium">延期天数</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium">继承次数</th>
+            <thead>
+              <tr className="bg-[#f5f5f7]">
+                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#86868b]">标题</th>
+                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#86868b]">负责人</th>
+                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#86868b]">Leader</th>
+                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#86868b]">状态</th>
+                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#86868b]">优先级</th>
+                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#86868b]">截止时间</th>
+                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#86868b]">延期天数</th>
+                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#86868b]">继承次数</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-[#f5f5f7]">
               {tasks.map((t, idx) => (
-                <tr key={`${t.title}-${idx}`} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium">
+                <tr key={`${t.title}-${idx}`} className="transition-colors duration-200 hover:bg-[#f5f5f7]/50">
+                  <td className="px-5 py-4 font-medium text-[#1d1d1f]">
                     {riskIndicator(t) && <span className="mr-1">{riskIndicator(t)}</span>}
                     {t.title}
                   </td>
-                  <td className="px-4 py-3">{t.assigneeName || '-'}</td>
-                  <td className="px-4 py-3 text-gray-500">{t.leaderName || '-'}</td>
-                  <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
-                  <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
-                  <td className="whitespace-nowrap px-4 py-3 text-gray-500">
+                  <td className="px-5 py-4 text-[#1d1d1f]">{t.assigneeName || '-'}</td>
+                  <td className="px-5 py-4 text-[#6e6e73]">{t.leaderName || '-'}</td>
+                  <td className="px-5 py-4"><StatusBadge status={t.status} /></td>
+                  <td className="px-5 py-4"><PriorityBadge priority={t.priority} /></td>
+                  <td className="whitespace-nowrap px-5 py-4 tabular-nums text-[#6e6e73]">
                     {t.dueAt ? new Date(t.dueAt).toLocaleDateString('zh-CN') : '-'}
                   </td>
-                  <td className={`px-4 py-3 ${t.isOverdue ? 'font-semibold text-red-600' : ''}`}>
+                  <td className={`px-5 py-4 tabular-nums ${t.isOverdue ? 'font-semibold text-[#ff3b30]' : 'text-[#6e6e73]'}`}>
                     {t.daysToDue && t.daysToDue < 0 ? `${Math.abs(t.daysToDue)}天` : '-'}
                   </td>
-                  <td className={`px-4 py-3 ${t.carryOverCount >= 2 ? 'font-semibold text-orange-600' : ''}`}>
+                  <td className={`px-5 py-4 tabular-nums ${t.carryOverCount >= 2 ? 'font-semibold text-[#ff9500]' : 'text-[#6e6e73]'}`}>
                     {t.carryOverCount}
                   </td>
                 </tr>
@@ -272,29 +308,38 @@ function DashboardContent() {
   const { data, error, isLoading } = useDashboard(month);
 
   if (!authed) {
-    return <div className="py-12 text-center text-gray-500">正在验证登录状态...</div>;
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-[#86868b]">正在验证登录状态...</p>
+      </div>
+    );
   }
 
   return (
-    <div>
-      <div className="mb-6">
-        <h2 className="mb-4 text-xl font-semibold">驾驶舱</h2>
+    <div className="pb-16">
+      <div className="mb-8 flex items-center justify-between pt-8">
+        <h2 className="sr-only">驾驶舱</h2>
         <MonthSelector value={month} onChange={setMonth} />
       </div>
 
       {isLoading ? (
-        <div className="py-12 text-center text-gray-500">加载中...</div>
+        <div className="flex min-h-[40vh] items-center justify-center">
+          <p className="text-[#86868b]">加载中...</p>
+        </div>
       ) : error ? (
-        <div className="py-12 text-center text-red-500">加载失败: {error.message}</div>
+        <div className="flex min-h-[40vh] items-center justify-center">
+          <p className="text-[#ff3b30]">加载失败: {error.message}</p>
+        </div>
       ) : data ? (
         <>
-          <StatsBar
+          <HeroStats
             stats={{
               total: data.stats?.total ?? 0,
               done: data.stats?.done ?? 0,
               overdue: data.stats?.overdue ?? 0,
               carryOver: data.stats?.carryOver ?? 0,
             }}
+            month={month}
           />
           <LeaderCards leaders={data.leaderSummary ?? []} />
           <RiskTable tasks={data.riskTasks ?? []} />
@@ -306,7 +351,13 @@ function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div className="py-12 text-center text-gray-500">加载中...</div>}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <p className="text-[#86868b]">加载中...</p>
+        </div>
+      }
+    >
       <DashboardContent />
     </Suspense>
   );
