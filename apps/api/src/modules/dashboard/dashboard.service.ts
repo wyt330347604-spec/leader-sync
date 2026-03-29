@@ -4,12 +4,23 @@ import type { Database } from '@leader-sync/db';
 import { task, monthlySnapshot, orgCache } from '@leader-sync/db';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 
-interface LeaderEntry {
+const DONE_STATUSES = ['done', 'shelved', 'closed'];
+
+export interface MemberEntry {
+  readonly userId: string;
+  readonly name: string;
+  readonly total: number;
+  readonly done: number;
+  readonly overdue: number;
+}
+
+export interface LeaderEntry {
   readonly name: string;
   readonly total: number;
   readonly done: number;
   readonly overdue: number;
   readonly carryOver: number;
+  readonly members: MemberEntry[];
 }
 
 @Injectable()
@@ -18,55 +29,59 @@ export class DashboardService {
 
   async getBossDashboard(month?: string) {
     const targetMonth = month || this.getCurrentMonth();
-    const DONE_STATUSES = ['done', 'shelved', 'closed'];
 
-    // 1. All tasks for the target month (non-deleted)
     const tasks = await this.db
       .select()
       .from(task)
       .where(and(eq(task.monthBucket, targetMonth), sql`${task.deletedAt} IS NULL`));
 
-    // 2. Leader summary - group by leaderUserId
+    // Group by leader, then by member within each leader
     const leaderMap = new Map<string, LeaderEntry>();
 
     for (const t of tasks) {
-      const leaderId = t.leaderUserId || t.assigneeManagerUserId || 'unknown';
+      const leaderId = t.leaderUserId || 'unknown';
       const prev = leaderMap.get(leaderId) ?? {
-        name: t.leaderName || t.assigneeManagerName || '',
+        name: t.leaderName || '',
         total: 0,
         done: 0,
         overdue: 0,
         carryOver: 0,
+        members: [],
       };
 
-      leaderMap.set(leaderId, {
-        name: prev.name || t.leaderName || t.assigneeManagerName || '',
-        total: prev.total + 1,
-        done: prev.done + (t.status === 'done' ? 1 : 0),
-        overdue:
-          prev.overdue +
-          (t.isOverdue && !DONE_STATUSES.includes(t.status) ? 1 : 0),
-        carryOver: prev.carryOver + ((t.carryOverCount ?? 0) >= 1 ? 1 : 0),
-      });
-    }
+      const isDone = t.status === 'done';
+      const isOverdue = t.isOverdue && !DONE_STATUSES.includes(t.status);
+      const isCarry = (t.carryOverCount ?? 0) >= 1;
 
-    // Resolve leader names from org_cache
-    const leaderIds = [...leaderMap.keys()].filter((id) => id.startsWith('ou_'));
-    if (leaderIds.length > 0) {
-      const leaders = await this.db
-        .select()
-        .from(orgCache)
-        .where(inArray(orgCache.userId, leaderIds));
-
-      for (const l of leaders) {
-        const entry = leaderMap.get(l.userId);
-        if (entry) {
-          leaderMap.set(l.userId, {
-            ...entry,
-            name: l.userName || l.userId,
-          });
-        }
+      // Update member entry
+      const members = [...prev.members];
+      const memberIdx = members.findIndex((m) => m.userId === t.assigneeUserId);
+      if (memberIdx >= 0) {
+        const m = members[memberIdx];
+        members[memberIdx] = {
+          ...m,
+          total: m.total + 1,
+          done: m.done + (isDone ? 1 : 0),
+          overdue: m.overdue + (isOverdue ? 1 : 0),
+        };
+      } else {
+        members.push({
+          userId: t.assigneeUserId,
+          name: t.assigneeName || t.assigneeUserId,
+          total: 1,
+          done: isDone ? 1 : 0,
+          overdue: isOverdue ? 1 : 0,
+        });
       }
+
+      leaderMap.set(leaderId, {
+        name: prev.name || t.leaderName || '',
+        total: prev.total + 1,
+        done: prev.done + (isDone ? 1 : 0),
+        overdue: prev.overdue + (isOverdue ? 1 : 0),
+        carryOver: prev.carryOver + (isCarry ? 1 : 0),
+        members,
+      });
     }
 
     const leaderSummary = [...leaderMap.entries()]
@@ -77,12 +92,12 @@ export class DashboardService {
         done: data.done,
         overdue: data.overdue,
         carryOver: data.carryOver,
-        doneRate:
-          data.total > 0 ? Math.round((data.done / data.total) * 100) : 0,
+        doneRate: data.total > 0 ? Math.round((data.done / data.total) * 100) : 0,
+        members: data.members.sort((a, b) => b.overdue - a.overdue),
       }))
-      .sort((a, b) => b.overdue - a.overdue);
+      .sort((a, b) => b.total - a.total);
 
-    // 3. Risk tasks: overdue OR carry_over_count >= 2, status not in done/shelved/closed
+    // Risk tasks
     const riskTasks = tasks
       .filter(
         (t) =>
@@ -93,6 +108,7 @@ export class DashboardService {
         taskUid: t.taskUid,
         title: t.title,
         assigneeName: t.assigneeName,
+        leaderName: t.leaderName,
         status: t.status,
         priority: t.priority,
         dueAt: t.dueAt,
@@ -102,7 +118,7 @@ export class DashboardService {
       }))
       .sort((a, b) => (a.daysToDue ?? 0) - (b.daysToDue ?? 0));
 
-    // 4. Monthly stats
+    // Stats
     const totalTasks = tasks.length;
     const doneTasks = tasks.filter((t) => t.status === 'done').length;
     const overdueTasks = tasks.filter(
@@ -112,7 +128,7 @@ export class DashboardService {
       (t) => (t.carryOverCount ?? 0) >= 1,
     ).length;
 
-    // 5. Snapshot (historical data)
+    // Snapshot
     const snapshots = await this.db
       .select()
       .from(monthlySnapshot)
@@ -134,10 +150,8 @@ export class DashboardService {
         done: doneTasks,
         overdue: overdueTasks,
         carryOver: carryOverTasks,
-        doneRate:
-          totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0,
-        overdueRate:
-          totalTasks > 0 ? Math.round((overdueTasks / totalTasks) * 100) : 0,
+        doneRate: totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0,
+        overdueRate: totalTasks > 0 ? Math.round((overdueTasks / totalTasks) * 100) : 0,
       },
       snapshot: snapshot
         ? {

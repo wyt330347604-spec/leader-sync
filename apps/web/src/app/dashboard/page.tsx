@@ -88,7 +88,15 @@ function StatsBar({ stats }: { readonly stats: MonthlyStats }) {
   );
 }
 
-/* ---------- Section C: Leader summary cards ---------- */
+/* ---------- Section C: Leader cards with expandable members ---------- */
+
+interface MemberSummary {
+  readonly userId: string;
+  readonly name: string;
+  readonly total: number;
+  readonly done: number;
+  readonly overdue: number;
+}
 
 interface LeaderSummary {
   readonly leaderName: string;
@@ -97,6 +105,67 @@ interface LeaderSummary {
   readonly overdue: number;
   readonly carryOver: number;
   readonly doneRate: number;
+  readonly members: readonly MemberSummary[];
+}
+
+function LeaderCard({ leader }: { readonly leader: LeaderSummary }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="rounded-xl border bg-white shadow-sm">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full p-4 text-left"
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-base font-semibold">{leader.leaderName}</p>
+          <span className="text-xs text-gray-400">{expanded ? '收起 ▲' : '展开 ▼'}</span>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-y-2 text-sm">
+          <span className="text-gray-500">总任务</span>
+          <span className="text-right font-medium">{leader.total}</span>
+          <span className="text-gray-500">已完成</span>
+          <span className="text-right font-medium text-green-600">{leader.done}</span>
+          <span className="text-gray-500">已延期</span>
+          <span className={`text-right font-medium ${leader.overdue > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+            {leader.overdue}
+          </span>
+          <span className="text-gray-500">继承任务</span>
+          <span className="text-right font-medium text-orange-600">{leader.carryOver}</span>
+          <span className="text-gray-500">完成率</span>
+          <span className="text-right font-medium">{leader.doneRate}%</span>
+        </div>
+      </button>
+
+      {expanded && leader.members.length > 0 && (
+        <div className="border-t px-4 pb-4 pt-3">
+          <p className="mb-2 text-xs font-medium text-gray-500">团队成员明细</p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-gray-400">
+                <th className="pb-1 text-left font-medium">成员</th>
+                <th className="pb-1 text-right font-medium">总数</th>
+                <th className="pb-1 text-right font-medium">完成</th>
+                <th className="pb-1 text-right font-medium">延期</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leader.members.map((m) => (
+                <tr key={m.userId} className="border-t border-gray-50">
+                  <td className="py-1.5 font-medium">{m.name}</td>
+                  <td className="py-1.5 text-right">{m.total}</td>
+                  <td className="py-1.5 text-right text-green-600">{m.done}</td>
+                  <td className={`py-1.5 text-right ${m.overdue > 0 ? 'font-semibold text-red-600' : ''}`}>
+                    {m.overdue}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function LeaderCards({ leaders }: { readonly leaders: readonly LeaderSummary[] }) {
@@ -106,26 +175,10 @@ function LeaderCards({ leaders }: { readonly leaders: readonly LeaderSummary[] }
 
   return (
     <div className="mb-8">
-      <h3 className="mb-4 text-lg font-semibold">负责人概览</h3>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <h3 className="mb-4 text-lg font-semibold">Leader 概览</h3>
+      <div className="grid gap-4 sm:grid-cols-2">
         {leaders.map((l) => (
-          <div key={l.leaderName} className="rounded-xl border bg-white p-4 shadow-sm">
-            <p className="text-base font-semibold">{l.leaderName}</p>
-            <div className="mt-3 grid grid-cols-2 gap-y-2 text-sm">
-              <span className="text-gray-500">总任务</span>
-              <span className="text-right font-medium">{l.total}</span>
-              <span className="text-gray-500">已完成</span>
-              <span className="text-right font-medium text-green-600">{l.done}</span>
-              <span className="text-gray-500">已延期</span>
-              <span className={`text-right font-medium ${l.overdue > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                {l.overdue}
-              </span>
-              <span className="text-gray-500">继承任务</span>
-              <span className="text-right font-medium text-orange-600">{l.carryOver}</span>
-              <span className="text-gray-500">完成率</span>
-              <span className="text-right font-medium">{l.doneRate}%</span>
-            </div>
-          </div>
+          <LeaderCard key={l.leaderName} leader={l} />
         ))}
       </div>
     </div>
@@ -137,6 +190,7 @@ function LeaderCards({ leaders }: { readonly leaders: readonly LeaderSummary[] }
 interface RiskTask {
   readonly title: string;
   readonly assigneeName: string;
+  readonly leaderName: string;
   readonly status: string;
   readonly priority: string;
   readonly dueAt: string | null;
@@ -145,10 +199,10 @@ interface RiskTask {
   readonly carryOverCount: number;
 }
 
-function riskIndicator(task: RiskTask): string {
+function riskIndicator(t: RiskTask): string {
   const indicators: string[] = [];
-  if (task.isOverdue) indicators.push('\uD83D\uDEA8');
-  if (task.carryOverCount >= 2) indicators.push('\uD83D\uDD04');
+  if (t.isOverdue) indicators.push('\uD83D\uDEA8');
+  if (t.carryOverCount >= 2) indicators.push('\uD83D\uDD04');
   return indicators.join(' ');
 }
 
@@ -167,6 +221,7 @@ function RiskTable({ tasks }: { readonly tasks: readonly RiskTask[] }) {
               <tr>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">标题</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">负责人</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Leader</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">状态</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">优先级</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">截止时间</th>
@@ -182,6 +237,7 @@ function RiskTable({ tasks }: { readonly tasks: readonly RiskTask[] }) {
                     {t.title}
                   </td>
                   <td className="px-4 py-3">{t.assigneeName || '-'}</td>
+                  <td className="px-4 py-3 text-gray-500">{t.leaderName || '-'}</td>
                   <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
                   <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
                   <td className="whitespace-nowrap px-4 py-3 text-gray-500">
@@ -203,7 +259,7 @@ function RiskTable({ tasks }: { readonly tasks: readonly RiskTask[] }) {
   );
 }
 
-/* ---------- Main dashboard content ---------- */
+/* ---------- Main ---------- */
 
 function DashboardContent() {
   const [authed, setAuthed] = useState(false);
