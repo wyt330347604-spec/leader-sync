@@ -13,6 +13,7 @@
     "@leader-sync/db": "workspace:*",
     "@leader-sync/shared-types": "workspace:*",
     "@leader-sync/domain-core": "workspace:*",
+    "@larksuiteoapi/node-sdk": "^1.60.0",
     "drizzle-orm": "^0.44.0",
     "node-cron": "^3.0.0",
     "dotenv": "^16.0.0"
