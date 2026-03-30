@@ -61,6 +61,22 @@ export class TaskController {
     return this.taskService.delayTask(user.user_id, taskUid, dto);
   }
 
+  @Post('tasks/:task_uid/toggle-important')
+  toggleImportant(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('task_uid') taskUid: string,
+  ) {
+    return this.taskService.toggleImportant(user.user_id, taskUid);
+  }
+
+  @Post('tasks/:task_uid/notify-leader')
+  notifyLeader(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('task_uid') taskUid: string,
+  ) {
+    return this.taskService.notifyLeader(user.user_id, taskUid);
+  }
+
   @Get('me/tasks')
   listMyTasks(
     @CurrentUser() user: CurrentUserPayload,

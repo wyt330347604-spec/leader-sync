@@ -269,6 +269,31 @@ export class TaskService {
     return updated;
   }
 
+  async toggleImportant(userId: string, taskUid: string) {
+    const existing = await this.taskRepository.findByUid(taskUid);
+    if (!existing) {
+      throw new BusinessException(ErrorCode.TASK_NOT_FOUND, 'Task not found', HttpStatus.NOT_FOUND);
+    }
+    const newValue = !existing.bossAttentionFlag;
+    const result = await this.taskRepository.updateWithVersion(taskUid, existing.version, {
+      bossAttentionFlag: newValue,
+      updatedBy: userId,
+    });
+    if (!result) {
+      throw new BusinessException(ErrorCode.VERSION_CONFLICT, 'Version conflict', HttpStatus.CONFLICT);
+    }
+    return result;
+  }
+
+  async notifyLeader(_userId: string, taskUid: string) {
+    const existing = await this.taskRepository.findByUid(taskUid);
+    if (!existing) {
+      throw new BusinessException(ErrorCode.TASK_NOT_FOUND, 'Task not found', HttpStatus.NOT_FOUND);
+    }
+    // MVP: return success flag. Actual Feishu messaging will be wired in batch 2.
+    return { notified: true, taskUid };
+  }
+
   async listMyTasks(userId: string, query: TaskListQuery): Promise<PaginatedData<unknown>> {
     const page = query.page ?? 1;
     const pageSize = query.page_size ?? 20;

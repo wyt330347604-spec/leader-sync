@@ -40,7 +40,7 @@ function WidgetContent() {
   if (!authed) {
     return (
       <div className="flex h-32 items-center justify-center">
-        <p className="text-xs text-white/50">验证中...</p>
+        <p className="text-xs text-[#5a5a6e]">验证中...</p>
       </div>
     );
   }
@@ -48,7 +48,7 @@ function WidgetContent() {
   if (isLoading) {
     return (
       <div className="flex h-32 items-center justify-center">
-        <p className="text-xs text-white/50">加载中...</p>
+        <p className="text-xs text-[#5a5a6e]">加载中...</p>
       </div>
     );
   }
@@ -56,7 +56,7 @@ function WidgetContent() {
   if (error) {
     return (
       <div className="flex h-32 items-center justify-center">
-        <p className="text-xs text-[#ff3b30]">加载失败</p>
+        <p className="text-xs text-[#ef4444]">加载失败</p>
       </div>
     );
   }
@@ -73,60 +73,60 @@ function WidgetContent() {
   const leaders: readonly LeaderSummary[] = data.leaderSummary ?? [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#000000] to-[#1d1d1f] text-white">
+    <div className="min-h-screen bg-[#0a0a0f] text-[#e4e4e7]">
       {/* Compact hero stats */}
       <div className="px-4 pt-5 pb-4">
-        <p className="mb-0.5 text-[10px] font-medium tracking-wide text-white/40">督办概览</p>
-        <h1 className="mb-4 text-lg font-bold tracking-tight">
+        <p className="mb-0.5 text-[10px] font-medium tracking-wide text-[#5a5a6e]">督办概览</p>
+        <h1 className="mb-4 text-lg font-bold tracking-tight text-white">
           {getMonthLabel(month)} 数据
         </h1>
         <div className="grid grid-cols-4 gap-2">
-          <div className="text-center">
-            <p className="tabular-nums text-2xl font-bold">{stats.total}</p>
-            <p className="mt-0.5 text-[10px] text-white/40">总任务</p>
+          <div className="text-center rounded-lg bg-[#12121a] border border-[#2a2a3a] py-2">
+            <p className="tabular-nums text-2xl font-bold text-white">{stats.total}</p>
+            <p className="mt-0.5 text-[10px] text-[#5a5a6e]">总任务</p>
           </div>
-          <div className="text-center">
-            <p className="tabular-nums text-2xl font-bold text-[#34c759]">{stats.done}</p>
-            <p className="mt-0.5 text-[10px] text-white/40">已完成</p>
+          <div className="text-center rounded-lg bg-[#12121a] border border-[#2a2a3a] py-2">
+            <p className="tabular-nums text-2xl font-bold text-[#22c55e]">{stats.done}</p>
+            <p className="mt-0.5 text-[10px] text-[#5a5a6e]">已完成</p>
           </div>
-          <div className="text-center">
-            <p className="tabular-nums text-2xl font-bold text-[#ff3b30]">{stats.overdue}</p>
-            <p className="mt-0.5 text-[10px] text-white/40">已延期</p>
+          <div className="text-center rounded-lg bg-[#12121a] border border-[#2a2a3a] py-2">
+            <p className="tabular-nums text-2xl font-bold text-[#ef4444]">{stats.overdue}</p>
+            <p className="mt-0.5 text-[10px] text-[#5a5a6e]">已延期</p>
           </div>
-          <div className="text-center">
-            <p className="tabular-nums text-2xl font-bold text-[#ff9500]">{stats.carryOver}</p>
-            <p className="mt-0.5 text-[10px] text-white/40">继承</p>
+          <div className="text-center rounded-lg bg-[#12121a] border border-[#2a2a3a] py-2">
+            <p className="tabular-nums text-2xl font-bold text-[#f59e0b]">{stats.carryOver}</p>
+            <p className="mt-0.5 text-[10px] text-[#5a5a6e]">继承</p>
           </div>
         </div>
       </div>
 
       {/* Divider */}
-      <div className="mx-4 h-px bg-white/10" />
+      <div className="mx-4 h-px bg-[#2a2a3a]" />
 
       {/* Compact leader list */}
       <div className="px-4 pt-4 pb-3">
-        <p className="mb-3 text-[10px] font-medium tracking-wide text-white/40">负责人</p>
+        <p className="mb-3 text-[10px] font-medium tracking-wide text-[#5a5a6e]">负责人</p>
         {leaders.length === 0 ? (
-          <p className="py-4 text-center text-xs text-white/30">暂无数据</p>
+          <p className="py-4 text-center text-xs text-[#5a5a6e]">暂无数据</p>
         ) : (
           <div className="space-y-2">
             {leaders.map((l) => (
               <div
                 key={l.leaderName}
-                className="flex items-center justify-between rounded-xl bg-white/5 px-3.5 py-2.5"
+                className="flex items-center justify-between rounded-xl bg-[#12121a] border border-[#2a2a3a] px-3.5 py-2.5"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{l.leaderName}</p>
-                  <div className="mt-1 flex items-center gap-3 text-[10px] text-white/40">
+                  <p className="truncate text-sm font-medium text-[#e4e4e7]">{l.leaderName}</p>
+                  <div className="mt-1 flex items-center gap-3 text-[10px] text-[#5a5a6e]">
                     <span className="tabular-nums">总 {l.total}</span>
-                    <span className="tabular-nums text-[#34c759]/70">完 {l.done}</span>
+                    <span className="tabular-nums text-[#22c55e]/70">完 {l.done}</span>
                     <span className="tabular-nums">{l.doneRate}%</span>
                   </div>
                 </div>
                 {l.overdue > 0 && (
-                  <div className="ml-2 flex shrink-0 items-center gap-1 rounded-full bg-[#ff3b30]/15 px-2.5 py-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#ff3b30]" />
-                    <span className="tabular-nums text-[11px] font-medium text-[#ff3b30]">
+                  <div className="ml-2 flex shrink-0 items-center gap-1 rounded-full bg-[#ef4444]/10 border border-[#ef4444]/20 px-2.5 py-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#ef4444]" />
+                    <span className="tabular-nums text-[11px] font-medium text-[#ef4444]">
                       {l.overdue} 延期
                     </span>
                   </div>
@@ -142,7 +142,7 @@ function WidgetContent() {
         <a
           href="/dashboard"
           target="_top"
-          className="flex items-center justify-center rounded-full bg-[#0071e3] py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#0077ed]"
+          className="flex items-center justify-center rounded-full bg-[#3b82f6] py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#2563eb]"
         >
           查看完整驾驶舱 &rarr;
         </a>
@@ -155,8 +155,8 @@ export default function WidgetPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-black">
-          <p className="text-xs text-white/50">加载中...</p>
+        <div className="flex min-h-screen items-center justify-center bg-[#0a0a0f]">
+          <p className="text-xs text-[#5a5a6e]">加载中...</p>
         </div>
       }
     >

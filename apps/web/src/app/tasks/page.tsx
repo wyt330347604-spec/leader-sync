@@ -34,7 +34,7 @@ function TaskListContent() {
   if (!authed) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[#86868b]">正在验证登录状态...</p>
+        <p className="text-[#5a5a6e]">正在验证登录状态...</p>
       </div>
     );
   }
@@ -43,10 +43,10 @@ function TaskListContent() {
     <div className="pb-16 pt-8">
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight text-[#1d1d1f]">我的任务</h2>
+        <h2 className="text-3xl font-bold tracking-tight text-[#e4e4e7]">我的任务</h2>
         <Link
           href="/tasks/create"
-          className="rounded-full bg-[#0071e3] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#0077ed] hover:shadow-[0_4px_16px_rgba(0,113,227,0.3)]"
+          className="rounded-full bg-[#3b82f6] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#2563eb]"
         >
           新建任务
         </Link>
@@ -60,8 +60,8 @@ function TaskListContent() {
             onClick={() => { setStatus(f.value); setPage(1); }}
             className={`rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 ease-out ${
               status === f.value
-                ? 'bg-[#0071e3] text-white shadow-[0_2px_12px_rgba(0,113,227,0.3)]'
-                : 'bg-white text-[#6e6e73] shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)]'
+                ? 'bg-[#3b82f6] text-white'
+                : 'bg-[#1e1e2e] text-[#8b8b9e] border border-[#2a2a3a] hover:bg-[#1a1a2e] hover:text-[#e4e4e7]'
             }`}
           >
             {f.label}
@@ -72,17 +72,17 @@ function TaskListContent() {
       {/* Task cards */}
       {isLoading ? (
         <div className="flex min-h-[40vh] items-center justify-center">
-          <p className="text-[#86868b]">加载中...</p>
+          <p className="text-[#5a5a6e]">加载中...</p>
         </div>
       ) : error ? (
         <div className="flex min-h-[40vh] items-center justify-center">
-          <p className="text-[#ff3b30]">加载失败: {error.message}</p>
+          <p className="text-[#ef4444]">加载失败: {error.message}</p>
         </div>
       ) : (
         <>
           {data?.items?.length === 0 ? (
             <div className="flex min-h-[30vh] items-center justify-center">
-              <p className="text-[#86868b]">暂无任务</p>
+              <p className="text-[#5a5a6e]">暂无任务</p>
             </div>
           ) : (
             <div className="grid gap-3">
@@ -90,17 +90,17 @@ function TaskListContent() {
                 <div
                   key={t.task_uid || t.taskUid}
                   onClick={() => router.push(`/tasks/${t.task_uid || t.taskUid}`)}
-                  className="cursor-pointer rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+                  className="cursor-pointer rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5 transition-all duration-300 ease-out hover:bg-[#1a1a2e]"
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-semibold text-[#1d1d1f]">{t.title}</h3>
+                      <h3 className="text-base font-semibold text-[#e4e4e7]">{t.title}</h3>
                       <div className="mt-2.5 flex items-center gap-2">
                         <StatusBadge status={t.status} />
                         <PriorityBadge priority={t.priority} />
                       </div>
                     </div>
-                    <div className="ml-4 flex shrink-0 flex-col items-end gap-1 text-xs text-[#86868b]">
+                    <div className="ml-4 flex shrink-0 flex-col items-end gap-1 text-xs text-[#5a5a6e]">
                       <span className="tabular-nums">
                         {t.due_at || t.dueAt ? new Date(t.due_at || t.dueAt).toLocaleDateString('zh-CN') : '-'}
                       </span>
@@ -118,17 +118,17 @@ function TaskListContent() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="rounded-full px-5 py-2 text-sm font-medium text-[#0071e3] transition-all duration-300 ease-out hover:bg-[#0071e3]/5 disabled:text-[#86868b] disabled:hover:bg-transparent"
+                className="rounded-full px-5 py-2 text-sm font-medium text-[#3b82f6] transition-all duration-300 ease-out hover:bg-[#3b82f6]/10 disabled:text-[#5a5a6e] disabled:hover:bg-transparent"
               >
                 上一页
               </button>
-              <span className="tabular-nums text-sm text-[#86868b]">
+              <span className="tabular-nums text-sm text-[#5a5a6e]">
                 第 {page} 页 / 共 {data.total} 条
               </span>
               <button
                 onClick={() => setPage((p) => p + 1)}
                 disabled={data.items.length < 20}
-                className="rounded-full px-5 py-2 text-sm font-medium text-[#0071e3] transition-all duration-300 ease-out hover:bg-[#0071e3]/5 disabled:text-[#86868b] disabled:hover:bg-transparent"
+                className="rounded-full px-5 py-2 text-sm font-medium text-[#3b82f6] transition-all duration-300 ease-out hover:bg-[#3b82f6]/10 disabled:text-[#5a5a6e] disabled:hover:bg-transparent"
               >
                 下一页
               </button>
@@ -145,7 +145,7 @@ export default function TasksPage() {
     <Suspense
       fallback={
         <div className="flex min-h-[60vh] items-center justify-center">
-          <p className="text-[#86868b]">加载中...</p>
+          <p className="text-[#5a5a6e]">加载中...</p>
         </div>
       }
     >

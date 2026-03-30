@@ -6,6 +6,56 @@ import { eq, and, sql, inArray } from 'drizzle-orm';
 
 const DONE_STATUSES = ['done', 'shelved', 'closed'];
 
+type RiskReason = 'overdue' | 'carry_over' | 'stalled' | 'near_due' | 'important_no_progress';
+
+function getThisMonday(): Date {
+  const now = new Date();
+  const day = now.getDay() || 7;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - day + 1);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+function computeRiskReasons(t: {
+  readonly isOverdue: boolean | null;
+  readonly status: string;
+  readonly carryOverCount: number | null;
+  readonly daysToDue: number | null;
+  readonly bossAttentionFlag: boolean | null;
+  readonly progressPercent: number | null;
+}): readonly RiskReason[] {
+  const reasons: RiskReason[] = [];
+  const isDoneStatus = DONE_STATUSES.includes(t.status);
+
+  // A. Overdue and not in a done status
+  if (t.isOverdue && !isDoneStatus) {
+    reasons.push('overdue');
+  }
+
+  // B. Carry-over count >= 2
+  if ((t.carryOverCount ?? 0) >= 2) {
+    reasons.push('carry_over');
+  }
+
+  // C. Status is stalled
+  if (t.status === 'stalled') {
+    reasons.push('stalled');
+  }
+
+  // D. Near due: due within 3 days and not done/shelved/closed
+  if (t.daysToDue !== null && t.daysToDue >= 0 && t.daysToDue <= 3 && !isDoneStatus) {
+    reasons.push('near_due');
+  }
+
+  // E. Important task with zero progress and not done/shelved/closed
+  if (t.bossAttentionFlag && (t.progressPercent ?? 0) === 0 && !isDoneStatus) {
+    reasons.push('important_no_progress');
+  }
+
+  return reasons;
+}
+
 export interface MemberEntry {
   readonly userId: string;
   readonly name: string;
@@ -20,6 +70,8 @@ export interface LeaderEntry {
   readonly done: number;
   readonly overdue: number;
   readonly carryOver: number;
+  readonly riskCount: number;
+  readonly weeklyNewCount: number;
   readonly members: MemberEntry[];
 }
 
@@ -37,6 +89,7 @@ export class DashboardService {
 
     // Group by leader, then by member within each leader
     const leaderMap = new Map<string, LeaderEntry>();
+    const thisMonday = getThisMonday();
 
     for (const t of tasks) {
       const leaderId = t.leaderUserId || 'unknown';
@@ -46,12 +99,17 @@ export class DashboardService {
         done: 0,
         overdue: 0,
         carryOver: 0,
+        riskCount: 0,
+        weeklyNewCount: 0,
         members: [],
       };
 
       const isDone = t.status === 'done';
       const isOverdue = t.isOverdue && !DONE_STATUSES.includes(t.status);
       const isCarry = (t.carryOverCount ?? 0) >= 1;
+      const riskReasons = computeRiskReasons(t);
+      const isRisk = riskReasons.length > 0;
+      const isWeeklyNew = t.createdAt >= thisMonday;
 
       // Update member entry
       const members = [...prev.members];
@@ -80,6 +138,8 @@ export class DashboardService {
         done: prev.done + (isDone ? 1 : 0),
         overdue: prev.overdue + (isOverdue ? 1 : 0),
         carryOver: prev.carryOver + (isCarry ? 1 : 0),
+        riskCount: prev.riskCount + (isRisk ? 1 : 0),
+        weeklyNewCount: prev.weeklyNewCount + (isWeeklyNew ? 1 : 0),
         members,
       });
     }
@@ -92,19 +152,21 @@ export class DashboardService {
         done: data.done,
         overdue: data.overdue,
         carryOver: data.carryOver,
+        riskCount: data.riskCount,
+        weeklyNewCount: data.weeklyNewCount,
         doneRate: data.total > 0 ? Math.round((data.done / data.total) * 100) : 0,
         members: data.members.sort((a, b) => b.overdue - a.overdue),
       }))
       .sort((a, b) => b.total - a.total);
 
-    // Risk tasks
+    // Risk tasks: any task matching at least one of the 5 risk conditions
     const riskTasks = tasks
-      .filter(
-        (t) =>
-          !DONE_STATUSES.includes(t.status) &&
-          (t.isOverdue || (t.carryOverCount ?? 0) >= 2),
-      )
       .map((t) => ({
+        task: t,
+        riskReasons: computeRiskReasons(t),
+      }))
+      .filter(({ riskReasons }) => riskReasons.length > 0)
+      .map(({ task: t, riskReasons }) => ({
         taskUid: t.taskUid,
         title: t.title,
         assigneeName: t.assigneeName,
@@ -115,6 +177,9 @@ export class DashboardService {
         daysToDue: t.daysToDue,
         isOverdue: t.isOverdue,
         carryOverCount: t.carryOverCount ?? 0,
+        bossAttentionFlag: t.bossAttentionFlag ?? false,
+        progressPercent: t.progressPercent ?? 0,
+        riskReasons: [...riskReasons],
       }))
       .sort((a, b) => (a.daysToDue ?? 0) - (b.daysToDue ?? 0));
 

@@ -19,6 +19,13 @@ const STATUS_OPTIONS = [
   { value: 'closed', label: '已归档' },
 ];
 
+const PRIORITY_OPTIONS = [
+  { value: 'urgent_important', label: '重要紧急' },
+  { value: 'important_not_urgent', label: '重要不紧急' },
+  { value: 'urgent_not_important', label: '紧急不重要' },
+  { value: 'not_urgent_not_important', label: '不紧急不重要' },
+];
+
 const TASK_TYPE_LABELS: Record<string, string> = {
   strategy: '战略事项',
   operation: '运营事项',
@@ -31,7 +38,7 @@ const TASK_TYPE_LABELS: Record<string, string> = {
 };
 
 const inputClass =
-  'block w-full rounded-xl bg-[#f5f5f7] px-4 py-3 text-sm text-[#1d1d1f] placeholder-[#86868b] transition-all duration-300 ease-out focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071e3]/40 focus:shadow-[0_0_0_4px_rgba(0,113,227,0.1)]';
+  'block w-full rounded-xl bg-[#1e1e2e] border border-[#2a2a3a] px-4 py-3 text-sm text-[#e4e4e7] placeholder-[#5a5a6e] transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 focus:border-[#3b82f6]/50';
 
 function formatDate(val: string | null | undefined): string {
   if (!val) return '-';
@@ -51,11 +58,20 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
+  // Inline edit state for status and priority
+  const [editingStatus, setEditingStatus] = useState(false);
+  const [editingPriority, setEditingPriority] = useState(false);
+  const [inlineStatus, setInlineStatus] = useState('');
+  const [inlinePriority, setInlinePriority] = useState('');
+
   // Delay form state
   const [showDelayForm, setShowDelayForm] = useState(false);
   const [newDueAt, setNewDueAt] = useState('');
   const [delayReason, setDelayReason] = useState('');
   const [delaySubmitting, setDelaySubmitting] = useState(false);
+
+  // Boss attention toggle state
+  const [togglingAttention, setTogglingAttention] = useState(false);
 
   useEffect(() => {
     ensureAuth().then(setAuthed);
@@ -66,6 +82,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
       setNewStatus(task.status);
       setProgressPercent(task.progress_percent ?? task.progressPercent ?? 0);
       setLatestProgress(task.latest_progress ?? task.latestProgress ?? '');
+      setInlineStatus(task.status);
+      setInlinePriority(task.priority);
     }
   }, [task]);
 
@@ -94,6 +112,72 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleInlineStatusSave() {
+    setSaving(true);
+    setSaveError('');
+    try {
+      await apiFetch(`/api/v1/tasks/${taskUid}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: inlineStatus, version: task.version }),
+      });
+      await mutate();
+      setEditingStatus(false);
+    } catch (err: any) {
+      if (err instanceof ApiError && err.code === 409) {
+        alert('数据已被修改，请刷新');
+        await mutate();
+      } else {
+        setSaveError(err.message || '保存失败');
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleInlinePrioritySave() {
+    setSaving(true);
+    setSaveError('');
+    try {
+      await apiFetch(`/api/v1/tasks/${taskUid}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ priority: inlinePriority, version: task.version }),
+      });
+      await mutate();
+      setEditingPriority(false);
+    } catch (err: any) {
+      if (err instanceof ApiError && err.code === 409) {
+        alert('数据已被修改，请刷新');
+        await mutate();
+      } else {
+        setSaveError(err.message || '保存失败');
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggleAttention() {
+    setTogglingAttention(true);
+    setSaveError('');
+    try {
+      const currentFlag = task.boss_attention_flag ?? task.bossAttentionFlag ?? false;
+      await apiFetch(`/api/v1/tasks/${taskUid}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ boss_attention_flag: !currentFlag, version: task.version }),
+      });
+      await mutate();
+    } catch (err: any) {
+      if (err instanceof ApiError && err.code === 409) {
+        alert('数据已被修改，请刷新');
+        await mutate();
+      } else {
+        setSaveError(err.message || '操作失败');
+      }
+    } finally {
+      setTogglingAttention(false);
     }
   }
 
@@ -154,7 +238,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
   if (!authed) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[#86868b]">正在验证登录状态...</p>
+        <p className="text-[#5a5a6e]">正在验证登录状态...</p>
       </div>
     );
   }
@@ -162,7 +246,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
   if (isLoading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[#86868b]">加载中...</p>
+        <p className="text-[#5a5a6e]">加载中...</p>
       </div>
     );
   }
@@ -170,7 +254,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
   if (error) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[#ff3b30]">加载失败: {error.message}</p>
+        <p className="text-[#ef4444]">加载失败: {error.message}</p>
       </div>
     );
   }
@@ -178,58 +262,133 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
   if (!task) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[#86868b]">任务不存在</p>
+        <p className="text-[#5a5a6e]">任务不存在</p>
       </div>
     );
   }
 
   const currentProgress = task.progress_percent ?? task.progressPercent ?? 0;
+  const isBossAttention = task.boss_attention_flag ?? task.bossAttentionFlag ?? false;
 
   return (
     <div className="mx-auto max-w-3xl pb-16 pt-8">
       {/* Back */}
       <Link
         href="/tasks"
-        className="inline-block text-sm text-[#0071e3] transition-all duration-300 ease-out hover:text-[#0077ed]"
+        className="inline-block text-sm text-[#3b82f6] transition-all duration-300 ease-out hover:text-[#60a5fa]"
       >
         &larr; 返回
       </Link>
 
       {/* Hero title */}
       <div className="mt-4 mb-8">
-        <h2 className="text-2xl font-bold tracking-tight text-[#1d1d1f]">{task.title}</h2>
-        <div className="mt-3 flex items-center gap-2">
-          <StatusBadge status={task.status} />
-          <PriorityBadge priority={task.priority} />
-          {(task.boss_attention_flag ?? task.bossAttentionFlag) && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ff3b30]/5 px-2.5 py-1 text-xs font-medium text-[#ff3b30]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#ff3b30]" />
-              老板关注
-            </span>
+        <h2 className="text-2xl font-bold tracking-tight text-[#e4e4e7]">{task.title}</h2>
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          {/* Inline status edit */}
+          {editingStatus ? (
+            <div className="flex items-center gap-2">
+              <select
+                value={inlineStatus}
+                onChange={(e) => setInlineStatus(e.target.value)}
+                className="rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-2 py-1 text-xs text-[#e4e4e7]"
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleInlineStatusSave}
+                disabled={saving}
+                className="rounded-lg bg-[#3b82f6] px-2 py-1 text-xs text-white hover:bg-[#2563eb] disabled:opacity-50"
+              >
+                保存
+              </button>
+              <button
+                onClick={() => { setEditingStatus(false); setInlineStatus(task.status); }}
+                className="rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-2 py-1 text-xs text-[#8b8b9e] hover:text-[#e4e4e7]"
+              >
+                取消
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setEditingStatus(true)} className="cursor-pointer" title="点击修改状态">
+              <StatusBadge status={task.status} />
+            </button>
           )}
+
+          {/* Inline priority edit */}
+          {editingPriority ? (
+            <div className="flex items-center gap-2">
+              <select
+                value={inlinePriority}
+                onChange={(e) => setInlinePriority(e.target.value)}
+                className="rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-2 py-1 text-xs text-[#e4e4e7]"
+              >
+                {PRIORITY_OPTIONS.map((p) => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleInlinePrioritySave}
+                disabled={saving}
+                className="rounded-lg bg-[#3b82f6] px-2 py-1 text-xs text-white hover:bg-[#2563eb] disabled:opacity-50"
+              >
+                保存
+              </button>
+              <button
+                onClick={() => { setEditingPriority(false); setInlinePriority(task.priority); }}
+                className="rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-2 py-1 text-xs text-[#8b8b9e] hover:text-[#e4e4e7]"
+              >
+                取消
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setEditingPriority(true)} className="cursor-pointer" title="点击修改优先级">
+              <PriorityBadge priority={task.priority} />
+            </button>
+          )}
+
+          {/* Boss attention toggle */}
+          <button
+            onClick={handleToggleAttention}
+            disabled={togglingAttention}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-all duration-300 ease-out disabled:opacity-50 ${
+              isBossAttention
+                ? 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/20 hover:bg-[#f59e0b]/20'
+                : 'bg-[#1e1e2e] text-[#5a5a6e] border-[#2a2a3a] hover:text-[#8b8b9e]'
+            }`}
+          >
+            <svg className="h-3 w-3" fill={isBossAttention ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+            </svg>
+            重点任务
+          </button>
         </div>
       </div>
 
       {saveError && (
-        <div className="mb-6 rounded-2xl bg-[#ff3b30]/5 px-5 py-4 text-sm text-[#ff3b30]">
+        <div className="mb-6 rounded-2xl bg-[#ef4444]/10 border border-[#ef4444]/20 px-5 py-4 text-sm text-[#ef4444]">
           {saveError}
         </div>
       )}
 
       {/* Progress section */}
-      <div className="mb-6 rounded-2xl bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
+      <div className="mb-6 rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-[#6e6e73]">完成进度</p>
-          <p className="tabular-nums text-2xl font-bold text-[#1d1d1f]">{currentProgress}%</p>
+          <p className="text-sm font-medium text-[#8b8b9e]">完成进度</p>
+          <p className="tabular-nums text-2xl font-bold text-[#e4e4e7]">{currentProgress}%</p>
         </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#f5f5f7]">
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#1e1e2e]">
           <div
-            className="h-full rounded-full bg-[#34c759] transition-all duration-500 ease-out"
-            style={{ width: `${Math.min(currentProgress, 100)}%` }}
+            className="h-full rounded-full bg-[#22c55e] transition-all duration-500 ease-out"
+            style={{
+              width: `${Math.min(currentProgress, 100)}%`,
+              boxShadow: '0 0 8px rgba(34,197,94,0.4)',
+            }}
           />
         </div>
         {(task.latest_progress || task.latestProgress) && (
-          <p className="mt-3 text-sm text-[#6e6e73]">
+          <p className="mt-3 text-sm text-[#8b8b9e]">
             {task.latest_progress || task.latestProgress}
           </p>
         )}
@@ -237,60 +396,60 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
 
       {/* Info cards grid */}
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
-          <p className="text-xs font-medium text-[#86868b]">任务类型</p>
-          <p className="mt-1 text-sm font-medium text-[#1d1d1f]">
+        <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5">
+          <p className="text-xs font-medium text-[#5a5a6e]">任务类型</p>
+          <p className="mt-1 text-sm font-medium text-[#e4e4e7]">
             {TASK_TYPE_LABELS[task.task_type || task.taskType] || task.task_type || task.taskType || '-'}
           </p>
         </div>
-        <div className="rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
-          <p className="text-xs font-medium text-[#86868b]">负责人</p>
-          <p className="mt-1 text-sm font-medium text-[#1d1d1f]">{task.assignee_name || task.assigneeName || '-'}</p>
+        <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5">
+          <p className="text-xs font-medium text-[#5a5a6e]">负责人</p>
+          <p className="mt-1 text-sm font-medium text-[#e4e4e7]">{task.assignee_name || task.assigneeName || '-'}</p>
         </div>
-        <div className="rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
-          <p className="text-xs font-medium text-[#86868b]">创建人</p>
-          <p className="mt-1 text-sm font-medium text-[#1d1d1f]">{task.creator_name || task.creatorName || '-'}</p>
+        <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5">
+          <p className="text-xs font-medium text-[#5a5a6e]">创建人</p>
+          <p className="mt-1 text-sm font-medium text-[#e4e4e7]">{task.creator_name || task.creatorName || '-'}</p>
         </div>
-        <div className="rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
-          <p className="text-xs font-medium text-[#86868b]">截止时间</p>
-          <p className="mt-1 tabular-nums text-sm font-medium text-[#1d1d1f]">{formatDate(task.due_at || task.dueAt)}</p>
+        <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5">
+          <p className="text-xs font-medium text-[#5a5a6e]">截止时间</p>
+          <p className="mt-1 tabular-nums text-sm font-medium text-[#e4e4e7]">{formatDate(task.due_at || task.dueAt)}</p>
         </div>
-        <div className="rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
-          <p className="text-xs font-medium text-[#86868b]">开始时间</p>
-          <p className="mt-1 tabular-nums text-sm font-medium text-[#1d1d1f]">{formatDate(task.start_at || task.startAt)}</p>
+        <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5">
+          <p className="text-xs font-medium text-[#5a5a6e]">开始时间</p>
+          <p className="mt-1 tabular-nums text-sm font-medium text-[#e4e4e7]">{formatDate(task.start_at || task.startAt)}</p>
         </div>
-        <div className="rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
-          <p className="text-xs font-medium text-[#86868b]">创建时间</p>
-          <p className="mt-1 tabular-nums text-sm font-medium text-[#1d1d1f]">{formatDate(task.created_at || task.createdAt)}</p>
+        <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5">
+          <p className="text-xs font-medium text-[#5a5a6e]">创建时间</p>
+          <p className="mt-1 tabular-nums text-sm font-medium text-[#e4e4e7]">{formatDate(task.created_at || task.createdAt)}</p>
         </div>
       </div>
 
       {/* Detail section */}
       {task.detail && (
-        <div className="mb-6 rounded-2xl bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
-          <p className="mb-2 text-xs font-medium text-[#86868b]">详细描述</p>
-          <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#1d1d1f]">{task.detail}</div>
+        <div className="mb-6 rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6">
+          <p className="mb-2 text-xs font-medium text-[#5a5a6e]">详细描述</p>
+          <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#e4e4e7]">{task.detail}</div>
         </div>
       )}
 
       {/* Action buttons */}
-      <div className="mb-6 flex gap-3">
+      <div className="mb-6 flex gap-3 flex-wrap">
         <button
           onClick={() => setEditingProgress((v) => !v)}
-          className="rounded-full bg-[#0071e3] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#0077ed] hover:shadow-[0_4px_16px_rgba(0,113,227,0.3)]"
+          className="rounded-full bg-[#3b82f6] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#2563eb]"
         >
           {editingProgress ? '取消编辑' : '更新进展'}
         </button>
         <button
           onClick={handleMarkDone}
           disabled={saving}
-          className="rounded-full bg-[#34c759] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#2db84e] hover:shadow-[0_4px_16px_rgba(52,199,89,0.3)] disabled:opacity-50"
+          className="rounded-full bg-[#22c55e] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#16a34a] disabled:opacity-50"
         >
           提交完成
         </button>
         <button
           onClick={() => setShowDelayForm((v) => !v)}
-          className="rounded-full border-0 bg-white px-6 py-2.5 text-sm font-medium text-[#ff9500] shadow-[0_2px_12px_rgba(0,0,0,0.08)] transition-all duration-300 ease-out hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+          className="rounded-full bg-[#1e1e2e] border border-[#2a2a3a] px-6 py-2.5 text-sm font-medium text-[#f59e0b] transition-all duration-300 ease-out hover:bg-[#1a1a2e]"
         >
           {showDelayForm ? '取消延期' : '申请延期'}
         </button>
@@ -298,11 +457,11 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
 
       {/* Edit progress form */}
       {editingProgress && (
-        <div className="mb-6 rounded-2xl bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
-          <h3 className="mb-5 text-lg font-semibold text-[#1d1d1f]">更新进展</h3>
+        <div className="mb-6 rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6">
+          <h3 className="mb-5 text-lg font-semibold text-[#e4e4e7]">更新进展</h3>
           <div className="space-y-5">
             <div>
-              <label htmlFor="edit_status" className="mb-1.5 block text-xs font-medium text-[#6e6e73]">状态</label>
+              <label htmlFor="edit_status" className="mb-1.5 block text-xs font-medium text-[#8b8b9e]">状态</label>
               <select
                 id="edit_status"
                 value={newStatus}
@@ -315,7 +474,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               </select>
             </div>
             <div>
-              <label htmlFor="edit_percent" className="mb-1.5 block text-xs font-medium text-[#6e6e73]">
+              <label htmlFor="edit_percent" className="mb-1.5 block text-xs font-medium text-[#8b8b9e]">
                 进度百分比
               </label>
               <div className="flex items-center gap-4">
@@ -327,13 +486,13 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
                   step={5}
                   value={progressPercent}
                   onChange={(e) => setProgressPercent(Number(e.target.value))}
-                  className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[#f5f5f7] accent-[#0071e3]"
+                  className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[#1e1e2e] accent-[#3b82f6]"
                 />
-                <span className="tabular-nums text-sm font-semibold text-[#1d1d1f]">{progressPercent}%</span>
+                <span className="tabular-nums text-sm font-semibold text-[#e4e4e7]">{progressPercent}%</span>
               </div>
             </div>
             <div>
-              <label htmlFor="edit_progress" className="mb-1.5 block text-xs font-medium text-[#6e6e73]">最新进展</label>
+              <label htmlFor="edit_progress" className="mb-1.5 block text-xs font-medium text-[#8b8b9e]">最新进展</label>
               <textarea
                 id="edit_progress"
                 rows={3}
@@ -347,7 +506,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               <button
                 onClick={handleUpdateProgress}
                 disabled={saving}
-                className="rounded-full bg-[#0071e3] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#0077ed] hover:shadow-[0_4px_16px_rgba(0,113,227,0.3)] disabled:opacity-50"
+                className="rounded-full bg-[#3b82f6] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#2563eb] disabled:opacity-50"
               >
                 {saving ? '保存中...' : '保存'}
               </button>
@@ -358,11 +517,11 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
 
       {/* Delay form */}
       {showDelayForm && (
-        <div className="mb-6 rounded-2xl bg-[#ff9500]/5 p-6">
-          <h3 className="mb-5 text-lg font-semibold text-[#ff9500]">申请延期</h3>
+        <div className="mb-6 rounded-2xl bg-[#f59e0b]/5 border border-[#f59e0b]/20 p-6">
+          <h3 className="mb-5 text-lg font-semibold text-[#f59e0b]">申请延期</h3>
           <div className="space-y-5">
             <div>
-              <label htmlFor="new_due_at" className="mb-1.5 block text-xs font-medium text-[#6e6e73]">新截止时间 *</label>
+              <label htmlFor="new_due_at" className="mb-1.5 block text-xs font-medium text-[#8b8b9e]">新截止时间 *</label>
               <input
                 id="new_due_at"
                 type="datetime-local"
@@ -373,7 +532,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               />
             </div>
             <div>
-              <label htmlFor="delay_reason" className="mb-1.5 block text-xs font-medium text-[#6e6e73]">延期原因 *</label>
+              <label htmlFor="delay_reason" className="mb-1.5 block text-xs font-medium text-[#8b8b9e]">延期原因 *</label>
               <textarea
                 id="delay_reason"
                 rows={3}
@@ -388,7 +547,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               <button
                 onClick={handleDelay}
                 disabled={delaySubmitting || !newDueAt || !delayReason.trim()}
-                className="rounded-full bg-[#ff9500] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#e68600] hover:shadow-[0_4px_16px_rgba(255,149,0,0.3)] disabled:opacity-50"
+                className="rounded-full bg-[#f59e0b] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#d97706] disabled:opacity-50"
               >
                 {delaySubmitting ? '提交中...' : '提交延期申请'}
               </button>

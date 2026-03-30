@@ -18,9 +18,9 @@ const PRIORITIES = [
 ];
 
 const inputClass =
-  'block w-full rounded-xl bg-[#f5f5f7] px-4 py-3 text-sm text-[#1d1d1f] placeholder-[#86868b] transition-all duration-300 ease-out focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071e3]/40 focus:shadow-[0_0_0_4px_rgba(0,113,227,0.1)]';
+  'block w-full rounded-xl bg-[#1e1e2e] border border-[#2a2a3a] px-4 py-3 text-sm text-[#e4e4e7] placeholder-[#5a5a6e] transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 focus:border-[#3b82f6]/50';
 
-const labelClass = 'mb-1.5 block text-xs font-medium text-[#6e6e73]';
+const labelClass = 'mb-1.5 block text-xs font-medium text-[#8b8b9e]';
 
 export default function TaskCreatePage() {
   const router = useRouter();
@@ -75,7 +75,7 @@ export default function TaskCreatePage() {
   if (!authed) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[#86868b]">正在验证登录状态...</p>
+        <p className="text-[#5a5a6e]">正在验证登录状态...</p>
       </div>
     );
   }
@@ -84,15 +84,15 @@ export default function TaskCreatePage() {
     <div className="mx-auto max-w-xl pb-16 pt-8">
       <Link
         href="/tasks"
-        className="inline-block text-sm text-[#0071e3] transition-all duration-300 ease-out hover:text-[#0077ed]"
+        className="inline-block text-sm text-[#3b82f6] transition-all duration-300 ease-out hover:text-[#60a5fa]"
       >
         &larr; 返回任务列表
       </Link>
 
-      <h2 className="mt-4 mb-8 text-3xl font-bold tracking-tight text-[#1d1d1f]">新建任务</h2>
+      <h2 className="mt-4 mb-8 text-3xl font-bold tracking-tight text-[#e4e4e7]">新建任务</h2>
 
       {error && (
-        <div className="mb-6 rounded-2xl bg-[#ff3b30]/5 px-5 py-4 text-sm text-[#ff3b30]">
+        <div className="mb-6 rounded-2xl bg-[#ef4444]/10 border border-[#ef4444]/20 px-5 py-4 text-sm text-[#ef4444]">
           {error}
         </div>
       )}
@@ -202,20 +202,20 @@ export default function TaskCreatePage() {
             aria-checked={bossAttentionFlag}
             onClick={() => setBossAttentionFlag(!bossAttentionFlag)}
             className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-out ${
-              bossAttentionFlag ? 'bg-[#0071e3]' : 'bg-[#e5e5ea]'
+              bossAttentionFlag ? 'bg-[#3b82f6]' : 'bg-[#2a2a3a]'
             }`}
           >
             <span
-              className={`pointer-events-none inline-block h-5 w-5 translate-y-0.5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.15)] transition-all duration-300 ease-out ${
+              className={`pointer-events-none inline-block h-5 w-5 translate-y-0.5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)] transition-all duration-300 ease-out ${
                 bossAttentionFlag ? 'translate-x-[22px]' : 'translate-x-0.5'
               }`}
             />
           </button>
           <label
             onClick={() => setBossAttentionFlag(!bossAttentionFlag)}
-            className="cursor-pointer text-sm text-[#1d1d1f]"
+            className="cursor-pointer text-sm text-[#e4e4e7]"
           >
-            老板关注
+            重点任务
           </label>
         </div>
 
@@ -223,14 +223,14 @@ export default function TaskCreatePage() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-full bg-[#0071e3] py-3.5 text-base font-medium text-white transition-all duration-300 ease-out hover:bg-[#0077ed] hover:shadow-[0_4px_16px_rgba(0,113,227,0.3)] disabled:opacity-50"
+          className="w-full rounded-full bg-[#3b82f6] py-3.5 text-base font-medium text-white transition-all duration-300 ease-out hover:bg-[#2563eb] disabled:opacity-50"
         >
           {submitting ? '提交中...' : '创建任务'}
         </button>
 
         <Link
           href="/tasks"
-          className="block text-center text-sm text-[#6e6e73] transition-all duration-300 ease-out hover:text-[#1d1d1f]"
+          className="block text-center text-sm text-[#5a5a6e] transition-all duration-300 ease-out hover:text-[#8b8b9e]"
         >
           取消
         </Link>
