@@ -77,6 +77,43 @@ export class TaskController {
     return this.taskService.notifyLeader(user.user_id, taskUid);
   }
 
+  @Patch('tasks/:task_uid/status')
+  updateStatus(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('task_uid') taskUid: string,
+    @Body() body: { status: string; version: number },
+  ) {
+    return this.taskService.updateTask(user.user_id, taskUid, {
+      version: body.version,
+      status: body.status as any,
+    });
+  }
+
+  @Patch('tasks/:task_uid/priority')
+  updatePriority(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('task_uid') taskUid: string,
+    @Body() body: { priority: string; version: number },
+  ) {
+    return this.taskService.updateTask(user.user_id, taskUid, {
+      version: body.version,
+      priority: body.priority as any,
+    });
+  }
+
+  @Patch('tasks/:task_uid/progress')
+  updateProgress(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('task_uid') taskUid: string,
+    @Body() body: { progress_percent: number; latest_progress?: string; version: number },
+  ) {
+    return this.taskService.updateTask(user.user_id, taskUid, {
+      version: body.version,
+      progress_percent: body.progress_percent,
+      latest_progress: body.latest_progress,
+    });
+  }
+
   @Get('me/tasks')
   listMyTasks(
     @CurrentUser() user: CurrentUserPayload,

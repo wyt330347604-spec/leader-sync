@@ -1,9 +1,12 @@
 'use client';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useDashboard } from '@/hooks/use-dashboard';
+import type { DashboardPeriod } from '@/hooks/use-dashboard';
 import { ensureAuth } from '@/lib/auth';
-import { StatusBadge } from '@/components/status-badge';
-import { PriorityBadge } from '@/components/priority-badge';
+import { apiFetch, ApiError } from '@/lib/api-client';
+import { TaskStatusLabel, PriorityLabel } from '@leader-sync/shared-types';
+
+/* ---------- helpers ---------- */
 
 function formatMonth(date: Date): string {
   const y = date.getFullYear();
@@ -17,44 +20,136 @@ function buildMonthOptions(): readonly { label: string; value: string }[] {
   for (let i = 2; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const value = formatMonth(d);
-    options.push({ label: `${d.getFullYear()}年${d.getMonth() + 1}月`, value });
+    options.push({ label: `${d.getMonth() + 1}月`, value });
   }
   return options;
 }
 
-function getMonthLabel(month: string): string {
-  const parts = month.split('-');
-  if (parts.length === 2) {
-    return `${parseInt(parts[1], 10)}月`;
-  }
-  return month;
+function buildQuarterOptions(): readonly { label: string; value: string }[] {
+  const year = new Date().getFullYear();
+  return [
+    { label: 'Q1', value: `${year}-Q1` },
+    { label: 'Q2', value: `${year}-Q2` },
+    { label: 'Q3', value: `${year}-Q3` },
+    { label: 'Q4', value: `${year}-Q4` },
+  ];
 }
 
-/* ---------- Section A: Month selector ---------- */
+function buildYearOption(): { label: string; value: string } {
+  const year = new Date().getFullYear();
+  return { label: `${year}年`, value: String(year) };
+}
 
-function MonthSelector({
-  value,
+function getCurrentQuarter(): string {
+  const now = new Date();
+  const q = Math.ceil((now.getMonth() + 1) / 3);
+  return `${now.getFullYear()}-Q${q}`;
+}
+
+function getPeriodDisplayLabel(period: DashboardPeriod): string {
+  if (period.mode === 'month') {
+    const parts = period.value.split('-');
+    if (parts.length === 2) return `${parseInt(parts[1], 10)}月`;
+    return period.value;
+  }
+  if (period.mode === 'quarter') {
+    const parts = period.value.split('-');
+    return parts.length === 2 ? parts[1] : period.value;
+  }
+  return `${period.value}年`;
+}
+
+/* ---------- Section A: Period Selector ---------- */
+
+type PeriodMode = 'month' | 'quarter' | 'year';
+
+const MODE_LABELS: readonly { mode: PeriodMode; label: string }[] = [
+  { mode: 'month', label: '月' },
+  { mode: 'quarter', label: '季' },
+  { mode: 'year', label: '年' },
+];
+
+function PeriodSelector({
+  period,
   onChange,
 }: {
-  readonly value: string;
-  readonly onChange: (v: string) => void;
+  readonly period: DashboardPeriod;
+  readonly onChange: (p: DashboardPeriod) => void;
 }) {
-  const options = buildMonthOptions();
+  const monthOptions = buildMonthOptions();
+  const quarterOptions = buildQuarterOptions();
+  const yearOption = buildYearOption();
+
+  const handleModeChange = (mode: PeriodMode) => {
+    if (mode === period.mode) return;
+    if (mode === 'month') {
+      onChange({ mode: 'month', value: formatMonth(new Date()) });
+    } else if (mode === 'quarter') {
+      onChange({ mode: 'quarter', value: getCurrentQuarter() });
+    } else {
+      onChange({ mode: 'year', value: String(new Date().getFullYear()) });
+    }
+  };
+
   return (
-    <div className="flex items-center gap-2">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          onClick={() => onChange(o.value)}
-          className={`rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 ease-out ${
-            value === o.value
-              ? 'bg-[#3b82f6] text-white'
-              : 'bg-[#1e1e2e] text-[#8b8b9e] border border-[#2a2a3a] hover:bg-[#1a1a2e] hover:text-[#e4e4e7]'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+      {/* Mode switcher pills */}
+      <div className="flex items-center gap-1 rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] p-1">
+        {MODE_LABELS.map((m) => (
+          <button
+            key={m.mode}
+            onClick={() => handleModeChange(m.mode)}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+              period.mode === m.mode
+                ? 'bg-[#3b82f6] text-white shadow-sm'
+                : 'text-[#8b8b9e] hover:text-[#e4e4e7] hover:bg-[#2a2a3a]'
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Period-specific options */}
+      <div className="flex items-center gap-2">
+        {period.mode === 'month' &&
+          monthOptions.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => onChange({ mode: 'month', value: o.value })}
+              className={`rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 ease-out ${
+                period.value === o.value
+                  ? 'bg-[#3b82f6] text-white'
+                  : 'bg-[#1e1e2e] text-[#8b8b9e] border border-[#2a2a3a] hover:bg-[#1a1a2e] hover:text-[#e4e4e7]'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+
+        {period.mode === 'quarter' &&
+          quarterOptions.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => onChange({ mode: 'quarter', value: o.value })}
+              className={`rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 ease-out ${
+                period.value === o.value
+                  ? 'bg-[#3b82f6] text-white'
+                  : 'bg-[#1e1e2e] text-[#8b8b9e] border border-[#2a2a3a] hover:bg-[#1a1a2e] hover:text-[#e4e4e7]'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+
+        {period.mode === 'year' && (
+          <button
+            className="rounded-full px-5 py-2 text-sm font-medium bg-[#3b82f6] text-white"
+          >
+            {yearOption.label}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -86,7 +181,7 @@ const STAT_ACCENT_COLORS = [
   '#ef4444', // red - overdue rate
 ] as const;
 
-function HeroStats({ stats, month }: { readonly stats: MonthlyStats; readonly month: string }) {
+function HeroStats({ stats, periodLabel }: { readonly stats: MonthlyStats; readonly periodLabel: string }) {
   const riskCount = stats.riskCount ?? 0;
   const weeklyNew = stats.weeklyNewCount ?? 0;
   const doneRate = pct(stats.done, stats.total);
@@ -108,7 +203,7 @@ function HeroStats({ stats, month }: { readonly stats: MonthlyStats; readonly mo
       <div className="relative z-10">
         <p className="mb-1 text-sm font-medium tracking-wide text-[#5a5a6e]">督办概览</p>
         <h2 className="mb-8 text-3xl font-bold tracking-tight text-white">
-          {getMonthLabel(month)} 督办概览
+          {periodLabel} 督办概览
         </h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {cards.map((c) => (
@@ -129,9 +224,79 @@ function HeroStats({ stats, month }: { readonly stats: MonthlyStats; readonly mo
   );
 }
 
+/* ---------- Inline feedback ---------- */
+
+function InlineFeedback({ message, isError }: { readonly message: string; readonly isError?: boolean }) {
+  return (
+    <span className={`ml-2 text-xs font-medium animate-pulse ${isError ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
+      {message}
+    </span>
+  );
+}
+
+/* ---------- Dropdown for status / priority ---------- */
+
+function InlineDropdown({
+  options,
+  currentValue,
+  onSelect,
+}: {
+  readonly options: readonly { value: string; label: string }[];
+  readonly currentValue: string;
+  readonly onSelect: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        className="cursor-pointer"
+      >
+        {options.find((o) => o.value === currentValue)?.label ?? currentValue}
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 min-w-[140px] rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] shadow-xl py-1">
+          {options.map((o) => (
+            <button
+              key={o.value}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(o.value);
+                setOpen(false);
+              }}
+              className={`block w-full text-left px-3 py-1.5 text-xs transition-colors duration-150 ${
+                o.value === currentValue
+                  ? 'bg-[#3b82f6]/20 text-[#3b82f6]'
+                  : 'text-[#e4e4e7] hover:bg-[#2a2a3a]'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------- Section C: Risk tasks table ---------- */
 
 interface RiskTask {
+  readonly taskUid: string;
   readonly title: string;
   readonly assigneeName: string;
   readonly leaderName: string;
@@ -142,6 +307,8 @@ interface RiskTask {
   readonly isOverdue: boolean;
   readonly carryOverCount: number;
   readonly riskReasons?: readonly string[];
+  readonly bossAttentionFlag?: boolean;
+  readonly version?: number;
 }
 
 const RISK_REASON_STYLES: Record<string, { bg: string; text: string; border: string }> = {
@@ -151,6 +318,9 @@ const RISK_REASON_STYLES: Record<string, { bg: string; text: string; border: str
   '临期': { bg: 'bg-[#eab308]/10', text: 'text-[#eab308]', border: 'border-[#eab308]/20' },
   '重点无进度': { bg: 'bg-[#3b82f6]/10', text: 'text-[#3b82f6]', border: 'border-[#3b82f6]/20' },
 };
+
+const STATUS_OPTIONS = Object.entries(TaskStatusLabel).map(([value, label]) => ({ value, label }));
+const PRIORITY_OPTIONS = Object.entries(PriorityLabel).map(([value, label]) => ({ value, label }));
 
 function RiskReasonTags({ reasons }: { readonly reasons: readonly string[] }) {
   if (reasons.length === 0) return null;
@@ -171,7 +341,135 @@ function RiskReasonTags({ reasons }: { readonly reasons: readonly string[] }) {
   );
 }
 
-function RiskTable({ tasks }: { readonly tasks: readonly RiskTask[] }) {
+function RiskTaskRow({
+  task,
+  onMutate,
+}: {
+  readonly task: RiskTask;
+  readonly onMutate: () => void;
+}) {
+  const [feedback, setFeedback] = useState<{ message: string; isError: boolean } | null>(null);
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showFeedback = useCallback((message: string, isError: boolean) => {
+    setFeedback({ message, isError });
+    if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
+    feedbackTimer.current = setTimeout(() => setFeedback(null), 2000);
+  }, []);
+
+  const handleToggleImportant = async () => {
+    try {
+      await apiFetch(`/api/v1/tasks/${task.taskUid}/toggle-important`, { method: 'POST' });
+      showFeedback('已更新', false);
+      onMutate();
+    } catch (err) {
+      const msg = err instanceof ApiError && err.code === 409 ? '版本冲突，已刷新' : '操作失败';
+      showFeedback(msg, true);
+      if (err instanceof ApiError && err.code === 409) onMutate();
+    }
+  };
+
+  const handleNotifyLeader = async () => {
+    try {
+      await apiFetch(`/api/v1/tasks/${task.taskUid}/notify-leader`, { method: 'POST' });
+      showFeedback('已催办', false);
+    } catch {
+      showFeedback('催办失败', true);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    try {
+      await apiFetch(`/api/v1/tasks/${task.taskUid}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus, version: task.version }),
+      });
+      showFeedback('已更新', false);
+      onMutate();
+    } catch (err) {
+      const msg = err instanceof ApiError && err.code === 409 ? '版本冲突，已刷新' : '更新失败';
+      showFeedback(msg, true);
+      if (err instanceof ApiError && err.code === 409) onMutate();
+    }
+  };
+
+  const handlePriorityChange = async (newPriority: string) => {
+    try {
+      await apiFetch(`/api/v1/tasks/${task.taskUid}/priority`, {
+        method: 'PATCH',
+        body: JSON.stringify({ priority: newPriority, version: task.version }),
+      });
+      showFeedback('已更新', false);
+      onMutate();
+    } catch (err) {
+      const msg = err instanceof ApiError && err.code === 409 ? '版本冲突，已刷新' : '更新失败';
+      showFeedback(msg, true);
+      if (err instanceof ApiError && err.code === 409) onMutate();
+    }
+  };
+
+  return (
+    <tr className="transition-colors duration-200 hover:bg-[#1a1a2e]">
+      <td className="px-5 py-4 font-medium text-[#e4e4e7]">
+        <span>{task.title}</span>
+        <RiskReasonTags reasons={task.riskReasons ?? []} />
+      </td>
+      <td className="px-5 py-4 text-[#e4e4e7]">{task.assigneeName || '-'}</td>
+      <td className="px-5 py-4 text-[#8b8b9e]">{task.leaderName || '-'}</td>
+      <td className="px-5 py-4">
+        <InlineDropdown
+          options={STATUS_OPTIONS}
+          currentValue={task.status}
+          onSelect={handleStatusChange}
+        />
+      </td>
+      <td className="px-5 py-4">
+        <InlineDropdown
+          options={PRIORITY_OPTIONS}
+          currentValue={task.priority}
+          onSelect={handlePriorityChange}
+        />
+      </td>
+      <td className="whitespace-nowrap px-5 py-4 tabular-nums text-[#8b8b9e]">
+        {task.dueAt ? new Date(task.dueAt).toLocaleDateString('zh-CN') : '-'}
+      </td>
+      <td className={`px-5 py-4 tabular-nums ${task.isOverdue ? 'font-semibold text-[#ef4444]' : 'text-[#8b8b9e]'}`}>
+        {task.daysToDue && task.daysToDue < 0 ? `${Math.abs(task.daysToDue)}天` : '-'}
+      </td>
+      <td className={`px-5 py-4 tabular-nums ${task.carryOverCount >= 2 ? 'font-semibold text-[#f59e0b]' : 'text-[#8b8b9e]'}`}>
+        {task.carryOverCount}
+      </td>
+      <td className="px-5 py-4">
+        <div className="flex items-center gap-1.5">
+          {/* Star toggle */}
+          <button
+            onClick={handleToggleImportant}
+            title={task.bossAttentionFlag ? '取消重点' : '标记重点'}
+            className={`rounded-lg border px-2 py-1 text-xs transition-colors duration-200 ${
+              task.bossAttentionFlag
+                ? 'text-[#f59e0b] border-[#f59e0b]/30 bg-[#f59e0b]/10 hover:bg-[#f59e0b]/20'
+                : 'text-[#5a5a6e] border-[#2a2a3a] bg-[#1e1e2e] hover:bg-[#2a2a3a] hover:text-[#f59e0b]'
+            }`}
+          >
+            ★
+          </button>
+          {/* Notify leader */}
+          <button
+            onClick={handleNotifyLeader}
+            title="催办"
+            className="rounded-lg border border-[#2a2a3a] bg-[#1e1e2e] px-2 py-1 text-xs text-[#5a5a6e] transition-colors duration-200 hover:bg-[#2a2a3a] hover:text-[#e4e4e7]"
+          >
+            催办
+          </button>
+          {/* Inline feedback */}
+          {feedback && <InlineFeedback message={feedback.message} isError={feedback.isError} />}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function RiskTable({ tasks, onMutate }: { readonly tasks: readonly RiskTask[]; readonly onMutate: () => void }) {
   if (tasks.length === 0) {
     return <p className="py-12 text-center text-[#5a5a6e]">暂无风险任务</p>;
   }
@@ -192,29 +490,12 @@ function RiskTable({ tasks }: { readonly tasks: readonly RiskTask[] }) {
                 <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">截止时间</th>
                 <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">延期天数</th>
                 <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">继承次数</th>
+                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2a2a3a]">
               {tasks.map((t, idx) => (
-                <tr key={`${t.title}-${idx}`} className="transition-colors duration-200 hover:bg-[#1a1a2e]">
-                  <td className="px-5 py-4 font-medium text-[#e4e4e7]">
-                    <span>{t.title}</span>
-                    <RiskReasonTags reasons={t.riskReasons ?? []} />
-                  </td>
-                  <td className="px-5 py-4 text-[#e4e4e7]">{t.assigneeName || '-'}</td>
-                  <td className="px-5 py-4 text-[#8b8b9e]">{t.leaderName || '-'}</td>
-                  <td className="px-5 py-4"><StatusBadge status={t.status} /></td>
-                  <td className="px-5 py-4"><PriorityBadge priority={t.priority} /></td>
-                  <td className="whitespace-nowrap px-5 py-4 tabular-nums text-[#8b8b9e]">
-                    {t.dueAt ? new Date(t.dueAt).toLocaleDateString('zh-CN') : '-'}
-                  </td>
-                  <td className={`px-5 py-4 tabular-nums ${t.isOverdue ? 'font-semibold text-[#ef4444]' : 'text-[#8b8b9e]'}`}>
-                    {t.daysToDue && t.daysToDue < 0 ? `${Math.abs(t.daysToDue)}天` : '-'}
-                  </td>
-                  <td className={`px-5 py-4 tabular-nums ${t.carryOverCount >= 2 ? 'font-semibold text-[#f59e0b]' : 'text-[#8b8b9e]'}`}>
-                    {t.carryOverCount}
-                  </td>
-                </tr>
+                <RiskTaskRow key={t.taskUid || `${t.title}-${idx}`} task={t} onMutate={onMutate} />
               ))}
             </tbody>
           </table>
@@ -329,6 +610,13 @@ function LeaderCard({ leader }: { readonly leader: LeaderSummary }) {
                   <span className={m.overdue > 0 ? 'font-semibold text-[#ef4444]' : 'text-[#8b8b9e]'}>
                     延 {m.overdue}
                   </span>
+                  <a
+                    href={`/tasks?assignee=${m.userId}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[#3b82f6] hover:text-[#60a5fa] hover:underline transition-colors duration-150"
+                  >
+                    查看任务
+                  </a>
                 </div>
               </div>
             ))}
@@ -360,13 +648,20 @@ function LeaderCards({ leaders }: { readonly leaders: readonly LeaderSummary[] }
 
 function DashboardContent() {
   const [authed, setAuthed] = useState(false);
-  const [month, setMonth] = useState(() => formatMonth(new Date()));
+  const [period, setPeriod] = useState<DashboardPeriod>(() => ({
+    mode: 'month',
+    value: formatMonth(new Date()),
+  }));
 
   useEffect(() => {
     ensureAuth().then(setAuthed);
   }, []);
 
-  const { data, error, isLoading } = useDashboard(month);
+  const { data, error, isLoading, mutate } = useDashboard(period);
+
+  const handleMutate = useCallback(() => {
+    mutate();
+  }, [mutate]);
 
   if (!authed) {
     return (
@@ -376,11 +671,13 @@ function DashboardContent() {
     );
   }
 
+  const periodLabel = getPeriodDisplayLabel(period);
+
   return (
     <div className="pb-16">
       <div className="mb-8 flex items-center justify-between pt-8">
         <h2 className="sr-only">驾驶舱</h2>
-        <MonthSelector value={month} onChange={setMonth} />
+        <PeriodSelector period={period} onChange={setPeriod} />
       </div>
 
       {isLoading ? (
@@ -402,9 +699,9 @@ function DashboardContent() {
               riskCount: data.stats?.riskCount ?? 0,
               weeklyNewCount: data.stats?.weeklyNewCount ?? 0,
             }}
-            month={month}
+            periodLabel={periodLabel}
           />
-          <RiskTable tasks={data.riskTasks ?? []} />
+          <RiskTable tasks={data.riskTasks ?? []} onMutate={handleMutate} />
           <LeaderCards leaders={data.leaderSummary ?? []} />
         </>
       ) : null}

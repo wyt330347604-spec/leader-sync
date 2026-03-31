@@ -6,6 +6,40 @@ import { eq, and, sql, inArray } from 'drizzle-orm';
 
 const DONE_STATUSES = ['done', 'shelved', 'closed'];
 
+export interface DashboardPeriod {
+  readonly type: 'month' | 'quarter' | 'year';
+  readonly value?: string;
+}
+
+function getCurrentMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getMonthBuckets(period: DashboardPeriod): readonly string[] {
+  if (period.type === 'year' && period.value) {
+    return Array.from({ length: 12 }, (_, i) => `${period.value}-${String(i + 1).padStart(2, '0')}`);
+  }
+  if (period.type === 'quarter' && period.value) {
+    const [y, q] = period.value.split('-Q');
+    const startMonth = (parseInt(q, 10) - 1) * 3 + 1;
+    return [0, 1, 2].map((i) => `${y}-${String(startMonth + i).padStart(2, '0')}`);
+  }
+  const m = period.value || getCurrentMonth();
+  return [m];
+}
+
+function getPeriodLabel(period: DashboardPeriod, monthBuckets: readonly string[]): string {
+  if (period.type === 'year' && period.value) {
+    return `${period.value}年`;
+  }
+  if (period.type === 'quarter' && period.value) {
+    const [y, q] = period.value.split('-Q');
+    return `${y}年Q${q}`;
+  }
+  return `${monthBuckets[0].split('-')[0]}年${parseInt(monthBuckets[0].split('-')[1], 10)}月`;
+}
+
 type RiskReason = 'overdue' | 'carry_over' | 'stalled' | 'near_due' | 'important_no_progress';
 
 function getThisMonday(): Date {
@@ -79,13 +113,13 @@ export interface LeaderEntry {
 export class DashboardService {
   constructor(@Inject(DATABASE_TOKEN) private readonly db: Database) {}
 
-  async getBossDashboard(month?: string) {
-    const targetMonth = month || this.getCurrentMonth();
+  async getBossDashboard(period: DashboardPeriod = { type: 'month' }) {
+    const monthBuckets = getMonthBuckets(period);
 
     const tasks = await this.db
       .select()
       .from(task)
-      .where(and(eq(task.monthBucket, targetMonth), sql`${task.deletedAt} IS NULL`));
+      .where(and(inArray(task.monthBucket, [...monthBuckets]), sql`${task.deletedAt} IS NULL`));
 
     // Group by leader, then by member within each leader
     const leaderMap = new Map<string, LeaderEntry>();
@@ -193,21 +227,24 @@ export class DashboardService {
       (t) => (t.carryOverCount ?? 0) >= 1,
     ).length;
 
-    // Snapshot
+    // Snapshot — fetch for all month buckets in the period
     const snapshots = await this.db
       .select()
       .from(monthlySnapshot)
       .where(
         and(
-          eq(monthlySnapshot.snapshotMonth, targetMonth),
+          inArray(monthlySnapshot.snapshotMonth, [...monthBuckets]),
           eq(monthlySnapshot.roleScope, 'company'),
           eq(monthlySnapshot.isLatest, true),
         ),
       );
     const snapshot = snapshots[0] ?? null;
 
+    const periodLabel = getPeriodLabel(period, monthBuckets);
+
     return {
-      month: targetMonth,
+      month: monthBuckets[0],
+      periodLabel,
       leaderSummary,
       riskTasks,
       stats: {
@@ -230,8 +267,4 @@ export class DashboardService {
     };
   }
 
-  private getCurrentMonth(): string {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  }
 }

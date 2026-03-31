@@ -35,7 +35,7 @@ function WidgetContent() {
     ensureAuth().then(setAuthed);
   }, []);
 
-  const { data, error, isLoading } = useDashboard(month);
+  const { data, error, isLoading } = useDashboard({ mode: 'month', value: month });
 
   if (!authed) {
     return (

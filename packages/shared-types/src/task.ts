@@ -17,6 +17,7 @@ export interface UpdateTaskDto {
   title?: string;
   detail?: string;
   status?: TaskStatus;
+  priority?: Priority;
   progress_percent?: number;
   latest_progress?: string;
   due_at?: string;

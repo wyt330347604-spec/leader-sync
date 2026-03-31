@@ -110,6 +110,7 @@ export class TaskService {
     if (dto.title !== undefined) updateValues.title = dto.title;
     if (dto.detail !== undefined) updateValues.detail = dto.detail;
     if (dto.status !== undefined) updateValues.status = dto.status;
+    if (dto.priority !== undefined) updateValues.priority = dto.priority;
     if (dto.progress_percent !== undefined) updateValues.progressPercent = dto.progress_percent;
     if (dto.latest_progress !== undefined) updateValues.latestProgress = dto.latest_progress;
     if (dto.due_at !== undefined) updateValues.dueAt = new Date(dto.due_at);
