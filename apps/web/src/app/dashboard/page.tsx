@@ -507,6 +507,122 @@ function RiskTable({ tasks, onMutate }: { readonly tasks: readonly RiskTask[]; r
   );
 }
 
+/* ---------- Section D-0: Person card (flat view) ---------- */
+
+interface PersonSummary {
+  readonly userId: string;
+  readonly name: string;
+  readonly leaderName: string;
+  readonly total: number;
+  readonly done: number;
+  readonly overdue: number;
+  readonly riskCount: number;
+  readonly weeklyNewCount: number;
+  readonly doneRate: number;
+}
+
+function PersonCard({ person }: { readonly person: PersonSummary }) {
+  return (
+    <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6 transition-all duration-300 ease-out hover:bg-[#1a1a2e]">
+      <p className="text-xl font-semibold text-[#e4e4e7]">{person.name}</p>
+      {person.leaderName && (
+        <p className="mt-0.5 text-xs text-[#5a5a6e]">Leader: {person.leaderName}</p>
+      )}
+      <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-[#3b82f6]" />
+          <span className="tabular-nums text-[#e4e4e7]">{person.total}</span>
+          <span className="text-[#5a5a6e]">总</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
+          <span className="tabular-nums text-[#e4e4e7]">{person.done}</span>
+          <span className="text-[#5a5a6e]">完成</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-[#ef4444]" />
+          <span className="tabular-nums text-[#e4e4e7]">{person.overdue}</span>
+          <span className="text-[#5a5a6e]">延期</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-[#f59e0b]" />
+          <span className="tabular-nums text-[#e4e4e7]">{person.riskCount}</span>
+          <span className="text-[#5a5a6e]">风险</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-[#06b6d4]" />
+          <span className="tabular-nums text-[#e4e4e7]">{person.weeklyNewCount}</span>
+          <span className="text-[#5a5a6e]">新增</span>
+        </span>
+      </div>
+      <div className="mt-3">
+        <div className="flex items-center justify-between text-xs text-[#5a5a6e]">
+          <span>完成率</span>
+          <span className="tabular-nums font-medium text-[#e4e4e7]">{person.doneRate}%</span>
+        </div>
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#1e1e2e]">
+          <div
+            className="h-full rounded-full bg-[#22c55e] transition-all duration-500 ease-out"
+            style={{
+              width: `${Math.min(person.doneRate, 100)}%`,
+              boxShadow: '0 0 8px rgba(34,197,94,0.4)',
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PersonCards({ persons }: { readonly persons: readonly PersonSummary[] }) {
+  if (persons.length === 0) {
+    return <p className="py-12 text-center text-[#5a5a6e]">暂无人员数据</p>;
+  }
+
+  return (
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {persons.map((p) => (
+        <PersonCard key={p.userId} person={p} />
+      ))}
+    </div>
+  );
+}
+
+/* ---------- Grouping toggle ---------- */
+
+type GroupMode = 'person' | 'leader';
+
+const GROUP_MODE_LABELS: readonly { mode: GroupMode; label: string }[] = [
+  { mode: 'person', label: '全部人员' },
+  { mode: 'leader', label: '按 Leader 分组' },
+];
+
+function GroupToggle({
+  groupMode,
+  onChange,
+}: {
+  readonly groupMode: GroupMode;
+  readonly onChange: (m: GroupMode) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1 rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] p-1">
+      {GROUP_MODE_LABELS.map((m) => (
+        <button
+          key={m.mode}
+          onClick={() => onChange(m.mode)}
+          className={`rounded-md px-4 py-1.5 text-xs font-medium transition-all duration-200 ${
+            groupMode === m.mode
+              ? 'bg-[#3b82f6] text-white shadow-sm'
+              : 'text-[#8b8b9e] hover:text-[#e4e4e7] hover:bg-[#2a2a3a]'
+          }`}
+        >
+          {m.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /* ---------- Section D: Leader cards with expandable members ---------- */
 
 interface MemberSummary {
@@ -635,13 +751,10 @@ function LeaderCards({ leaders }: { readonly leaders: readonly LeaderSummary[] }
   }
 
   return (
-    <div className="mt-10">
-      <h3 className="mb-5 text-xl font-semibold tracking-tight text-[#e4e4e7]">Leader 概览</h3>
-      <div className="grid gap-5 sm:grid-cols-2">
-        {leaders.map((l) => (
-          <LeaderCard key={l.leaderName} leader={l} />
-        ))}
-      </div>
+    <div className="grid gap-5 sm:grid-cols-2">
+      {leaders.map((l) => (
+        <LeaderCard key={l.leaderName} leader={l} />
+      ))}
     </div>
   );
 }
@@ -698,6 +811,7 @@ function DashboardContent() {
     value: formatMonth(new Date()),
   }));
   const [activeView, setActiveView] = useState<DashboardView>('overview');
+  const [groupMode, setGroupMode] = useState<GroupMode>('person');
 
   useEffect(() => {
     ensureAuth().then(setAuthed);
@@ -750,7 +864,19 @@ function DashboardContent() {
             }}
             periodLabel={periodLabel}
           />
-          <LeaderCards leaders={data.leaderSummary ?? []} />
+          <div className="mt-10">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-xl font-semibold tracking-tight text-[#e4e4e7]">
+                {groupMode === 'person' ? '人员概览' : 'Leader 概览'}
+              </h3>
+              <GroupToggle groupMode={groupMode} onChange={setGroupMode} />
+            </div>
+            {groupMode === 'person' ? (
+              <PersonCards persons={data.personSummary ?? []} />
+            ) : (
+              <LeaderCards leaders={data.leaderSummary ?? []} />
+            )}
+          </div>
           <RiskTable tasks={data.riskTasks ?? []} onMutate={handleMutate} />
         </>
       ) : null}

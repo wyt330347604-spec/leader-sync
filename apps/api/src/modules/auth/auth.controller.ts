@@ -37,7 +37,7 @@ export class AuthController {
       httpOnly: true,
       secure: this.config.get('APP_ENV') === 'production',
       sameSite: 'lax',
-      maxAge: 8 * 60 * 60 * 1000, // 8h
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
     return user;
   }
@@ -68,7 +68,7 @@ export class AuthController {
         httpOnly: true,
         secure: this.config.get('APP_ENV') === 'production',
         sameSite: 'lax',
-        maxAge: 8 * 60 * 60 * 1000,
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
       // Validate redirect is internal path
       const safePath = redirectPath.startsWith('/') && !redirectPath.startsWith('//') ? redirectPath : '/tasks';

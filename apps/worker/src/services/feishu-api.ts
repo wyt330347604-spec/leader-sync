@@ -82,7 +82,7 @@ export class FeishuApi {
     try {
       await client.im.message.create({
         params: {
-          receive_id_type: 'user_id',
+          receive_id_type: 'open_id',
         },
         data: {
           receive_id: userId,

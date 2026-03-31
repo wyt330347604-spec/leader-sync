@@ -144,6 +144,7 @@ export async function runMonthlyClose(): Promise<void> {
       assigneeManagerName: t.assigneeManagerName,
       assigneeDeptName: t.assigneeDeptName,
       leaderUserId: t.leaderUserId,
+      leaderName: t.leaderName,
       issuerUserId: t.issuerUserId,
       assignerUserId: t.assignerUserId,
       assignmentType: 'carry_over' as const,

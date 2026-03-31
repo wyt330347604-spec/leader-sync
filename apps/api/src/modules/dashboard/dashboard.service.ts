@@ -261,6 +261,55 @@ export class DashboardService {
       }))
       .sort((a, b) => b.total - a.total);
 
+    // Per-person flat summary (all individuals regardless of leader grouping)
+    const personMap = new Map<
+      string,
+      { name: string; leaderName: string; total: number; done: number; overdue: number; riskCount: number; weeklyNewCount: number }
+    >();
+
+    for (const t of tasks) {
+      const userId = t.assigneeUserId;
+      const prev = personMap.get(userId) ?? {
+        name: t.assigneeName || userId,
+        leaderName: t.leaderName || '',
+        total: 0,
+        done: 0,
+        overdue: 0,
+        riskCount: 0,
+        weeklyNewCount: 0,
+      };
+
+      const isDone = t.status === 'done';
+      const isOverdue = t.isOverdue && !DONE_STATUSES.includes(t.status);
+      const riskReasons = computeRiskReasons(t);
+      const isRisk = riskReasons.length > 0;
+      const isWeeklyNew = t.createdAt >= thisMonday;
+
+      personMap.set(userId, {
+        name: prev.name || t.assigneeName || '',
+        leaderName: prev.leaderName || t.leaderName || '',
+        total: prev.total + 1,
+        done: prev.done + (isDone ? 1 : 0),
+        overdue: prev.overdue + (isOverdue ? 1 : 0),
+        riskCount: prev.riskCount + (isRisk ? 1 : 0),
+        weeklyNewCount: prev.weeklyNewCount + (isWeeklyNew ? 1 : 0),
+      });
+    }
+
+    const personSummary = [...personMap.entries()]
+      .map(([userId, data]) => ({
+        userId,
+        name: data.name || userId,
+        leaderName: data.leaderName,
+        total: data.total,
+        done: data.done,
+        overdue: data.overdue,
+        riskCount: data.riskCount,
+        weeklyNewCount: data.weeklyNewCount,
+        doneRate: data.total > 0 ? Math.round((data.done / data.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
+
     // Risk tasks: any task matching at least one of the 5 risk conditions
     const riskTasks = tasks
       .map((t) => ({
@@ -314,6 +363,7 @@ export class DashboardService {
       month: monthBuckets[0],
       periodLabel,
       leaderSummary,
+      personSummary,
       riskTasks,
       stats: {
         total: totalTasks,
