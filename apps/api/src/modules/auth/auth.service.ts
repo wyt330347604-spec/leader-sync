@@ -8,6 +8,7 @@ import { FeishuAuthService } from './feishu-auth.service';
 
 export interface JwtPayload {
   user_id: string;
+  open_id?: string;
   user_name: string;
   role: string;
   dept_id: string;
@@ -33,12 +34,14 @@ export class AuthService {
       .insert(orgCache)
       .values({
         userId: feishuUser.user_id,
+        openId: feishuUser.open_id,
         userName: feishuUser.name,
         deptId: feishuUser.department_ids?.[0] || null,
       })
       .onConflictDoUpdate({
         target: orgCache.userId,
         set: {
+          openId: feishuUser.open_id,
           userName: feishuUser.name,
           deptId: feishuUser.department_ids?.[0] || null,
           syncedAt: new Date(),
@@ -54,6 +57,7 @@ export class AuthService {
 
     const payload: JwtPayload = {
       user_id: feishuUser.user_id,
+      open_id: feishuUser.open_id,
       user_name: feishuUser.name,
       role,
       dept_id: feishuUser.department_ids?.[0] || '',
@@ -78,6 +82,7 @@ export class AuthService {
 
     return {
       user_id: users[0].userId,
+      open_id: users[0].openId ?? undefined,
       user_name: users[0].userName || '',
       role: roles[0]?.role || 'employee',
       dept_id: users[0].deptId || '',

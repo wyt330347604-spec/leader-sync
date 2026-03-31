@@ -68,6 +68,7 @@ describe('AuthService', () => {
       expect(mockDb.insert).toHaveBeenCalled();
       expect(mockJwtService.signAsync).toHaveBeenCalledWith({
         user_id: 'u_abc123',
+        open_id: 'ou_abc123',
         user_name: 'Test User',
         role: 'employee',
         dept_id: 'dept_001',
@@ -76,6 +77,7 @@ describe('AuthService', () => {
         token: 'signed-jwt-token',
         user: {
           user_id: 'u_abc123',
+          open_id: 'ou_abc123',
           user_name: 'Test User',
           role: 'employee',
           dept_id: 'dept_001',
@@ -113,6 +115,7 @@ describe('AuthService', () => {
         where: vi.fn().mockResolvedValue([
           {
             userId: 'u_abc123',
+            openId: 'ou_abc123',
             userName: 'Test User',
             deptId: 'dept_001',
             syncedAt: new Date(),
@@ -133,6 +136,7 @@ describe('AuthService', () => {
 
       expect(result).toEqual({
         user_id: 'u_abc123',
+        open_id: 'ou_abc123',
         user_name: 'Test User',
         role: 'admin',
         dept_id: 'dept_001',

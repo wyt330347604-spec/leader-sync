@@ -750,8 +750,8 @@ function DashboardContent() {
             }}
             periodLabel={periodLabel}
           />
-          <RiskTable tasks={data.riskTasks ?? []} onMutate={handleMutate} />
           <LeaderCards leaders={data.leaderSummary ?? []} />
+          <RiskTable tasks={data.riskTasks ?? []} onMutate={handleMutate} />
         </>
       ) : null}
     </div>

@@ -295,12 +295,13 @@ export class TaskService {
     return { notified: true, taskUid };
   }
 
-  async listMyTasks(userId: string, query: TaskListQuery): Promise<PaginatedData<unknown>> {
+  async listMyTasks(userId: string, openId: string | undefined, query: TaskListQuery): Promise<PaginatedData<unknown>> {
     const page = query.page ?? 1;
     const pageSize = query.page_size ?? 20;
 
     const { items, total } = await this.taskRepository.listByUser(
       userId,
+      openId,
       {
         status: query.status,
         bucket: query.bucket,

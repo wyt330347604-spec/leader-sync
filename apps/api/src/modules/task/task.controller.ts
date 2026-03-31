@@ -123,7 +123,7 @@ export class TaskController {
     @Query('page') page?: string,
     @Query('page_size') pageSize?: string,
   ) {
-    return this.taskService.listMyTasks(user.user_id, {
+    return this.taskService.listMyTasks(user.user_id, user.open_id, {
       status: status as any,
       bucket,
       priority: priority as any,

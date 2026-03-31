@@ -36,16 +36,20 @@ export class TaskRepository {
 
   async listByUser(
     userId: string,
+    openId: string | undefined,
     filters: { status?: string; bucket?: string; priority?: string },
     page: number,
     pageSize: number,
   ) {
+    const userIds = [userId];
+    if (openId && openId !== userId) userIds.push(openId);
+
     const conditions = [
       sql`${task.deletedAt} IS NULL`,
       or(
-        eq(task.assigneeUserId, userId),
-        eq(task.issuerUserId, userId),
-        sql`${task.collaborators}::jsonb @> ${JSON.stringify([userId])}::jsonb`,
+        inArray(task.assigneeUserId, userIds),
+        inArray(task.issuerUserId, userIds),
+        ...userIds.map(id => sql`${task.collaborators}::jsonb @> ${JSON.stringify([id])}::jsonb`),
       ),
     ];
 

@@ -8,6 +8,7 @@ import {
 export const orgCache = pgTable('org_cache', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
   userId: varchar('user_id', { length: 128 }).notNull().unique(),
+  openId: varchar('open_id', { length: 128 }),
   userName: varchar('user_name', { length: 128 }),
   deptId: varchar('dept_id', { length: 128 }),
   deptName: varchar('dept_name', { length: 128 }),
