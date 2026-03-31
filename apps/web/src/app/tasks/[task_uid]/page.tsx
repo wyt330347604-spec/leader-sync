@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
+import useSWR from 'swr';
 import { useTask } from '@/hooks/use-task';
 import { StatusBadge } from '@/components/status-badge';
 import { PriorityBadge } from '@/components/priority-badge';
@@ -43,6 +44,135 @@ const inputClass =
 function formatDate(val: string | null | undefined): string {
   if (!val) return '-';
   return new Date(val).toLocaleString('zh-CN');
+}
+
+/* ---------- Multi-Leader Section ---------- */
+
+interface TaskLeader {
+  readonly leader_user_id: string;
+  readonly leader_name: string;
+}
+
+function LeaderSection({ taskUid }: { readonly taskUid: string }) {
+  const { data: leaders, mutate: mutateLeaders } = useSWR<readonly TaskLeader[]>(
+    taskUid ? `/api/v1/tasks/${taskUid}/leaders` : null,
+    (url: string) => apiFetch<TaskLeader[]>(url),
+  );
+
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newLeaderId, setNewLeaderId] = useState('');
+  const [newLeaderName, setNewLeaderName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [leaderError, setLeaderError] = useState('');
+
+  async function handleAddLeader() {
+    if (!newLeaderId.trim() || !newLeaderName.trim()) return;
+    setSubmitting(true);
+    setLeaderError('');
+    try {
+      await apiFetch(`/api/v1/tasks/${taskUid}/leaders`, {
+        method: 'POST',
+        body: JSON.stringify({
+          leader_user_id: newLeaderId.trim(),
+          leader_name: newLeaderName.trim(),
+        }),
+      });
+      await mutateLeaders();
+      setNewLeaderId('');
+      setNewLeaderName('');
+      setShowAddForm(false);
+    } catch (err: any) {
+      setLeaderError(err.message || '添加失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleRemoveLeader(leaderUserId: string) {
+    setLeaderError('');
+    try {
+      await apiFetch(`/api/v1/tasks/${taskUid}/leaders/${leaderUserId}`, {
+        method: 'DELETE',
+      });
+      await mutateLeaders();
+    } catch (err: any) {
+      setLeaderError(err.message || '移除失败');
+    }
+  }
+
+  return (
+    <div className="mb-6 rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs font-medium text-[#5a5a6e]">关联 Leader</p>
+        <button
+          onClick={() => setShowAddForm((v) => !v)}
+          className="rounded-full bg-[#3b82f6] px-3 py-1 text-xs font-medium text-white transition-all duration-200 hover:bg-[#2563eb]"
+        >
+          {showAddForm ? '取消' : '添加 Leader'}
+        </button>
+      </div>
+
+      {leaderError && (
+        <p className="mb-3 text-xs text-[#ef4444]">{leaderError}</p>
+      )}
+
+      {/* Leader chips */}
+      <div className="flex flex-wrap gap-2">
+        {leaders && leaders.length > 0 ? (
+          leaders.map((l) => (
+            <span
+              key={l.leader_user_id}
+              className="inline-flex items-center gap-1.5 bg-[#1e1e2e] border border-[#2a2a3a] rounded-full px-3 py-1 text-sm text-[#e4e4e7]"
+            >
+              {l.leader_name}
+              <button
+                onClick={() => handleRemoveLeader(l.leader_user_id)}
+                className="ml-0.5 text-[#ef4444] hover:text-[#f87171] transition-colors duration-150 text-xs font-bold leading-none"
+                title="移除"
+              >
+                &times;
+              </button>
+            </span>
+          ))
+        ) : (
+          <span className="text-xs text-[#5a5a6e]">暂无关联 Leader</span>
+        )}
+      </div>
+
+      {/* Add form */}
+      {showAddForm && (
+        <div className="mt-4 flex items-end gap-3 flex-wrap">
+          <div>
+            <label className="mb-1 block text-[10px] font-medium text-[#8b8b9e]">用户 ID</label>
+            <input
+              type="text"
+              value={newLeaderId}
+              onChange={(e) => setNewLeaderId(e.target.value)}
+              placeholder="leader_user_id"
+              className="block w-40 rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-3 py-1.5 text-xs text-[#e4e4e7] placeholder-[#5a5a6e] focus:outline-none focus:ring-1 focus:ring-[#3b82f6]/40"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[10px] font-medium text-[#8b8b9e]">姓名</label>
+            <input
+              type="text"
+              value={newLeaderName}
+              onChange={(e) => setNewLeaderName(e.target.value)}
+              placeholder="Leader 姓名"
+              className="block w-40 rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-3 py-1.5 text-xs text-[#e4e4e7] placeholder-[#5a5a6e] focus:outline-none focus:ring-1 focus:ring-[#3b82f6]/40"
+            />
+          </div>
+          <button
+            onClick={handleAddLeader}
+            disabled={submitting || !newLeaderId.trim() || !newLeaderName.trim()}
+            className="rounded-lg bg-[#3b82f6] px-4 py-1.5 text-xs font-medium text-white transition-all duration-200 hover:bg-[#2563eb] disabled:opacity-50"
+          >
+            {submitting ? '添加中...' : '确认添加'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function TaskDetailPage({ params }: { params: Promise<{ task_uid: string }> }) {
@@ -423,6 +553,9 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
           <p className="mt-1 tabular-nums text-sm font-medium text-[#e4e4e7]">{formatDate(task.created_at || task.createdAt)}</p>
         </div>
       </div>
+
+      {/* Multi-Leader section */}
+      <LeaderSection taskUid={taskUid} />
 
       {/* Detail section */}
       {task.detail && (

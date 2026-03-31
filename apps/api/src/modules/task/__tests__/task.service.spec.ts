@@ -13,6 +13,10 @@ function createMockRepository(): Record<keyof TaskRepository, ReturnType<typeof 
     listByUser: vi.fn(),
     insertProgressLog: vi.fn(),
     findOrgUser: vi.fn(),
+    addTaskLeader: vi.fn(),
+    removeTaskLeader: vi.fn(),
+    getTaskLeaders: vi.fn(),
+    getTaskLeadersByTaskUids: vi.fn(),
   };
 }
 

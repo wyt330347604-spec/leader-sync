@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser, type CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { TaskService } from './task.service';
@@ -130,5 +130,28 @@ export class TaskController {
       page: page ? parseInt(page, 10) : 1,
       page_size: pageSize ? parseInt(pageSize, 10) : 20,
     });
+  }
+
+  @Post('tasks/:task_uid/leaders')
+  addLeader(
+    @CurrentUser() _user: CurrentUserPayload,
+    @Param('task_uid') taskUid: string,
+    @Body() body: { leader_user_id: string; leader_name?: string },
+  ) {
+    return this.taskService.addLeader(taskUid, body.leader_user_id, body.leader_name);
+  }
+
+  @Delete('tasks/:task_uid/leaders/:leader_user_id')
+  removeLeader(
+    @CurrentUser() _user: CurrentUserPayload,
+    @Param('task_uid') taskUid: string,
+    @Param('leader_user_id') leaderUserId: string,
+  ) {
+    return this.taskService.removeLeader(taskUid, leaderUserId);
+  }
+
+  @Get('tasks/:task_uid/leaders')
+  getLeaders(@Param('task_uid') taskUid: string) {
+    return this.taskService.getLeaders(taskUid);
   }
 }

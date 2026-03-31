@@ -1,8 +1,8 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { DATABASE_TOKEN } from '../../database.module';
 import type { Database } from '@leader-sync/db';
-import { task, taskProgressLog, orgCache } from '@leader-sync/db';
-import { eq, and, or, sql, desc } from 'drizzle-orm';
+import { task, taskLeader, taskProgressLog, orgCache } from '@leader-sync/db';
+import { eq, and, or, sql, desc, inArray } from 'drizzle-orm';
 
 @Injectable()
 export class TaskRepository {
@@ -82,5 +82,28 @@ export class TaskRepository {
       .from(orgCache)
       .where(eq(orgCache.userId, userId));
     return result || null;
+  }
+
+  async addTaskLeader(values: typeof taskLeader.$inferInsert) {
+    const [result] = await this.db.insert(taskLeader).values(values).returning();
+    return result;
+  }
+
+  async removeTaskLeader(taskUid: string, leaderUserId: string) {
+    await this.db
+      .delete(taskLeader)
+      .where(and(eq(taskLeader.taskUid, taskUid), eq(taskLeader.leaderUserId, leaderUserId)));
+  }
+
+  async getTaskLeaders(taskUid: string) {
+    return this.db.select().from(taskLeader).where(eq(taskLeader.taskUid, taskUid));
+  }
+
+  async getTaskLeadersByTaskUids(taskUids: readonly string[]) {
+    if (taskUids.length === 0) return [];
+    return this.db
+      .select()
+      .from(taskLeader)
+      .where(inArray(taskLeader.taskUid, [...taskUids]));
   }
 }

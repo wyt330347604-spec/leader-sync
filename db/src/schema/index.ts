@@ -1,4 +1,5 @@
 export { task } from './task';
+export { taskLeader } from './task-leader';
 export { taskProgressLog } from './task-progress-log';
 export { externalMapping } from './external-mapping';
 export { inboundEvent } from './inbound-event';

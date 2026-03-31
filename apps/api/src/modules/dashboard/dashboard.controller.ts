@@ -17,4 +17,15 @@ export class DashboardController {
     if (quarter) return this.dashboardService.getBossDashboard({ type: 'quarter', value: quarter });
     return this.dashboardService.getBossDashboard({ type: 'month', value: month });
   }
+
+  @Get('gantt')
+  async ganttData(
+    @Query('month') month?: string,
+    @Query('quarter') quarter?: string,
+    @Query('year') year?: string,
+  ) {
+    if (year) return this.dashboardService.getGanttData({ type: 'year', value: year });
+    if (quarter) return this.dashboardService.getGanttData({ type: 'quarter', value: quarter });
+    return this.dashboardService.getGanttData({ type: 'month', value: month });
+  }
 }

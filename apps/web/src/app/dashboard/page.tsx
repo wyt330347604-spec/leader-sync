@@ -1,10 +1,12 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useDashboard } from '@/hooks/use-dashboard';
+import { useGantt } from '@/hooks/use-gantt';
 import type { DashboardPeriod } from '@/hooks/use-dashboard';
 import { ensureAuth } from '@/lib/auth';
 import { apiFetch, ApiError } from '@/lib/api-client';
 import { TaskStatusLabel, PriorityLabel } from '@leader-sync/shared-types';
+import { GanttChart } from '@/components/gantt-chart';
 
 /* ---------- helpers ---------- */
 
@@ -644,6 +646,49 @@ function LeaderCards({ leaders }: { readonly leaders: readonly LeaderSummary[] }
   );
 }
 
+/* ---------- View Switcher ---------- */
+
+type DashboardView = 'overview' | 'gantt';
+
+const VIEW_TABS: readonly { view: DashboardView; label: string }[] = [
+  { view: 'overview', label: '概览' },
+  { view: 'gantt', label: '甘特图' },
+];
+
+function ViewSwitcher({
+  activeView,
+  onChange,
+}: {
+  readonly activeView: DashboardView;
+  readonly onChange: (v: DashboardView) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1 rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] p-1">
+      {VIEW_TABS.map((tab) => (
+        <button
+          key={tab.view}
+          onClick={() => onChange(tab.view)}
+          className={`rounded-md px-4 py-1.5 text-xs font-medium transition-all duration-200 ${
+            activeView === tab.view
+              ? 'bg-[#3b82f6] text-white shadow-sm'
+              : 'text-[#8b8b9e] hover:text-[#e4e4e7] hover:bg-[#2a2a3a]'
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ---------- Gantt View Wrapper ---------- */
+
+function GanttView({ period }: { readonly period: DashboardPeriod }) {
+  const { data, error, isLoading } = useGantt(period);
+
+  return <GanttChart data={data} isLoading={isLoading} error={error} />;
+}
+
 /* ---------- Main ---------- */
 
 function DashboardContent() {
@@ -652,6 +697,7 @@ function DashboardContent() {
     mode: 'month',
     value: formatMonth(new Date()),
   }));
+  const [activeView, setActiveView] = useState<DashboardView>('overview');
 
   useEffect(() => {
     ensureAuth().then(setAuthed);
@@ -675,12 +721,15 @@ function DashboardContent() {
 
   return (
     <div className="pb-16">
-      <div className="mb-8 flex items-center justify-between pt-8">
+      <div className="mb-8 flex items-center justify-between gap-4 pt-8">
         <h2 className="sr-only">驾驶舱</h2>
         <PeriodSelector period={period} onChange={setPeriod} />
+        <ViewSwitcher activeView={activeView} onChange={setActiveView} />
       </div>
 
-      {isLoading ? (
+      {activeView === 'gantt' ? (
+        <GanttView period={period} />
+      ) : isLoading ? (
         <div className="flex min-h-[40vh] items-center justify-center">
           <p className="text-[#5a5a6e]">加载中...</p>
         </div>

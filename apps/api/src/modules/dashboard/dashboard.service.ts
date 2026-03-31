@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { DATABASE_TOKEN } from '../../database.module';
 import type { Database } from '@leader-sync/db';
-import { task, monthlySnapshot, orgCache } from '@leader-sync/db';
+import { task, taskLeader, monthlySnapshot, orgCache } from '@leader-sync/db';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 
 const DONE_STATUSES = ['done', 'shelved', 'closed'];
@@ -109,9 +109,69 @@ export interface LeaderEntry {
   readonly members: MemberEntry[];
 }
 
+export interface GanttTask {
+  readonly taskUid: string;
+  readonly title: string;
+  readonly assigneeName: string;
+  readonly status: string;
+  readonly priority: string;
+  readonly startAt: Date;
+  readonly dueAt: Date;
+  readonly completedAt: Date | null;
+  readonly progressPercent: number;
+  readonly isOverdue: boolean;
+  readonly bossAttentionFlag: boolean;
+}
+
 @Injectable()
 export class DashboardService {
   constructor(@Inject(DATABASE_TOKEN) private readonly db: Database) {}
+
+  /**
+   * Fetch all task_leader entries for the given task UIDs,
+   * keyed by taskUid for easy lookup.
+   */
+  private async fetchExtraLeaders(
+    taskUids: readonly string[],
+  ): Promise<ReadonlyMap<string, readonly { leaderUserId: string; leaderName: string | null }[]>> {
+    if (taskUids.length === 0) return new Map();
+
+    const rows = await this.db
+      .select()
+      .from(taskLeader)
+      .where(inArray(taskLeader.taskUid, [...taskUids]));
+
+    const map = new Map<string, { leaderUserId: string; leaderName: string | null }[]>();
+    for (const r of rows) {
+      const existing = map.get(r.taskUid) ?? [];
+      map.set(r.taskUid, [...existing, { leaderUserId: r.leaderUserId, leaderName: r.leaderName }]);
+    }
+    return map;
+  }
+
+  /**
+   * For a given task, return all leader IDs it should be grouped under:
+   * the primary leaderUserId plus any additional leaders from task_leader.
+   */
+  private getLeaderIdsForTask(
+    t: { readonly leaderUserId: string; readonly leaderName: string | null; readonly taskUid: string },
+    extraLeadersMap: ReadonlyMap<string, readonly { leaderUserId: string; leaderName: string | null }[]>,
+  ): readonly { leaderId: string; leaderName: string | null }[] {
+    const primary = { leaderId: t.leaderUserId || 'unknown', leaderName: t.leaderName ?? null };
+    const extras = extraLeadersMap.get(t.taskUid) ?? [];
+
+    const seen = new Set<string>([primary.leaderId]);
+    const result = [primary];
+
+    for (const e of extras) {
+      if (!seen.has(e.leaderUserId)) {
+        seen.add(e.leaderUserId);
+        result.push({ leaderId: e.leaderUserId, leaderName: e.leaderName });
+      }
+    }
+
+    return result;
+  }
 
   async getBossDashboard(period: DashboardPeriod = { type: 'month' }) {
     const monthBuckets = getMonthBuckets(period);
@@ -121,23 +181,15 @@ export class DashboardService {
       .from(task)
       .where(and(inArray(task.monthBucket, [...monthBuckets]), sql`${task.deletedAt} IS NULL`));
 
+    // Fetch extra leaders from task_leader table
+    const taskUids = tasks.map((t) => t.taskUid);
+    const extraLeadersMap = await this.fetchExtraLeaders(taskUids);
+
     // Group by leader, then by member within each leader
     const leaderMap = new Map<string, LeaderEntry>();
     const thisMonday = getThisMonday();
 
     for (const t of tasks) {
-      const leaderId = t.leaderUserId || 'unknown';
-      const prev = leaderMap.get(leaderId) ?? {
-        name: t.leaderName || '',
-        total: 0,
-        done: 0,
-        overdue: 0,
-        carryOver: 0,
-        riskCount: 0,
-        weeklyNewCount: 0,
-        members: [],
-      };
-
       const isDone = t.status === 'done';
       const isOverdue = t.isOverdue && !DONE_STATUSES.includes(t.status);
       const isCarry = (t.carryOverCount ?? 0) >= 1;
@@ -145,37 +197,53 @@ export class DashboardService {
       const isRisk = riskReasons.length > 0;
       const isWeeklyNew = t.createdAt >= thisMonday;
 
-      // Update member entry
-      const members = [...prev.members];
-      const memberIdx = members.findIndex((m) => m.userId === t.assigneeUserId);
-      if (memberIdx >= 0) {
-        const m = members[memberIdx];
-        members[memberIdx] = {
-          ...m,
-          total: m.total + 1,
-          done: m.done + (isDone ? 1 : 0),
-          overdue: m.overdue + (isOverdue ? 1 : 0),
+      // Each task may belong to multiple leaders
+      const leaderEntries = this.getLeaderIdsForTask(t, extraLeadersMap);
+
+      for (const { leaderId, leaderName: lName } of leaderEntries) {
+        const prev = leaderMap.get(leaderId) ?? {
+          name: lName || '',
+          total: 0,
+          done: 0,
+          overdue: 0,
+          carryOver: 0,
+          riskCount: 0,
+          weeklyNewCount: 0,
+          members: [],
         };
-      } else {
-        members.push({
-          userId: t.assigneeUserId,
-          name: t.assigneeName || t.assigneeUserId,
-          total: 1,
-          done: isDone ? 1 : 0,
-          overdue: isOverdue ? 1 : 0,
+
+        // Update member entry
+        const members = [...prev.members];
+        const memberIdx = members.findIndex((m) => m.userId === t.assigneeUserId);
+        if (memberIdx >= 0) {
+          const m = members[memberIdx];
+          members[memberIdx] = {
+            ...m,
+            total: m.total + 1,
+            done: m.done + (isDone ? 1 : 0),
+            overdue: m.overdue + (isOverdue ? 1 : 0),
+          };
+        } else {
+          members.push({
+            userId: t.assigneeUserId,
+            name: t.assigneeName || t.assigneeUserId,
+            total: 1,
+            done: isDone ? 1 : 0,
+            overdue: isOverdue ? 1 : 0,
+          });
+        }
+
+        leaderMap.set(leaderId, {
+          name: prev.name || lName || '',
+          total: prev.total + 1,
+          done: prev.done + (isDone ? 1 : 0),
+          overdue: prev.overdue + (isOverdue ? 1 : 0),
+          carryOver: prev.carryOver + (isCarry ? 1 : 0),
+          riskCount: prev.riskCount + (isRisk ? 1 : 0),
+          weeklyNewCount: prev.weeklyNewCount + (isWeeklyNew ? 1 : 0),
+          members,
         });
       }
-
-      leaderMap.set(leaderId, {
-        name: prev.name || t.leaderName || '',
-        total: prev.total + 1,
-        done: prev.done + (isDone ? 1 : 0),
-        overdue: prev.overdue + (isOverdue ? 1 : 0),
-        carryOver: prev.carryOver + (isCarry ? 1 : 0),
-        riskCount: prev.riskCount + (isRisk ? 1 : 0),
-        weeklyNewCount: prev.weeklyNewCount + (isWeeklyNew ? 1 : 0),
-        members,
-      });
     }
 
     const leaderSummary = [...leaderMap.entries()]
@@ -267,4 +335,79 @@ export class DashboardService {
     };
   }
 
+  async getGanttData(period: DashboardPeriod) {
+    const monthBuckets = getMonthBuckets(period);
+
+    const tasks = await this.db
+      .select()
+      .from(task)
+      .where(and(inArray(task.monthBucket, [...monthBuckets]), sql`${task.deletedAt} IS NULL`));
+
+    // Fetch extra leaders from task_leader table
+    const taskUids = tasks.map((t) => t.taskUid);
+    const extraLeadersMap = await this.fetchExtraLeaders(taskUids);
+
+    // Group by leader — a task with multiple leaders appears in each group
+    const groups = new Map<string, { leaderName: string; tasks: GanttTask[] }>();
+
+    for (const t of tasks) {
+      const ganttTask: GanttTask = {
+        taskUid: t.taskUid,
+        title: t.title,
+        assigneeName: t.assigneeName,
+        status: t.status,
+        priority: t.priority,
+        startAt: t.startAt ?? t.createdAt,
+        dueAt: t.dueAt,
+        completedAt: t.completedAt,
+        progressPercent: t.progressPercent ?? 0,
+        isOverdue: t.isOverdue ?? false,
+        bossAttentionFlag: t.bossAttentionFlag ?? false,
+      };
+
+      const leaderEntries = this.getLeaderIdsForTask(t, extraLeadersMap);
+
+      for (const { leaderId, leaderName: lName } of leaderEntries) {
+        const existing = groups.get(leaderId);
+        if (existing) {
+          groups.set(leaderId, {
+            leaderName: existing.leaderName || lName || leaderId,
+            tasks: [...existing.tasks, ganttTask],
+          });
+        } else {
+          groups.set(leaderId, {
+            leaderName: lName || leaderId,
+            tasks: [ganttTask],
+          });
+        }
+      }
+    }
+
+    // Sort tasks within each group by startAt
+    const ganttGroups = [...groups.entries()].map(([leaderId, group]) => ({
+      leaderId,
+      leaderName: group.leaderName,
+      tasks: [...group.tasks].sort(
+        (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
+      ),
+    }));
+
+    // Calculate overall time range
+    const allDates = tasks
+      .flatMap((t) => [t.startAt ?? t.createdAt, t.dueAt])
+      .filter(Boolean)
+      .map((d) => new Date(d!).getTime());
+
+    const minDate = allDates.length > 0 ? new Date(Math.min(...allDates)).toISOString() : null;
+    const maxDate = allDates.length > 0 ? new Date(Math.max(...allDates)).toISOString() : null;
+
+    const periodLabel = getPeriodLabel(period, monthBuckets);
+
+    return {
+      periodLabel,
+      timeRange: { min: minDate, max: maxDate },
+      groups: ganttGroups,
+      totalTasks: tasks.length,
+    };
+  }
 }

@@ -312,4 +312,28 @@ export class TaskService {
 
     return { items, total, page, page_size: pageSize };
   }
+
+  async addLeader(taskUid: string, leaderUserId: string, leaderName?: string) {
+    const existing = await this.taskRepository.findByUid(taskUid);
+    if (!existing) {
+      throw new BusinessException(ErrorCode.TASK_NOT_FOUND, 'Task not found', HttpStatus.NOT_FOUND);
+    }
+
+    const result = await this.taskRepository.addTaskLeader({
+      taskUid,
+      leaderUserId,
+      leaderName: leaderName ?? null,
+    });
+
+    return result;
+  }
+
+  async removeLeader(taskUid: string, leaderUserId: string) {
+    await this.taskRepository.removeTaskLeader(taskUid, leaderUserId);
+    return { removed: true };
+  }
+
+  async getLeaders(taskUid: string) {
+    return this.taskRepository.getTaskLeaders(taskUid);
+  }
 }
