@@ -346,8 +346,46 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
   const { groups, markerPositions, showToday, todayPct } = computed;
   const LEADER_COL_WIDTH = 150;
 
+  const allPersonKeys = useMemo(() => {
+    const keys: string[] = [];
+    for (const group of groups) {
+      for (const pg of group.personSubGroups) {
+        keys.push(pg.personKey);
+      }
+    }
+    return keys;
+  }, [groups]);
+
+  const allExpanded = allPersonKeys.length > 0 && allPersonKeys.every(k => expandedPersons.has(k));
+
+  const totalTasks = useMemo(() => {
+    let count = 0;
+    for (const group of groups) {
+      for (const pg of group.personSubGroups) {
+        count += pg.bars.length;
+      }
+    }
+    return count;
+  }, [groups]);
+
   return (
     <div className="overflow-hidden rounded-2xl bg-[#12121a] border border-[#2a2a3a]">
+      {/* Chart header with task count and expand/collapse toggle */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a3a]">
+        <p className="text-sm text-[#5a5a6e]">{totalTasks} 项任务</p>
+        <button
+          onClick={() => {
+            if (allExpanded) {
+              setExpandedPersons(new Set());
+            } else {
+              setExpandedPersons(new Set(allPersonKeys));
+            }
+          }}
+          className="text-xs text-[#5a5a6e] hover:text-[#e4e4e7] transition-colors"
+        >
+          {allExpanded ? '全部收起' : '全部展开'}
+        </button>
+      </div>
       <div className="overflow-x-auto">
         <div style={{ minWidth: 800 }}>
           {/* Timeline header */}

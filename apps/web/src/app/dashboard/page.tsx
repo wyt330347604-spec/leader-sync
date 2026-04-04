@@ -614,9 +614,26 @@ function RiskTable({ tasks, onMutate }: { readonly tasks: readonly RiskTask[]; r
     });
   };
 
+  const allPersonKeys = personGroups.map(g => g.name);
+  const allExpanded = allPersonKeys.length > 0 && allPersonKeys.every(k => expandedPersons.has(k));
+
   return (
     <div className="mt-10">
-      <h3 className="mb-5 text-xl font-semibold tracking-tight text-[#e4e4e7]">风险任务</h3>
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="text-xl font-semibold tracking-tight text-[#e4e4e7]">风险任务</h3>
+        <button
+          onClick={() => {
+            if (allExpanded) {
+              setExpandedPersons(new Set());
+            } else {
+              setExpandedPersons(new Set(allPersonKeys));
+            }
+          }}
+          className="text-xs text-[#5a5a6e] hover:text-[#e4e4e7] transition-colors"
+        >
+          {allExpanded ? '全部收起' : '全部展开'}
+        </button>
+      </div>
       <div className="overflow-hidden rounded-2xl bg-[#12121a] border border-[#2a2a3a]">
         {personGroups.map((group) => {
           const expanded = expandedPersons.has(group.name);
