@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react';
 import { useDashboard } from '@/hooks/use-dashboard';
 import { useGantt } from '@/hooks/use-gantt';
 import type { DashboardPeriod } from '@/hooks/use-dashboard';
@@ -295,6 +295,105 @@ function InlineDropdown({
   );
 }
 
+/* ---------- FilterBar ---------- */
+
+function FilterBar({
+  persons,
+  selectedPersons,
+  onPersonsChange,
+  taskTitle,
+  onTaskTitleChange,
+}: {
+  readonly persons: readonly string[];
+  readonly selectedPersons: readonly string[];
+  readonly onPersonsChange: (p: string[]) => void;
+  readonly taskTitle: string;
+  readonly onTaskTitleChange: (v: string) => void;
+}) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [dropdownOpen]);
+
+  const togglePerson = (name: string) => {
+    const next = selectedPersons.includes(name)
+      ? selectedPersons.filter((p) => p !== name)
+      : [...selectedPersons, name];
+    onPersonsChange(next);
+  };
+
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3">
+      {/* Person multi-select dropdown */}
+      <div ref={dropdownRef} className="relative">
+        <button
+          onClick={() => setDropdownOpen(!dropdownOpen)}
+          className="bg-[#1e1e2e] border border-[#2a2a3a] rounded-lg px-3 py-1.5 text-sm text-[#e4e4e7] hover:bg-[#2a2a3a] transition-colors duration-150"
+        >
+          人员: {selectedPersons.length === 0 ? '全部' : `${selectedPersons.length} 人`} ▼
+        </button>
+        {dropdownOpen && (
+          <div className="absolute z-50 mt-1 min-w-[180px] max-h-[300px] overflow-y-auto rounded-xl bg-[#12121a] border border-[#2a2a3a] shadow-lg py-1">
+            {persons.map((name) => {
+              const selected = selectedPersons.includes(name);
+              return (
+                <button
+                  key={name}
+                  onClick={() => togglePerson(name)}
+                  className={`flex items-center gap-2 w-full text-left hover:bg-[#1a1a2e] px-3 py-2 text-sm transition-colors duration-150 ${
+                    selected ? 'text-[#3b82f6]' : 'text-[#e4e4e7]'
+                  }`}
+                >
+                  <span className={`inline-flex items-center justify-center w-4 h-4 rounded border text-[10px] ${
+                    selected
+                      ? 'bg-[#3b82f6] border-[#3b82f6] text-white'
+                      : 'border-[#5a5a6e] text-transparent'
+                  }`}>
+                    ✓
+                  </span>
+                  {name}
+                </button>
+              );
+            })}
+            {persons.length === 0 && (
+              <p className="px-3 py-2 text-xs text-[#5a5a6e]">无人员数据</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Task title search */}
+      <input
+        type="text"
+        placeholder="搜索任务标题..."
+        value={taskTitle}
+        onChange={(e) => onTaskTitleChange(e.target.value)}
+        className="bg-[#1e1e2e] border border-[#2a2a3a] rounded-lg px-3 py-1.5 text-sm text-[#e4e4e7] placeholder-[#5a5a6e] w-60 focus:outline-none focus:border-[#3b82f6] transition-colors duration-150"
+      />
+
+      {/* Clear button */}
+      {(selectedPersons.length > 0 || taskTitle) && (
+        <button
+          onClick={() => { onPersonsChange([]); onTaskTitleChange(''); }}
+          className="text-xs text-[#5a5a6e] hover:text-[#e4e4e7] transition-colors duration-150"
+        >
+          清除筛选
+        </button>
+      )}
+    </div>
+  );
+}
+
 /* ---------- Section C: Risk tasks table ---------- */
 
 interface RiskTask {
@@ -472,36 +571,102 @@ function RiskTaskRow({
 }
 
 function RiskTable({ tasks, onMutate }: { readonly tasks: readonly RiskTask[]; readonly onMutate: () => void }) {
+  const [expandedPersons, setExpandedPersons] = useState<Set<string>>(() => new Set());
+
+  const personGroups = useMemo(() => {
+    const grouped = new Map<string, RiskTask[]>();
+    for (const task of tasks) {
+      const name = task.assigneeName || '未分配';
+      const existing = grouped.get(name);
+      if (existing) {
+        existing.push(task);
+      } else {
+        grouped.set(name, [task]);
+      }
+    }
+    return Array.from(grouped.entries()).map(([name, personTasks]) => {
+      let overdueCount = 0;
+      let stalledCount = 0;
+      let nearDueCount = 0;
+      for (const t of personTasks) {
+        const reasons = t.riskReasons ?? [];
+        if (reasons.includes('延期')) overdueCount++;
+        if (reasons.includes('停滞')) stalledCount++;
+        if (reasons.includes('临期')) nearDueCount++;
+      }
+      return { name, tasks: personTasks, overdueCount, stalledCount, nearDueCount };
+    });
+  }, [tasks]);
+
   if (tasks.length === 0) {
     return <p className="py-12 text-center text-[#5a5a6e]">暂无风险任务</p>;
   }
+
+  const togglePerson = (name: string) => {
+    setExpandedPersons((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      return next;
+    });
+  };
 
   return (
     <div className="mt-10">
       <h3 className="mb-5 text-xl font-semibold tracking-tight text-[#e4e4e7]">风险任务</h3>
       <div className="overflow-hidden rounded-2xl bg-[#12121a] border border-[#2a2a3a]">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="bg-[#1e1e2e]">
-                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">标题</th>
-                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">负责人</th>
-                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">Leader</th>
-                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">状态</th>
-                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">优先级</th>
-                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">截止时间</th>
-                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">延期天数</th>
-                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">继承次数</th>
-                <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#2a2a3a]">
-              {tasks.map((t, idx) => (
-                <RiskTaskRow key={t.taskUid || `${t.title}-${idx}`} task={t} onMutate={onMutate} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {personGroups.map((group) => {
+          const expanded = expandedPersons.has(group.name);
+          return (
+            <div key={group.name}>
+              {/* Person summary row */}
+              <div
+                onClick={() => togglePerson(group.name)}
+                className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-[#1a1a2e] border-b border-[#2a2a3a]"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-[#5a5a6e]">{expanded ? '▼' : '▶'}</span>
+                  <span className="font-medium text-[#e4e4e7]">{group.name}</span>
+                  <span className="text-xs text-[#5a5a6e]">({group.tasks.length} 项风险任务)</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  {group.overdueCount > 0 && <span className="text-[#ef4444]">延期 {group.overdueCount}</span>}
+                  {group.stalledCount > 0 && <span className="text-[#8b5cf6]">停滞 {group.stalledCount}</span>}
+                  {group.nearDueCount > 0 && <span className="text-[#f59e0b]">临期 {group.nearDueCount}</span>}
+                </div>
+              </div>
+
+              {/* Expanded task detail rows */}
+              {expanded && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="bg-[#1e1e2e]">
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">标题</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">负责人</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">Leader</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">状态</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">优先级</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">截止时间</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">延期天数</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">继承次数</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#2a2a3a]">
+                      {group.tasks.map((t, idx) => (
+                        <RiskTaskRow key={t.taskUid || `${t.title}-${idx}`} task={t} onMutate={onMutate} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -796,10 +961,26 @@ function ViewSwitcher({
 
 /* ---------- Gantt View Wrapper ---------- */
 
-function GanttView({ period }: { readonly period: DashboardPeriod }) {
+function GanttView({
+  period,
+  filterPersons,
+  filterTaskTitle,
+}: {
+  readonly period: DashboardPeriod;
+  readonly filterPersons: readonly string[];
+  readonly filterTaskTitle: string;
+}) {
   const { data, error, isLoading } = useGantt(period);
 
-  return <GanttChart data={data} isLoading={isLoading} error={error} />;
+  return (
+    <GanttChart
+      data={data}
+      isLoading={isLoading}
+      error={error}
+      filterPersons={filterPersons}
+      filterTaskTitle={filterTaskTitle}
+    />
+  );
 }
 
 /* ---------- Main ---------- */
@@ -812,6 +993,8 @@ function DashboardContent() {
   }));
   const [activeView, setActiveView] = useState<DashboardView>('overview');
   const [groupMode, setGroupMode] = useState<GroupMode>('person');
+  const [filterPersons, setFilterPersons] = useState<string[]>([]);
+  const [filterTaskTitle, setFilterTaskTitle] = useState('');
 
   useEffect(() => {
     ensureAuth().then(setAuthed);
@@ -822,6 +1005,33 @@ function DashboardContent() {
   const handleMutate = useCallback(() => {
     mutate();
   }, [mutate]);
+
+  // Extract all unique person names from dashboard data
+  const allPersonNames = useMemo(() => {
+    if (!data) return [];
+    const names = new Set<string>();
+    for (const p of data.personSummary ?? []) {
+      if (p.name) names.add(p.name);
+    }
+    for (const t of data.riskTasks ?? []) {
+      if (t.assigneeName) names.add(t.assigneeName);
+    }
+    return Array.from(names).sort();
+  }, [data]);
+
+  // Filter risk tasks based on filterPersons and filterTaskTitle
+  const filteredRiskTasks = useMemo(() => {
+    const tasks: readonly RiskTask[] = data?.riskTasks ?? [];
+    return tasks.filter((t) => {
+      if (filterPersons.length > 0 && !filterPersons.includes(t.assigneeName)) {
+        return false;
+      }
+      if (filterTaskTitle && !t.title.toLowerCase().includes(filterTaskTitle.toLowerCase())) {
+        return false;
+      }
+      return true;
+    });
+  }, [data?.riskTasks, filterPersons, filterTaskTitle]);
 
   if (!authed) {
     return (
@@ -842,7 +1052,20 @@ function DashboardContent() {
       </div>
 
       {activeView === 'gantt' ? (
-        <GanttView period={period} />
+        <>
+          <FilterBar
+            persons={allPersonNames}
+            selectedPersons={filterPersons}
+            onPersonsChange={setFilterPersons}
+            taskTitle={filterTaskTitle}
+            onTaskTitleChange={setFilterTaskTitle}
+          />
+          <GanttView
+            period={period}
+            filterPersons={filterPersons}
+            filterTaskTitle={filterTaskTitle}
+          />
+        </>
       ) : isLoading ? (
         <div className="flex min-h-[40vh] items-center justify-center">
           <p className="text-[#5a5a6e]">加载中...</p>
@@ -877,7 +1100,16 @@ function DashboardContent() {
               <LeaderCards leaders={data.leaderSummary ?? []} />
             )}
           </div>
-          <RiskTable tasks={data.riskTasks ?? []} onMutate={handleMutate} />
+          <div className="mt-10">
+            <FilterBar
+              persons={allPersonNames}
+              selectedPersons={filterPersons}
+              onPersonsChange={setFilterPersons}
+              taskTitle={filterTaskTitle}
+              onTaskTitleChange={setFilterTaskTitle}
+            />
+          </div>
+          <RiskTable tasks={filteredRiskTasks} onMutate={handleMutate} />
         </>
       ) : null}
     </div>
