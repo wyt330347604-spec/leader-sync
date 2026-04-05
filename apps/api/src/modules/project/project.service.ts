@@ -40,6 +40,19 @@ export class ProjectService {
     return { deleted: true };
   }
 
+  async setDefault(projectUid: string) {
+    // Unset current default
+    await this.db.update(project).set({ isDefault: false }).where(eq(project.isDefault, true));
+    // Set new default
+    const [result] = await this.db
+      .update(project)
+      .set({ isDefault: true })
+      .where(eq(project.projectUid, projectUid))
+      .returning();
+    if (!result) throw new BusinessException(1003, 'Project not found');
+    return result;
+  }
+
   async getDefault() {
     const [def] = await this.db.select().from(project).where(eq(project.isDefault, true));
     return def ?? null;

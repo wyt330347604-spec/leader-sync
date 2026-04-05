@@ -34,6 +34,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               >
                 驾驶舱
               </a>
+              <a
+                href="/projects"
+                className="text-xs text-[#8b8b9e] transition-all duration-300 ease-out hover:text-white"
+              >
+                项目管理
+              </a>
             </nav>
           </div>
         </header>
