@@ -37,21 +37,43 @@ export class TaskRepository {
   async listByUser(
     userId: string,
     openId: string | undefined,
-    filters: { status?: string; bucket?: string; priority?: string },
+    filters: { status?: string; bucket?: string; priority?: string; role?: string },
     page: number,
     pageSize: number,
   ) {
     const userIds = [userId];
     if (openId && openId !== userId) userIds.push(openId);
 
-    const conditions = [
-      sql`${task.deletedAt} IS NULL`,
-      or(
-        inArray(task.assigneeUserId, userIds),
-        inArray(task.issuerUserId, userIds),
-        ...userIds.map(id => sql`${task.collaborators}::jsonb @> ${JSON.stringify([id])}::jsonb`),
-      ),
-    ];
+    const conditions = [sql`${task.deletedAt} IS NULL`];
+
+    // Build collaborator JSONB containment checks:
+    // collaborators stores [{user_id: "ou_xxx", user_name: "name"}]
+    const collaboratorChecks = userIds.map(
+      (id) => sql`${task.collaborators}::jsonb @> ${JSON.stringify([{ user_id: id }])}::jsonb`,
+    );
+
+    // Role-based filter
+    if (filters.role === 'collaborator') {
+      // Only collaborator tasks
+      conditions.push(or(...collaboratorChecks)!);
+    } else if (filters.role === 'assignee') {
+      // Only assigned/issued tasks
+      conditions.push(
+        or(
+          inArray(task.assigneeUserId, userIds),
+          inArray(task.issuerUserId, userIds),
+        )!,
+      );
+    } else {
+      // All (default) — assigned + issued + collaborator
+      conditions.push(
+        or(
+          inArray(task.assigneeUserId, userIds),
+          inArray(task.issuerUserId, userIds),
+          ...collaboratorChecks,
+        )!,
+      );
+    }
 
     if (filters.status) conditions.push(eq(task.status, filters.status));
     if (filters.bucket) conditions.push(eq(task.monthBucket, filters.bucket));

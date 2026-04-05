@@ -175,6 +175,146 @@ function LeaderSection({ taskUid }: { readonly taskUid: string }) {
   );
 }
 
+/* ---------- Collaborator Section ---------- */
+
+interface Collaborator {
+  readonly user_id: string;
+  readonly user_name: string;
+}
+
+interface UserSearchResult {
+  readonly userId: string;
+  readonly userName: string;
+  readonly deptName: string | null;
+}
+
+function CollaboratorSection({ taskUid }: { readonly taskUid: string }) {
+  const { data: collaborators, mutate: mutateCollaborators } = useSWR<readonly Collaborator[]>(
+    taskUid ? `/api/v1/tasks/${taskUid}/collaborators` : null,
+    (url: string) => apiFetch<Collaborator[]>(url),
+  );
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<readonly UserSearchResult[]>([]);
+  const [showSearch, setShowSearch] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [collabError, setCollabError] = useState('');
+
+  // Search users with debounce
+  useEffect(() => {
+    if (searchQuery.length < 1) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      apiFetch<UserSearchResult[]>(`/api/v1/users/search?q=${encodeURIComponent(searchQuery)}`)
+        .then(setSearchResults)
+        .catch(() => setSearchResults([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  async function handleAddCollaborator(userId: string, userName: string) {
+    setSubmitting(true);
+    setCollabError('');
+    try {
+      await apiFetch(`/api/v1/tasks/${taskUid}/collaborators`, {
+        method: 'POST',
+        body: JSON.stringify({ user_id: userId, user_name: userName }),
+      });
+      await mutateCollaborators();
+      setSearchQuery('');
+      setShowSearch(false);
+      setSearchResults([]);
+    } catch (err: any) {
+      setCollabError(err.message || '添加失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleRemoveCollaborator(userId: string) {
+    setCollabError('');
+    try {
+      await apiFetch(`/api/v1/tasks/${taskUid}/collaborators/${userId}`, {
+        method: 'DELETE',
+      });
+      await mutateCollaborators();
+    } catch (err: any) {
+      setCollabError(err.message || '移除失败');
+    }
+  }
+
+  return (
+    <div className="mb-6 rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs font-medium text-[#5a5a6e]">协作人</p>
+        <button
+          onClick={() => setShowSearch((v) => !v)}
+          className="rounded-full bg-[#3b82f6] px-3 py-1 text-xs font-medium text-white transition-all duration-200 hover:bg-[#2563eb]"
+        >
+          {showSearch ? '取消' : '添加协作人'}
+        </button>
+      </div>
+
+      {collabError && (
+        <p className="mb-3 text-xs text-[#ef4444]">{collabError}</p>
+      )}
+
+      {/* Collaborator chips */}
+      <div className="flex flex-wrap gap-2">
+        {collaborators && collaborators.length > 0 ? (
+          collaborators.map((c) => (
+            <span
+              key={c.user_id}
+              className="inline-flex items-center gap-1.5 bg-[#1e1e2e] border border-[#2a2a3a] rounded-full px-3 py-1 text-sm text-[#e4e4e7]"
+            >
+              {c.user_name}
+              <button
+                onClick={() => handleRemoveCollaborator(c.user_id)}
+                className="ml-0.5 text-[#ef4444] hover:text-[#f87171] transition-colors duration-150 text-xs font-bold leading-none"
+                title="移除"
+              >
+                &times;
+              </button>
+            </span>
+          ))
+        ) : (
+          <span className="text-xs text-[#5a5a6e]">暂无协作人</span>
+        )}
+      </div>
+
+      {/* Search input and results */}
+      {showSearch && (
+        <div className="mt-4">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜索用户名..."
+            className="block w-full rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-3 py-2 text-sm text-[#e4e4e7] placeholder-[#5a5a6e] focus:outline-none focus:ring-1 focus:ring-[#3b82f6]/40"
+          />
+          {searchResults.length > 0 && (
+            <div className="mt-2 rounded-xl bg-[#12121a] border border-[#2a2a3a] overflow-hidden">
+              {searchResults.map((u) => (
+                <button
+                  key={u.userId}
+                  onClick={() => handleAddCollaborator(u.userId, u.userName ?? '')}
+                  disabled={submitting}
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-[#e4e4e7] hover:bg-[#1e1e2e] transition-colors duration-150 disabled:opacity-50"
+                >
+                  <span>{u.userName}</span>
+                  <span className="text-xs text-[#5a5a6e]">{u.deptName || ''}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TaskDetailPage({ params }: { params: Promise<{ task_uid: string }> }) {
   const { task_uid: taskUid } = use(params);
   const { data: task, error, isLoading, mutate } = useTask(taskUid);
@@ -556,6 +696,9 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
 
       {/* Multi-Leader section */}
       <LeaderSection taskUid={taskUid} />
+
+      {/* Collaborator section */}
+      <CollaboratorSection taskUid={taskUid} />
 
       {/* Detail section */}
       {task.detail && (

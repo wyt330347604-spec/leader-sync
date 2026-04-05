@@ -5,6 +5,17 @@ import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
 import { ensureAuth } from '@/lib/auth';
 
+interface CollaboratorEntry {
+  readonly user_id: string;
+  readonly user_name: string;
+}
+
+interface UserSearchResult {
+  readonly userId: string;
+  readonly userName: string;
+  readonly deptName: string | null;
+}
+
 const TASK_TYPES = [
   { value: 'carry_over', label: '上月遗留' },
   { value: 'new', label: '本月新增' },
@@ -38,6 +49,9 @@ export default function TaskCreatePage() {
   const [bossAttentionFlag, setBossAttentionFlag] = useState(false);
   const [projects, setProjects] = useState<{projectUid: string; name: string; isDefault: boolean}[]>([]);
   const [projectUid, setProjectUid] = useState('');
+  const [collaborators, setCollaborators] = useState<CollaboratorEntry[]>([]);
+  const [collabSearch, setCollabSearch] = useState('');
+  const [collabResults, setCollabResults] = useState<readonly UserSearchResult[]>([]);
 
   useEffect(() => {
     ensureAuth().then(setAuthed);
@@ -56,6 +70,20 @@ export default function TaskCreatePage() {
     if (defaultProject && !projectUid) setProjectUid(defaultProject.projectUid);
   }, [projects, projectUid]);
 
+  // Collaborator user search with debounce
+  useEffect(() => {
+    if (collabSearch.length < 1) {
+      setCollabResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      apiFetch<UserSearchResult[]>(`/api/v1/users/search?q=${encodeURIComponent(collabSearch)}`)
+        .then(setCollabResults)
+        .catch(() => setCollabResults([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [collabSearch]);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
@@ -73,6 +101,7 @@ export default function TaskCreatePage() {
       if (detail.trim()) body.detail = detail;
       if (startAt) body.start_at = new Date(startAt).toISOString();
       if (projectUid) body.project_uid = projectUid;
+      if (collaborators.length > 0) body.collaborators = collaborators;
 
       const result: any = await apiFetch('/api/v1/tasks', {
         method: 'POST',
@@ -248,6 +277,60 @@ export default function TaskCreatePage() {
           >
             重点任务
           </label>
+        </div>
+
+        {/* Collaborators */}
+        <div>
+          <label className={labelClass}>协作人</label>
+          {/* Collaborator chips */}
+          <div className="flex flex-wrap gap-2 mb-2">
+            {collaborators.map((c) => (
+              <span
+                key={c.user_id}
+                className="inline-flex items-center gap-1.5 bg-[#1e1e2e] border border-[#2a2a3a] rounded-full px-3 py-1 text-sm text-[#e4e4e7]"
+              >
+                {c.user_name}
+                <button
+                  type="button"
+                  onClick={() => setCollaborators((prev) => prev.filter((x) => x.user_id !== c.user_id))}
+                  className="ml-0.5 text-[#ef4444] hover:text-[#f87171] transition-colors duration-150 text-xs font-bold leading-none"
+                  title="移除"
+                >
+                  &times;
+                </button>
+              </span>
+            ))}
+          </div>
+          {/* Search input */}
+          <input
+            type="text"
+            value={collabSearch}
+            onChange={(e) => setCollabSearch(e.target.value)}
+            placeholder="搜索用户名添加协作人..."
+            className="block w-full rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-3 py-2 text-sm text-[#e4e4e7] placeholder-[#5a5a6e] focus:outline-none focus:ring-1 focus:ring-[#3b82f6]/40"
+          />
+          {/* Search results dropdown */}
+          {collabResults.length > 0 && (
+            <div className="mt-2 rounded-xl bg-[#12121a] border border-[#2a2a3a] overflow-hidden">
+              {collabResults.map((u) => (
+                <button
+                  key={u.userId}
+                  type="button"
+                  onClick={() => {
+                    if (!collaborators.some((c) => c.user_id === u.userId)) {
+                      setCollaborators((prev) => [...prev, { user_id: u.userId, user_name: u.userName ?? '' }]);
+                    }
+                    setCollabSearch('');
+                    setCollabResults([]);
+                  }}
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-[#e4e4e7] hover:bg-[#1e1e2e] transition-colors duration-150"
+                >
+                  <span>{u.userName}</span>
+                  <span className="text-xs text-[#5a5a6e]">{u.deptName || ''}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Submit */}

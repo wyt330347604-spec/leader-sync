@@ -9,6 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { TaskModule } from './modules/task/task.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ProjectModule } from './modules/project/project.module';
+import { UserModule } from './modules/user/user.module';
 import { DatabaseModule } from './database.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { DatabaseModule } from './database.module';
     TaskModule,
     DashboardModule,
     ProjectModule,
+    UserModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: TraceIdInterceptor },

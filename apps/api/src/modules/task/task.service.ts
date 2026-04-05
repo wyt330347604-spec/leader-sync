@@ -59,6 +59,7 @@ export class TaskService {
       issuerUserId: userId,
       assignerUserId: userId,
       assignmentType: dto.assignment_type ?? 'boss_assign',
+      collaborators: dto.collaborators ?? null,
       startAt: dto.start_at ? new Date(dto.start_at) : null,
       dueAt: new Date(dto.due_at),
       monthBucket,
@@ -315,6 +316,7 @@ export class TaskService {
         status: query.status,
         bucket: query.bucket,
         priority: query.priority,
+        role: query.role,
       },
       page,
       pageSize,
@@ -345,5 +347,59 @@ export class TaskService {
 
   async getLeaders(taskUid: string) {
     return this.taskRepository.getTaskLeaders(taskUid);
+  }
+
+  async addCollaborator(
+    currentUser: { user_id: string },
+    taskUid: string,
+    userId: string,
+    userName: string,
+  ) {
+    const existing = await this.taskRepository.findByUid(taskUid);
+    if (!existing) {
+      throw new BusinessException(ErrorCode.TASK_NOT_FOUND, 'Task not found', HttpStatus.NOT_FOUND);
+    }
+
+    const collaborators: { user_id: string; user_name: string }[] =
+      (existing.collaborators as { user_id: string; user_name: string }[]) || [];
+
+    // Don't add if already a collaborator
+    if (collaborators.some((c) => c.user_id === userId)) {
+      return { collaborators };
+    }
+
+    const updated = [...collaborators, { user_id: userId, user_name: userName }];
+    await this.taskRepository.updateWithVersion(taskUid, existing.version, {
+      collaborators: updated,
+      updatedBy: currentUser.user_id,
+    });
+
+    return { collaborators: updated };
+  }
+
+  async removeCollaborator(taskUid: string, userId: string) {
+    const existing = await this.taskRepository.findByUid(taskUid);
+    if (!existing) {
+      throw new BusinessException(ErrorCode.TASK_NOT_FOUND, 'Task not found', HttpStatus.NOT_FOUND);
+    }
+
+    const collaborators: { user_id: string; user_name: string }[] =
+      (existing.collaborators as { user_id: string; user_name: string }[]) || [];
+    const updated = collaborators.filter((c) => c.user_id !== userId);
+
+    await this.taskRepository.updateWithVersion(taskUid, existing.version, {
+      collaborators: updated,
+      updatedBy: 'system',
+    });
+
+    return { collaborators: updated };
+  }
+
+  async getCollaborators(taskUid: string) {
+    const existing = await this.taskRepository.findByUid(taskUid);
+    if (!existing) {
+      throw new BusinessException(ErrorCode.TASK_NOT_FOUND, 'Task not found', HttpStatus.NOT_FOUND);
+    }
+    return existing.collaborators || [];
   }
 }

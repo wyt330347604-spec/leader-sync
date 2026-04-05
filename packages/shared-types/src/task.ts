@@ -11,6 +11,7 @@ export interface CreateTaskDto {
   assignment_type?: AssignmentType;
   boss_attention_flag?: boolean;
   project_uid?: string;
+  collaborators?: { user_id: string; user_name: string }[];
 }
 
 export interface UpdateTaskDto {
@@ -48,6 +49,7 @@ export interface TaskListQuery {
   status?: TaskStatus;
   bucket?: string;
   priority?: Priority;
+  role?: 'all' | 'assignee' | 'collaborator';
   page?: number;
   page_size?: number;
 }

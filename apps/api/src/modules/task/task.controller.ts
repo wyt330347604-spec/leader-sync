@@ -120,6 +120,7 @@ export class TaskController {
     @Query('status') status?: string,
     @Query('bucket') bucket?: string,
     @Query('priority') priority?: string,
+    @Query('role') role?: string,
     @Query('page') page?: string,
     @Query('page_size') pageSize?: string,
   ) {
@@ -127,6 +128,7 @@ export class TaskController {
       status: status as any,
       bucket,
       priority: priority as any,
+      role: role as any,
       page: page ? parseInt(page, 10) : 1,
       page_size: pageSize ? parseInt(pageSize, 10) : 20,
     });
@@ -153,5 +155,28 @@ export class TaskController {
   @Get('tasks/:task_uid/leaders')
   getLeaders(@Param('task_uid') taskUid: string) {
     return this.taskService.getLeaders(taskUid);
+  }
+
+  @Post('tasks/:task_uid/collaborators')
+  addCollaborator(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('task_uid') taskUid: string,
+    @Body() body: { user_id: string; user_name: string },
+  ) {
+    return this.taskService.addCollaborator(user, taskUid, body.user_id, body.user_name);
+  }
+
+  @Delete('tasks/:task_uid/collaborators/:collaborator_id')
+  removeCollaborator(
+    @CurrentUser() _user: CurrentUserPayload,
+    @Param('task_uid') taskUid: string,
+    @Param('collaborator_id') collaboratorId: string,
+  ) {
+    return this.taskService.removeCollaborator(taskUid, collaboratorId);
+  }
+
+  @Get('tasks/:task_uid/collaborators')
+  getCollaborators(@Param('task_uid') taskUid: string) {
+    return this.taskService.getCollaborators(taskUid);
   }
 }

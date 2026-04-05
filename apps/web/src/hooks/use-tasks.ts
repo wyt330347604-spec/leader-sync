@@ -3,9 +3,10 @@ import useSWR from 'swr';
 import { apiFetch } from '@/lib/api-client';
 import type { PaginatedData } from '@leader-sync/shared-types';
 
-export function useTasks(query: { status?: string; page?: number; page_size?: number }) {
+export function useTasks(query: { status?: string; role?: string; page?: number; page_size?: number }) {
   const params = new URLSearchParams();
   if (query.status) params.set('status', query.status);
+  if (query.role && query.role !== 'all') params.set('role', query.role);
   if (query.page) params.set('page', String(query.page));
   if (query.page_size) params.set('page_size', String(query.page_size ?? 20));
 
