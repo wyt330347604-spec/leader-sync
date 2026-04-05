@@ -10,6 +10,7 @@ export interface CreateTaskDto {
   start_at?: string;
   assignment_type?: AssignmentType;
   boss_attention_flag?: boolean;
+  project_uid?: string;
 }
 
 export interface UpdateTaskDto {
@@ -24,6 +25,7 @@ export interface UpdateTaskDto {
   completed_at?: string;
   stall_reason?: string;
   delay_reason?: string;
+  project_uid?: string;
 }
 
 export interface AssignTaskDto {

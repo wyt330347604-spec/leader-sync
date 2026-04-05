@@ -772,11 +772,12 @@ function PersonCards({ persons }: { readonly persons: readonly PersonSummary[] }
 
 /* ---------- Grouping toggle ---------- */
 
-type GroupMode = 'person' | 'leader';
+type GroupMode = 'person' | 'leader' | 'project';
 
 const GROUP_MODE_LABELS: readonly { mode: GroupMode; label: string }[] = [
   { mode: 'person', label: '全部人员' },
   { mode: 'leader', label: '按 Leader 分组' },
+  { mode: 'project', label: '按项目分组' },
 ];
 
 function GroupToggle({
@@ -936,6 +937,77 @@ function LeaderCards({ leaders }: { readonly leaders: readonly LeaderSummary[] }
     <div className="grid gap-5 sm:grid-cols-2">
       {leaders.map((l) => (
         <LeaderCard key={l.leaderName} leader={l} />
+      ))}
+    </div>
+  );
+}
+
+/* ---------- Section D-2: Project cards ---------- */
+
+interface ProjectSummary {
+  readonly projectUid: string;
+  readonly projectName: string;
+  readonly total: number;
+  readonly done: number;
+  readonly overdue: number;
+  readonly riskCount: number;
+  readonly doneRate: number;
+}
+
+function ProjectCard({ project }: { readonly project: ProjectSummary }) {
+  return (
+    <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6 transition-all duration-300 ease-out hover:bg-[#1a1a2e]">
+      <p className="text-xl font-semibold text-[#e4e4e7]">{project.projectName}</p>
+      <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-[#3b82f6]" />
+          <span className="tabular-nums text-[#e4e4e7]">{project.total}</span>
+          <span className="text-[#5a5a6e]">总</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
+          <span className="tabular-nums text-[#e4e4e7]">{project.done}</span>
+          <span className="text-[#5a5a6e]">完成</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-[#ef4444]" />
+          <span className="tabular-nums text-[#e4e4e7]">{project.overdue}</span>
+          <span className="text-[#5a5a6e]">延期</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-[#f59e0b]" />
+          <span className="tabular-nums text-[#e4e4e7]">{project.riskCount}</span>
+          <span className="text-[#5a5a6e]">风险</span>
+        </span>
+      </div>
+      <div className="mt-3">
+        <div className="flex items-center justify-between text-xs text-[#5a5a6e]">
+          <span>完成率</span>
+          <span className="tabular-nums font-medium text-[#e4e4e7]">{project.doneRate}%</span>
+        </div>
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#1e1e2e]">
+          <div
+            className="h-full rounded-full bg-[#22c55e] transition-all duration-500 ease-out"
+            style={{
+              width: `${Math.min(project.doneRate, 100)}%`,
+              boxShadow: '0 0 8px rgba(34,197,94,0.4)',
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProjectCards({ projects }: { readonly projects: readonly ProjectSummary[] }) {
+  if (projects.length === 0) {
+    return <p className="py-12 text-center text-[#5a5a6e]">暂无项目数据</p>;
+  }
+
+  return (
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {projects.map((p) => (
+        <ProjectCard key={p.projectUid} project={p} />
       ))}
     </div>
   );
@@ -1107,14 +1179,16 @@ function DashboardContent() {
           <div className="mt-10">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-xl font-semibold tracking-tight text-[#e4e4e7]">
-                {groupMode === 'person' ? '人员概览' : 'Leader 概览'}
+                {groupMode === 'person' ? '人员概览' : groupMode === 'leader' ? 'Leader 概览' : '项目概览'}
               </h3>
               <GroupToggle groupMode={groupMode} onChange={setGroupMode} />
             </div>
             {groupMode === 'person' ? (
               <PersonCards persons={data.personSummary ?? []} />
-            ) : (
+            ) : groupMode === 'leader' ? (
               <LeaderCards leaders={data.leaderSummary ?? []} />
+            ) : (
+              <ProjectCards projects={data.projectSummary ?? []} />
             )}
           </div>
           <div className="mt-10">

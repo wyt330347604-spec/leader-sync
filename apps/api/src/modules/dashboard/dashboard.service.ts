@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { DATABASE_TOKEN } from '../../database.module';
 import type { Database } from '@leader-sync/db';
-import { task, taskLeader, monthlySnapshot, orgCache } from '@leader-sync/db';
+import { task, taskLeader, monthlySnapshot, orgCache, project } from '@leader-sync/db';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 
 const DONE_STATUSES = ['done', 'shelved', 'closed'];
@@ -310,6 +310,47 @@ export class DashboardService {
       }))
       .sort((a, b) => b.total - a.total);
 
+    // Group by project
+    const projectMap = new Map<string, { name: string; total: number; done: number; overdue: number; riskCount: number }>();
+    for (const t of tasks) {
+      const pUid = t.projectUid || 'default';
+      const prev = projectMap.get(pUid) ?? { name: '', total: 0, done: 0, overdue: 0, riskCount: 0 };
+      const isDone = t.status === 'done';
+      const isOverdue = t.isOverdue && !DONE_STATUSES.includes(t.status);
+      const riskReasons = computeRiskReasons(t);
+
+      projectMap.set(pUid, {
+        name: prev.name,
+        total: prev.total + 1,
+        done: prev.done + (isDone ? 1 : 0),
+        overdue: prev.overdue + (isOverdue ? 1 : 0),
+        riskCount: prev.riskCount + (riskReasons.length > 0 ? 1 : 0),
+      });
+    }
+
+    // Resolve project names
+    const projectUids = [...projectMap.keys()].filter(k => k !== 'default');
+    if (projectUids.length > 0) {
+      const projects = await this.db.select().from(project).where(inArray(project.projectUid, projectUids));
+      for (const p of projects) {
+        const entry = projectMap.get(p.projectUid);
+        if (entry) projectMap.set(p.projectUid, { ...entry, name: p.name });
+      }
+    }
+    // Default project name
+    const defEntry = projectMap.get('default');
+    if (defEntry) projectMap.set('default', { ...defEntry, name: '公司建设' });
+
+    const projectSummary = [...projectMap.entries()].map(([uid, data]) => ({
+      projectUid: uid,
+      projectName: data.name || uid,
+      total: data.total,
+      done: data.done,
+      overdue: data.overdue,
+      riskCount: data.riskCount,
+      doneRate: data.total > 0 ? Math.round((data.done / data.total) * 100) : 0,
+    })).sort((a, b) => b.total - a.total);
+
     // Risk tasks: any task matching at least one of the 5 risk conditions
     const riskTasks = tasks
       .map((t) => ({
@@ -364,6 +405,7 @@ export class DashboardService {
       periodLabel,
       leaderSummary,
       personSummary,
+      projectSummary,
       riskTasks,
       stats: {
         total: totalTasks,

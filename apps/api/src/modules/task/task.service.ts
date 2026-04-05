@@ -33,6 +33,13 @@ export class TaskService {
     const monthBucket = dto.due_at.slice(0, 7);
     const status = dto.assignee_user_id ? TaskStatus.NOT_STARTED : TaskStatus.PENDING;
 
+    // Resolve project
+    let projectUid = dto.project_uid ?? null;
+    if (!projectUid) {
+      const defaultProject = await this.taskRepository.getDefaultProject();
+      projectUid = defaultProject?.projectUid ?? null;
+    }
+
     const created = await this.taskRepository.insert({
       taskUid,
       title: dto.title,
@@ -56,6 +63,7 @@ export class TaskService {
       dueAt: new Date(dto.due_at),
       monthBucket,
       bossAttentionFlag: dto.boss_attention_flag ?? false,
+      projectUid,
       version: 1,
       createdBy: userId,
     });
@@ -116,6 +124,7 @@ export class TaskService {
     if (dto.due_at !== undefined) updateValues.dueAt = new Date(dto.due_at);
     if (dto.stall_reason !== undefined) updateValues.stallReason = dto.stall_reason;
     if (dto.delay_reason !== undefined) updateValues.delayReason = dto.delay_reason;
+    if (dto.project_uid !== undefined) updateValues.projectUid = dto.project_uid;
 
     if (dto.status === TaskStatus.DONE) {
       updateValues.progressPercent = 100;

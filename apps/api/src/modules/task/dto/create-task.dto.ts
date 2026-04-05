@@ -34,4 +34,8 @@ export class CreateTaskRequestDto implements CreateTaskDto {
   @IsBoolean()
   @IsOptional()
   boss_attention_flag?: boolean;
+
+  @IsString()
+  @IsOptional()
+  project_uid?: string;
 }

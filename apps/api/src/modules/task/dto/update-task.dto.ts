@@ -42,4 +42,8 @@ export class UpdateTaskRequestDto implements UpdateTaskDto {
   @IsString()
   @IsOptional()
   delay_reason?: string;
+
+  @IsString()
+  @IsOptional()
+  project_uid?: string;
 }

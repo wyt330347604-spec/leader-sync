@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { DATABASE_TOKEN } from '../../database.module';
 import type { Database } from '@leader-sync/db';
-import { task, taskLeader, taskProgressLog, orgCache } from '@leader-sync/db';
+import { task, taskLeader, taskProgressLog, orgCache, project } from '@leader-sync/db';
 import { eq, and, or, sql, desc, inArray } from 'drizzle-orm';
 
 @Injectable()
@@ -109,5 +109,10 @@ export class TaskRepository {
       .select()
       .from(taskLeader)
       .where(inArray(taskLeader.taskUid, [...taskUids]));
+  }
+
+  async getDefaultProject() {
+    const [def] = await this.db.select().from(project).where(eq(project.isDefault, true));
+    return def ?? null;
   }
 }

@@ -36,10 +36,25 @@ export default function TaskCreatePage() {
   const [detail, setDetail] = useState('');
   const [startAt, setStartAt] = useState('');
   const [bossAttentionFlag, setBossAttentionFlag] = useState(false);
+  const [projects, setProjects] = useState<{projectUid: string; name: string; isDefault: boolean}[]>([]);
+  const [projectUid, setProjectUid] = useState('');
 
   useEffect(() => {
     ensureAuth().then(setAuthed);
   }, []);
+
+  // Fetch projects
+  useEffect(() => {
+    apiFetch<{projectUid: string; name: string; isDefault: boolean}[]>('/api/v1/projects')
+      .then(setProjects)
+      .catch(() => {});
+  }, []);
+
+  // When projects load, set default
+  useEffect(() => {
+    const defaultProject = projects.find(p => p.isDefault);
+    if (defaultProject && !projectUid) setProjectUid(defaultProject.projectUid);
+  }, [projects, projectUid]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -57,6 +72,7 @@ export default function TaskCreatePage() {
       };
       if (detail.trim()) body.detail = detail;
       if (startAt) body.start_at = new Date(startAt).toISOString();
+      if (projectUid) body.project_uid = projectUid;
 
       const result: any = await apiFetch('/api/v1/tasks', {
         method: 'POST',
@@ -192,6 +208,21 @@ export default function TaskCreatePage() {
             className={inputClass}
             placeholder="任务详细描述（可选）"
           />
+        </div>
+
+        {/* Project */}
+        <div>
+          <label htmlFor="project_uid" className={labelClass}>所属项目</label>
+          <select
+            id="project_uid"
+            value={projectUid}
+            onChange={(e) => setProjectUid(e.target.value)}
+            className={inputClass}
+          >
+            {projects.map(p => (
+              <option key={p.projectUid} value={p.projectUid}>{p.name}{p.isDefault ? ' (默认)' : ''}</option>
+            ))}
+          </select>
         </div>
 
         {/* Boss attention flag */}

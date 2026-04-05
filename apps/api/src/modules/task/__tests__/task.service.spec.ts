@@ -17,6 +17,7 @@ function createMockRepository(): Record<keyof TaskRepository, ReturnType<typeof 
     removeTaskLeader: vi.fn(),
     getTaskLeaders: vi.fn(),
     getTaskLeadersByTaskUids: vi.fn(),
+    getDefaultProject: vi.fn(),
   };
 }
 
@@ -60,6 +61,7 @@ function makeFakeTask(overrides: Record<string, unknown> = {}) {
     monthlyCommitmentFlag: false,
     bossAttentionFlag: false,
     monthlyCloseLocked: false,
+    projectUid: null,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -91,6 +93,7 @@ describe('TaskService', () => {
         managerName: 'Manager Name',
       };
       repo.findOrgUser.mockResolvedValue(orgUser);
+      repo.getDefaultProject.mockResolvedValue(null);
 
       const insertedTask = makeFakeTask({ status: TaskStatus.NOT_STARTED });
       repo.insert.mockResolvedValue(insertedTask);

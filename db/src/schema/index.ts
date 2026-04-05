@@ -8,3 +8,4 @@ export { syncConflict } from './sync-conflict';
 export { monthlySnapshot } from './monthly-snapshot';
 export { userRoleBinding } from './user-role-binding';
 export { orgCache } from './org-cache';
+export { project } from './project';

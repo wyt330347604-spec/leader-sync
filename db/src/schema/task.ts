@@ -56,6 +56,7 @@ export const task = pgTable(
     bossAttentionFlag: boolean('boss_attention_flag').default(false),
     overdueNotifiedLeaderAt: timestamp('overdue_notified_leader_at', { withTimezone: true }),
     monthlyCloseLocked: boolean('monthly_close_locked').default(false),
+    projectUid: varchar('project_uid', { length: 64 }),
     version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

@@ -8,6 +8,7 @@ import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { TaskModule } from './modules/task/task.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ProjectModule } from './modules/project/project.module';
 import { DatabaseModule } from './database.module';
 
 @Module({
@@ -18,6 +19,7 @@ import { DatabaseModule } from './database.module';
     AuthModule,
     TaskModule,
     DashboardModule,
+    ProjectModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: TraceIdInterceptor },
