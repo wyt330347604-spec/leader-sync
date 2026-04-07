@@ -21,14 +21,20 @@ const ROLE_TABS = [
   { label: '我协作的', value: 'collaborator' },
 ];
 
+function getCurrentMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
 function buildMonthOptions() {
-  const options = [{ label: '全部月份', value: '' }];
+  const options: { label: string; value: string }[] = [];
   const now = new Date();
   for (let i = 0; i < 6; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     options.push({ label: `${d.getFullYear()}年${d.getMonth() + 1}月`, value });
   }
+  options.push({ label: '全部月份', value: '' });
   return options;
 }
 
@@ -37,7 +43,7 @@ const monthOptions = buildMonthOptions();
 function TaskListContent() {
   const [status, setStatus] = useState('');
   const [role, setRole] = useState('all');
-  const [bucket, setBucket] = useState('');
+  const [bucket, setBucket] = useState(() => getCurrentMonth());
   const [page, setPage] = useState(1);
   const [authed, setAuthed] = useState(false);
   const router = useRouter();
