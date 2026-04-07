@@ -21,9 +21,23 @@ const ROLE_TABS = [
   { label: '我协作的', value: 'collaborator' },
 ];
 
+function buildMonthOptions() {
+  const options = [{ label: '全部月份', value: '' }];
+  const now = new Date();
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    options.push({ label: `${d.getFullYear()}年${d.getMonth() + 1}月`, value });
+  }
+  return options;
+}
+
+const monthOptions = buildMonthOptions();
+
 function TaskListContent() {
   const [status, setStatus] = useState('');
   const [role, setRole] = useState('all');
+  const [bucket, setBucket] = useState('');
   const [page, setPage] = useState(1);
   const [authed, setAuthed] = useState(false);
   const router = useRouter();
@@ -34,9 +48,10 @@ function TaskListContent() {
 
   const { data, error, isLoading } = useTasks({
     status: status || undefined,
-    role,
     page,
     page_size: 20,
+    role,
+    bucket: bucket || undefined,
   });
 
   if (!authed) {
@@ -73,6 +88,24 @@ function TaskListContent() {
             }`}
           >
             {r.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Month filter */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs text-[#5a5a6e] mr-1">月份:</span>
+        {monthOptions.map((o) => (
+          <button
+            key={o.value}
+            onClick={() => { setBucket(o.value); setPage(1); }}
+            className={`rounded-full px-3 py-1 text-xs transition-all ${
+              bucket === o.value
+                ? 'bg-[#3b82f6] text-white'
+                : 'bg-[#1e1e2e] text-[#8b8b9e] border border-[#2a2a3a] hover:border-[#3b82f6]/50'
+            }`}
+          >
+            {o.label}
           </button>
         ))}
       </div>
@@ -130,6 +163,11 @@ function TaskListContent() {
                       <div className="mt-2.5 flex items-center gap-2">
                         <StatusBadge status={t.status} />
                         <PriorityBadge priority={t.priority} />
+                        {(t.is_carried_over || t.isCarriedOver) && (
+                          <span className="inline-flex items-center rounded-full bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/20 px-2 py-0.5 text-xs">
+                            顺延
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="ml-4 flex shrink-0 flex-col items-end gap-1 text-xs text-[#5a5a6e]">

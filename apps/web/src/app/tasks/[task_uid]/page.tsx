@@ -618,6 +618,13 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
             </button>
           )}
 
+          {/* Carried-over tag */}
+          {(task.is_carried_over || task.isCarriedOver) && (
+            <span className="inline-flex items-center rounded-full bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/20 px-2 py-0.5 text-xs">
+              顺延
+            </span>
+          )}
+
           {/* Boss attention toggle */}
           <button
             onClick={handleToggleAttention}
