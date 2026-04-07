@@ -75,7 +75,15 @@ export class TaskRepository {
       );
     }
 
-    if (filters.status) conditions.push(eq(task.status, filters.status));
+    if (filters.status === 'active') {
+      // 进行中 = pending + not_started + in_progress
+      conditions.push(inArray(task.status, ['pending', 'not_started', 'in_progress']));
+    } else if (filters.status === 'stalled') {
+      // 已停滞 = stalled + shelved
+      conditions.push(inArray(task.status, ['stalled', 'shelved']));
+    } else if (filters.status) {
+      conditions.push(eq(task.status, filters.status));
+    }
     if (filters.bucket) conditions.push(eq(task.monthBucket, filters.bucket));
     if (filters.priority) conditions.push(eq(task.priority, filters.priority));
 

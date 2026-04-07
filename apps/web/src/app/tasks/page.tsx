@@ -8,11 +8,10 @@ import { PriorityBadge } from '@/components/priority-badge';
 import { ensureAuth } from '@/lib/auth';
 
 const STATUS_FILTERS = [
-  { label: '全部', value: '' },
-  { label: '进行中', value: 'in_progress' },
+  { label: '进行中', value: 'active' },
   { label: '已完成', value: 'done' },
-  { label: '阻塞', value: 'blocked' },
-  { label: '待验收', value: 'pending_review' },
+  { label: '已停滞', value: 'stalled' },
+  { label: '全部', value: '' },
 ];
 
 const ROLE_TABS = [
@@ -41,7 +40,7 @@ function buildMonthOptions() {
 const monthOptions = buildMonthOptions();
 
 function TaskListContent() {
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState('active');
   const [role, setRole] = useState('all');
   const [bucket, setBucket] = useState(() => getCurrentMonth());
   const [page, setPage] = useState(1);
