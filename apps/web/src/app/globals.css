@@ -1,10 +1,42 @@
 @import "tailwindcss";
 
+:root {
+  --bg-page: #0a0a0f;
+  --bg-card: #12121a;
+  --bg-surface: #1e1e2e;
+  --bg-hover: #1a1a2e;
+  --border: #2a2a3a;
+  --text-primary: #e4e4e7;
+  --text-secondary: #8b8b9e;
+  --text-muted: #5a5a6e;
+  --accent-blue: #3b82f6;
+  --accent-green: #22c55e;
+  --accent-red: #ef4444;
+  --accent-orange: #f59e0b;
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg-page: #f9fafb;
+  --bg-card: #ffffff;
+  --bg-surface: #f3f4f6;
+  --bg-hover: #e5e7eb;
+  --border: #e5e7eb;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --accent-blue: #2563eb;
+  --accent-green: #16a34a;
+  --accent-red: #dc2626;
+  --accent-orange: #d97706;
+  color-scheme: light;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background-color: #0a0a0f;
-  color: #e4e4e7;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
 }
 
 .tabular-nums {

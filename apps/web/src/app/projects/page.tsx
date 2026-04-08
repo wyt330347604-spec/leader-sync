@@ -142,7 +142,7 @@ function ProjectsContent() {
   if (!authed) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[#5a5a6e]">正在验证登录状态...</p>
+        <p className="text-[var(--text-muted)]">正在验证登录状态...</p>
       </div>
     );
   }
@@ -151,7 +151,7 @@ function ProjectsContent() {
     <div className="pb-16 pt-8">
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight text-[#e4e4e7]">项目管理</h2>
+        <h2 className="text-3xl font-bold tracking-tight text-[var(--text-primary)]">项目管理</h2>
         {canManage && (
           <button
             onClick={() => setShowCreate((v) => !v)}
@@ -164,7 +164,7 @@ function ProjectsContent() {
 
       {/* Create form */}
       {canManage && showCreate && (
-        <div className="mb-6 rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5">
+        <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-5">
           <div className="flex items-center gap-3">
             <input
               type="text"
@@ -172,7 +172,7 @@ function ProjectsContent() {
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
               placeholder="输入项目名称"
-              className="flex-1 rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-4 py-2.5 text-sm text-[#e4e4e7] placeholder-[#5a5a6e] outline-none transition-colors focus:border-[#3b82f6]"
+              className="flex-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none transition-colors focus:border-[var(--accent-blue)]"
               autoFocus
             />
             <button
@@ -189,7 +189,7 @@ function ProjectsContent() {
       {/* Loading */}
       {isLoading && (
         <div className="flex min-h-[40vh] items-center justify-center">
-          <p className="text-[#5a5a6e]">加载中...</p>
+          <p className="text-[var(--text-muted)]">加载中...</p>
         </div>
       )}
 
@@ -203,7 +203,7 @@ function ProjectsContent() {
       {/* Empty */}
       {!isLoading && !error && projects?.length === 0 && (
         <div className="flex min-h-[30vh] items-center justify-center">
-          <p className="text-[#5a5a6e]">暂无项目</p>
+          <p className="text-[var(--text-muted)]">暂无项目</p>
         </div>
       )}
 
@@ -213,7 +213,7 @@ function ProjectsContent() {
           {projects.map((p) => (
             <div
               key={p.projectUid}
-              className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5 transition-all duration-300 ease-out hover:bg-[#1a1a2e]"
+              className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-5 transition-all duration-300 ease-out hover:bg-[var(--bg-hover)]"
             >
               {editingUid === p.projectUid ? (
                 /* Edit mode */
@@ -226,7 +226,7 @@ function ProjectsContent() {
                       if (e.key === 'Enter') handleUpdate(p.projectUid);
                       if (e.key === 'Escape') cancelEdit();
                     }}
-                    className="flex-1 rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-4 py-2 text-sm text-[#e4e4e7] outline-none transition-colors focus:border-[#3b82f6]"
+                    className="flex-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-blue)]"
                     autoFocus
                   />
                   <button
@@ -238,7 +238,7 @@ function ProjectsContent() {
                   </button>
                   <button
                     onClick={cancelEdit}
-                    className="rounded-full px-4 py-2 text-xs font-medium text-[#8b8b9e] transition-all duration-300 ease-out hover:text-[#e4e4e7]"
+                    className="rounded-full px-4 py-2 text-xs font-medium text-[var(--text-secondary)] transition-all duration-300 ease-out hover:text-[var(--text-primary)]"
                   >
                     取消
                   </button>
@@ -247,7 +247,7 @@ function ProjectsContent() {
                 /* Display mode */
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="text-base font-semibold text-[#e4e4e7]">{p.name}</span>
+                    <span className="text-base font-semibold text-[var(--text-primary)]">{p.name}</span>
                     {p.isDefault && (
                       <span className="rounded-full bg-[#3b82f6]/10 border border-[#3b82f6]/20 px-2 py-0.5 text-xs text-[#3b82f6]">
                         默认
@@ -260,14 +260,14 @@ function ProjectsContent() {
                         <button
                           onClick={() => handleSetDefault(p.projectUid)}
                           disabled={submitting}
-                          className="rounded-full px-3 py-1.5 text-xs font-medium text-[#8b8b9e] transition-all duration-300 ease-out hover:bg-[#3b82f6]/10 hover:text-[#3b82f6] disabled:opacity-50"
+                          className="rounded-full px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-all duration-300 ease-out hover:bg-[#3b82f6]/10 hover:text-[#3b82f6] disabled:opacity-50"
                         >
                           设为默认
                         </button>
                       )}
                       <button
                         onClick={() => startEdit(p.projectUid, p.name)}
-                        className="rounded-full p-2 text-[#8b8b9e] transition-all duration-300 ease-out hover:bg-[#3b82f6]/10 hover:text-[#3b82f6]"
+                        className="rounded-full p-2 text-[var(--text-secondary)] transition-all duration-300 ease-out hover:bg-[#3b82f6]/10 hover:text-[#3b82f6]"
                         title="编辑"
                       >
                         <PencilIcon />
@@ -299,7 +299,7 @@ export default function ProjectsPage() {
     <Suspense
       fallback={
         <div className="flex min-h-[60vh] items-center justify-center">
-          <p className="text-[#5a5a6e]">加载中...</p>
+          <p className="text-[var(--text-muted)]">加载中...</p>
         </div>
       }
     >

@@ -62,7 +62,7 @@ function TaskListContent() {
   if (!authed) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[#5a5a6e]">正在验证登录状态...</p>
+        <p className="text-[var(--text-muted)]">正在验证登录状态...</p>
       </div>
     );
   }
@@ -71,7 +71,7 @@ function TaskListContent() {
     <div className="pb-16 pt-8">
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight text-[#e4e4e7]">我的任务</h2>
+        <h2 className="text-3xl font-bold tracking-tight text-[var(--text-primary)]">我的任务</h2>
         <Link
           href="/tasks/create"
           className="rounded-full bg-[#3b82f6] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#2563eb]"
@@ -89,7 +89,7 @@ function TaskListContent() {
             className={`rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 ease-out ${
               role === r.value
                 ? 'bg-[#6366f1] text-white'
-                : 'bg-[#1e1e2e] text-[#8b8b9e] border border-[#2a2a3a] hover:bg-[#1a1a2e] hover:text-[#e4e4e7]'
+                : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
             }`}
           >
             {r.label}
@@ -99,7 +99,7 @@ function TaskListContent() {
 
       {/* Month filter */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="text-xs text-[#5a5a6e] mr-1">月份:</span>
+        <span className="text-xs text-[var(--text-muted)] mr-1">月份:</span>
         {monthOptions.map((o) => (
           <button
             key={o.value}
@@ -107,7 +107,7 @@ function TaskListContent() {
             className={`rounded-full px-3 py-1 text-xs transition-all ${
               bucket === o.value
                 ? 'bg-[#3b82f6] text-white'
-                : 'bg-[#1e1e2e] text-[#8b8b9e] border border-[#2a2a3a] hover:border-[#3b82f6]/50'
+                : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border)] hover:border-[var(--accent-blue)]/50'
             }`}
           >
             {o.label}
@@ -124,7 +124,7 @@ function TaskListContent() {
             className={`rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 ease-out ${
               status === f.value
                 ? 'bg-[#3b82f6] text-white'
-                : 'bg-[#1e1e2e] text-[#8b8b9e] border border-[#2a2a3a] hover:bg-[#1a1a2e] hover:text-[#e4e4e7]'
+                : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
             }`}
           >
             {f.label}
@@ -135,7 +135,7 @@ function TaskListContent() {
       {/* Task cards */}
       {isLoading ? (
         <div className="flex min-h-[40vh] items-center justify-center">
-          <p className="text-[#5a5a6e]">加载中...</p>
+          <p className="text-[var(--text-muted)]">加载中...</p>
         </div>
       ) : error ? (
         <div className="flex min-h-[40vh] items-center justify-center">
@@ -145,7 +145,7 @@ function TaskListContent() {
         <>
           {data?.items?.length === 0 ? (
             <div className="flex min-h-[30vh] items-center justify-center">
-              <p className="text-[#5a5a6e]">暂无任务</p>
+              <p className="text-[var(--text-muted)]">暂无任务</p>
             </div>
           ) : (
             <div className="grid gap-3">
@@ -153,12 +153,12 @@ function TaskListContent() {
                 <div
                   key={t.task_uid || t.taskUid}
                   onClick={() => router.push(`/tasks/${t.task_uid || t.taskUid}`)}
-                  className="cursor-pointer rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5 transition-all duration-300 ease-out hover:bg-[#1a1a2e]"
+                  className="cursor-pointer rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-5 transition-all duration-300 ease-out hover:bg-[var(--bg-hover)]"
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-base font-semibold text-[#e4e4e7]">{t.title}</h3>
+                        <h3 className="text-base font-semibold text-[var(--text-primary)]">{t.title}</h3>
                         {role === 'collaborator' && (
                           <span className="shrink-0 rounded-full bg-[#6366f1]/15 border border-[#6366f1]/25 px-2 py-0.5 text-[10px] font-medium text-[#818cf8]">
                             协作
@@ -175,7 +175,7 @@ function TaskListContent() {
                         )}
                       </div>
                     </div>
-                    <div className="ml-4 flex shrink-0 flex-col items-end gap-1 text-xs text-[#5a5a6e]">
+                    <div className="ml-4 flex shrink-0 flex-col items-end gap-1 text-xs text-[var(--text-muted)]">
                       <span className="tabular-nums">
                         {t.due_at || t.dueAt ? new Date(t.due_at || t.dueAt).toLocaleDateString('zh-CN') : '-'}
                       </span>
@@ -193,17 +193,17 @@ function TaskListContent() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="rounded-full px-5 py-2 text-sm font-medium text-[#3b82f6] transition-all duration-300 ease-out hover:bg-[#3b82f6]/10 disabled:text-[#5a5a6e] disabled:hover:bg-transparent"
+                className="rounded-full px-5 py-2 text-sm font-medium text-[#3b82f6] transition-all duration-300 ease-out hover:bg-[#3b82f6]/10 disabled:text-[var(--text-muted)] disabled:hover:bg-transparent"
               >
                 上一页
               </button>
-              <span className="tabular-nums text-sm text-[#5a5a6e]">
+              <span className="tabular-nums text-sm text-[var(--text-muted)]">
                 第 {page} 页 / 共 {data.total} 条
               </span>
               <button
                 onClick={() => setPage((p) => p + 1)}
                 disabled={data.items.length < 20}
-                className="rounded-full px-5 py-2 text-sm font-medium text-[#3b82f6] transition-all duration-300 ease-out hover:bg-[#3b82f6]/10 disabled:text-[#5a5a6e] disabled:hover:bg-transparent"
+                className="rounded-full px-5 py-2 text-sm font-medium text-[#3b82f6] transition-all duration-300 ease-out hover:bg-[#3b82f6]/10 disabled:text-[var(--text-muted)] disabled:hover:bg-transparent"
               >
                 下一页
               </button>
@@ -220,7 +220,7 @@ export default function TasksPage() {
     <Suspense
       fallback={
         <div className="flex min-h-[60vh] items-center justify-center">
-          <p className="text-[#5a5a6e]">加载中...</p>
+          <p className="text-[var(--text-muted)]">加载中...</p>
         </div>
       }
     >

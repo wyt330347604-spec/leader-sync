@@ -29,9 +29,9 @@ const PRIORITIES = [
 ];
 
 const inputClass =
-  'block w-full rounded-xl bg-[#1e1e2e] border border-[#2a2a3a] px-4 py-3 text-sm text-[#e4e4e7] placeholder-[#5a5a6e] transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 focus:border-[#3b82f6]/50';
+  'block w-full rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[var(--accent-blue)]/40 focus:border-[var(--accent-blue)]/50';
 
-const labelClass = 'mb-1.5 block text-xs font-medium text-[#8b8b9e]';
+const labelClass = 'mb-1.5 block text-xs font-medium text-[var(--text-secondary)]';
 
 export default function TaskCreatePage() {
   const router = useRouter();
@@ -42,7 +42,9 @@ export default function TaskCreatePage() {
   const [title, setTitle] = useState('');
   const [taskType, setTaskType] = useState('new');
   const [priority, setPriority] = useState('urgent_important');
-  const [assigneeUserId, setAssigneeUserId] = useState('');
+  const [assigneeSearch, setAssigneeSearch] = useState('');
+  const [assigneeResults, setAssigneeResults] = useState<readonly UserSearchResult[]>([]);
+  const [selectedAssignee, setSelectedAssignee] = useState<{ userId: string; userName: string } | null>(null);
   const [dueAt, setDueAt] = useState('');
   const [detail, setDetail] = useState('');
   const [startAt, setStartAt] = useState('');
@@ -70,6 +72,20 @@ export default function TaskCreatePage() {
     if (defaultProject && !projectUid) setProjectUid(defaultProject.projectUid);
   }, [projects, projectUid]);
 
+  // Assignee user search with debounce
+  useEffect(() => {
+    if (assigneeSearch.length < 1) {
+      setAssigneeResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      apiFetch<UserSearchResult[]>(`/api/v1/users/search?q=${encodeURIComponent(assigneeSearch)}`)
+        .then(setAssigneeResults)
+        .catch(() => setAssigneeResults([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [assigneeSearch]);
+
   // Collaborator user search with debounce
   useEffect(() => {
     if (collabSearch.length < 1) {
@@ -94,12 +110,12 @@ export default function TaskCreatePage() {
         title,
         task_type: taskType,
         priority,
-        assignee_user_id: assigneeUserId,
-        due_at: new Date(dueAt).toISOString(),
+        assignee_user_id: selectedAssignee?.userId ?? '',
+        due_at: dueAt ? `${dueAt}T23:59:59+08:00` : undefined,
         boss_attention_flag: bossAttentionFlag,
       };
       if (detail.trim()) body.detail = detail;
-      if (startAt) body.start_at = new Date(startAt).toISOString();
+      if (startAt) body.start_at = `${startAt}T00:00:00+08:00`;
       if (projectUid) body.project_uid = projectUid;
       if (collaborators.length > 0) body.collaborators = collaborators;
 
@@ -120,7 +136,7 @@ export default function TaskCreatePage() {
   if (!authed) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[#5a5a6e]">正在验证登录状态...</p>
+        <p className="text-[var(--text-muted)]">正在验证登录状态...</p>
       </div>
     );
   }
@@ -129,12 +145,12 @@ export default function TaskCreatePage() {
     <div className="mx-auto max-w-xl pb-16 pt-8">
       <Link
         href="/tasks"
-        className="inline-block text-sm text-[#3b82f6] transition-all duration-300 ease-out hover:text-[#60a5fa]"
+        className="inline-block text-sm text-[var(--accent-blue)] transition-all duration-300 ease-out hover:text-[var(--accent-blue)]"
       >
         &larr; 返回任务列表
       </Link>
 
-      <h2 className="mt-4 mb-8 text-3xl font-bold tracking-tight text-[#e4e4e7]">新建任务</h2>
+      <h2 className="mt-4 mb-8 text-3xl font-bold tracking-tight text-[var(--text-primary)]">新建任务</h2>
 
       {error && (
         <div className="mb-6 rounded-2xl bg-[#ef4444]/10 border border-[#ef4444]/20 px-5 py-4 text-sm text-[#ef4444]">
@@ -187,41 +203,76 @@ export default function TaskCreatePage() {
           </div>
         </div>
 
-        {/* Assignee */}
+        {/* Assignee search */}
         <div>
-          <label htmlFor="assignee" className={labelClass}>负责人 ID *</label>
-          <input
-            id="assignee"
-            type="text"
-            required
-            value={assigneeUserId}
-            onChange={(e) => setAssigneeUserId(e.target.value)}
-            className={inputClass}
-            placeholder="请输入负责人用户 ID"
-          />
+          <label className={labelClass}>负责人 *</label>
+          {selectedAssignee ? (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 bg-[var(--bg-surface)] border border-[var(--border)] rounded-full px-3 py-1.5 text-sm text-[var(--text-primary)]">
+                {selectedAssignee.userName}
+                <button
+                  type="button"
+                  onClick={() => setSelectedAssignee(null)}
+                  className="ml-0.5 text-[#ef4444] hover:text-[#f87171] transition-colors duration-150 text-xs font-bold leading-none"
+                  title="移除"
+                >
+                  &times;
+                </button>
+              </span>
+            </div>
+          ) : (
+            <div className="relative">
+              <input
+                type="text"
+                value={assigneeSearch}
+                onChange={(e) => setAssigneeSearch(e.target.value)}
+                placeholder="搜索负责人姓名..."
+                className={inputClass}
+              />
+              {assigneeResults.length > 0 && (
+                <div className="absolute z-50 mt-1 w-full rounded-xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden shadow-lg">
+                  {assigneeResults.map((u) => (
+                    <button
+                      key={u.userId}
+                      type="button"
+                      onClick={() => {
+                        setSelectedAssignee({ userId: u.userId, userName: u.userName ?? '' });
+                        setAssigneeSearch('');
+                        setAssigneeResults([]);
+                      }}
+                      className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors duration-150"
+                    >
+                      <span>{u.userName}</span>
+                      <span className="text-xs text-[var(--text-muted)]">{u.deptName || ''}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Due at & Start at */}
+        {/* Due at & Start at (day precision) */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label htmlFor="due_at" className={labelClass}>截止时间 *</label>
+            <label htmlFor="due_at" className={labelClass}>截止日期 *</label>
             <input
               id="due_at"
-              type="datetime-local"
+              type="date"
               required
               value={dueAt}
               onChange={(e) => setDueAt(e.target.value)}
-              className={inputClass}
+              className="w-full rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-primary)] [color-scheme:dark] transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[var(--accent-blue)]/40 focus:border-[var(--accent-blue)]/50"
             />
           </div>
           <div>
-            <label htmlFor="start_at" className={labelClass}>开始时间</label>
+            <label htmlFor="start_at" className={labelClass}>开始日期</label>
             <input
               id="start_at"
-              type="datetime-local"
+              type="date"
               value={startAt}
               onChange={(e) => setStartAt(e.target.value)}
-              className={inputClass}
+              className="w-full rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-primary)] [color-scheme:dark] transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[var(--accent-blue)]/40 focus:border-[var(--accent-blue)]/50"
             />
           </div>
         </div>
@@ -262,7 +313,7 @@ export default function TaskCreatePage() {
             aria-checked={bossAttentionFlag}
             onClick={() => setBossAttentionFlag(!bossAttentionFlag)}
             className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-out ${
-              bossAttentionFlag ? 'bg-[#3b82f6]' : 'bg-[#2a2a3a]'
+              bossAttentionFlag ? 'bg-[var(--accent-blue)]' : 'bg-[var(--border)]'
             }`}
           >
             <span
@@ -273,7 +324,7 @@ export default function TaskCreatePage() {
           </button>
           <label
             onClick={() => setBossAttentionFlag(!bossAttentionFlag)}
-            className="cursor-pointer text-sm text-[#e4e4e7]"
+            className="cursor-pointer text-sm text-[var(--text-primary)]"
           >
             重点任务
           </label>
@@ -287,7 +338,7 @@ export default function TaskCreatePage() {
             {collaborators.map((c) => (
               <span
                 key={c.user_id}
-                className="inline-flex items-center gap-1.5 bg-[#1e1e2e] border border-[#2a2a3a] rounded-full px-3 py-1 text-sm text-[#e4e4e7]"
+                className="inline-flex items-center gap-1.5 bg-[var(--bg-surface)] border border-[var(--border)] rounded-full px-3 py-1 text-sm text-[var(--text-primary)]"
               >
                 {c.user_name}
                 <button
@@ -307,11 +358,11 @@ export default function TaskCreatePage() {
             value={collabSearch}
             onChange={(e) => setCollabSearch(e.target.value)}
             placeholder="搜索用户名添加协作人..."
-            className="block w-full rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-3 py-2 text-sm text-[#e4e4e7] placeholder-[#5a5a6e] focus:outline-none focus:ring-1 focus:ring-[#3b82f6]/40"
+            className="block w-full rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-blue)]/40"
           />
           {/* Search results dropdown */}
           {collabResults.length > 0 && (
-            <div className="mt-2 rounded-xl bg-[#12121a] border border-[#2a2a3a] overflow-hidden">
+            <div className="mt-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden">
               {collabResults.map((u) => (
                 <button
                   key={u.userId}
@@ -323,10 +374,10 @@ export default function TaskCreatePage() {
                     setCollabSearch('');
                     setCollabResults([]);
                   }}
-                  className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-[#e4e4e7] hover:bg-[#1e1e2e] transition-colors duration-150"
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors duration-150"
                 >
                   <span>{u.userName}</span>
-                  <span className="text-xs text-[#5a5a6e]">{u.deptName || ''}</span>
+                  <span className="text-xs text-[var(--text-muted)]">{u.deptName || ''}</span>
                 </button>
               ))}
             </div>
@@ -344,7 +395,7 @@ export default function TaskCreatePage() {
 
         <Link
           href="/tasks"
-          className="block text-center text-sm text-[#5a5a6e] transition-all duration-300 ease-out hover:text-[#8b8b9e]"
+          className="block text-center text-sm text-[var(--text-muted)] transition-all duration-300 ease-out hover:text-[var(--text-secondary)]"
         >
           取消
         </Link>

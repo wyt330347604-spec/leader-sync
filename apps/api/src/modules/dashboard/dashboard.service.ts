@@ -246,6 +246,23 @@ export class DashboardService {
       }
     }
 
+    // After the leader loop, resolve any remaining empty names
+    // NOTE: Tasks with empty leader_name should also be backfilled in the DB via a data migration script.
+    for (const [leaderId, entry] of leaderMap.entries()) {
+      if (!entry.name || entry.name === leaderId) {
+        // Try to find name from any task with this leader
+        const taskWithName = tasks.find(t =>
+          (t.leaderUserId === leaderId || t.assigneeManagerUserId === leaderId) &&
+          t.leaderName && t.leaderName !== ''
+        );
+        if (taskWithName?.leaderName) {
+          leaderMap.set(leaderId, { ...entry, name: taskWithName.leaderName });
+        } else if (taskWithName?.assigneeManagerName) {
+          leaderMap.set(leaderId, { ...entry, name: taskWithName.assigneeManagerName });
+        }
+      }
+    }
+
     const leaderSummary = [...leaderMap.entries()]
       .map(([id, data]) => ({
         leaderId: id,
@@ -471,6 +488,21 @@ export class DashboardService {
             leaderName: lName || leaderId,
             tasks: [ganttTask],
           });
+        }
+      }
+    }
+
+    // Resolve any remaining empty leader names in Gantt groups
+    for (const [leaderId, group] of groups.entries()) {
+      if (!group.leaderName || group.leaderName === leaderId) {
+        const taskWithName = tasks.find(t =>
+          (t.leaderUserId === leaderId || t.assigneeManagerUserId === leaderId) &&
+          t.leaderName && t.leaderName !== ''
+        );
+        if (taskWithName?.leaderName) {
+          groups.set(leaderId, { ...group, leaderName: taskWithName.leaderName });
+        } else if (taskWithName?.assigneeManagerName) {
+          groups.set(leaderId, { ...group, leaderName: taskWithName.assigneeManagerName });
         }
       }
     }

@@ -39,7 +39,7 @@ const TASK_TYPE_LABELS: Record<string, string> = {
 };
 
 const inputClass =
-  'block w-full rounded-xl bg-[#1e1e2e] border border-[#2a2a3a] px-4 py-3 text-sm text-[#e4e4e7] placeholder-[#5a5a6e] transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 focus:border-[#3b82f6]/50';
+  'block w-full rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[var(--accent-blue)]/40 focus:border-[var(--accent-blue)]/50';
 
 function formatDate(val: string | null | undefined): string {
   if (!val) return '-';
@@ -101,9 +101,9 @@ function LeaderSection({ taskUid }: { readonly taskUid: string }) {
   }
 
   return (
-    <div className="mb-6 rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6">
+    <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6">
       <div className="flex items-center justify-between mb-4">
-        <p className="text-xs font-medium text-[#5a5a6e]">关联 Leader</p>
+        <p className="text-xs font-medium text-[var(--text-muted)]">关联 Leader</p>
         <button
           onClick={() => setShowAddForm((v) => !v)}
           className="rounded-full bg-[#3b82f6] px-3 py-1 text-xs font-medium text-white transition-all duration-200 hover:bg-[#2563eb]"
@@ -122,7 +122,7 @@ function LeaderSection({ taskUid }: { readonly taskUid: string }) {
           leaders.map((l) => (
             <span
               key={l.leader_user_id}
-              className="inline-flex items-center gap-1.5 bg-[#1e1e2e] border border-[#2a2a3a] rounded-full px-3 py-1 text-sm text-[#e4e4e7]"
+              className="inline-flex items-center gap-1.5 bg-[var(--bg-surface)] border border-[var(--border)] rounded-full px-3 py-1 text-sm text-[var(--text-primary)]"
             >
               {l.leader_name}
               <button
@@ -135,7 +135,7 @@ function LeaderSection({ taskUid }: { readonly taskUid: string }) {
             </span>
           ))
         ) : (
-          <span className="text-xs text-[#5a5a6e]">暂无关联 Leader</span>
+          <span className="text-xs text-[var(--text-muted)]">暂无关联 Leader</span>
         )}
       </div>
 
@@ -143,23 +143,23 @@ function LeaderSection({ taskUid }: { readonly taskUid: string }) {
       {showAddForm && (
         <div className="mt-4 flex items-end gap-3 flex-wrap">
           <div>
-            <label className="mb-1 block text-[10px] font-medium text-[#8b8b9e]">用户 ID</label>
+            <label className="mb-1 block text-[10px] font-medium text-[var(--text-secondary)]">用户 ID</label>
             <input
               type="text"
               value={newLeaderId}
               onChange={(e) => setNewLeaderId(e.target.value)}
               placeholder="leader_user_id"
-              className="block w-40 rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-3 py-1.5 text-xs text-[#e4e4e7] placeholder-[#5a5a6e] focus:outline-none focus:ring-1 focus:ring-[#3b82f6]/40"
+              className="block w-40 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-blue)]/40"
             />
           </div>
           <div>
-            <label className="mb-1 block text-[10px] font-medium text-[#8b8b9e]">姓名</label>
+            <label className="mb-1 block text-[10px] font-medium text-[var(--text-secondary)]">姓名</label>
             <input
               type="text"
               value={newLeaderName}
               onChange={(e) => setNewLeaderName(e.target.value)}
               placeholder="Leader 姓名"
-              className="block w-40 rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-3 py-1.5 text-xs text-[#e4e4e7] placeholder-[#5a5a6e] focus:outline-none focus:ring-1 focus:ring-[#3b82f6]/40"
+              className="block w-40 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-blue)]/40"
             />
           </div>
           <button
@@ -246,9 +246,9 @@ function CollaboratorSection({ taskUid }: { readonly taskUid: string }) {
   }
 
   return (
-    <div className="mb-6 rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6">
+    <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6">
       <div className="flex items-center justify-between mb-4">
-        <p className="text-xs font-medium text-[#5a5a6e]">协作人</p>
+        <p className="text-xs font-medium text-[var(--text-muted)]">协作人</p>
         <button
           onClick={() => setShowSearch((v) => !v)}
           className="rounded-full bg-[#3b82f6] px-3 py-1 text-xs font-medium text-white transition-all duration-200 hover:bg-[#2563eb]"
@@ -267,7 +267,7 @@ function CollaboratorSection({ taskUid }: { readonly taskUid: string }) {
           collaborators.map((c) => (
             <span
               key={c.user_id}
-              className="inline-flex items-center gap-1.5 bg-[#1e1e2e] border border-[#2a2a3a] rounded-full px-3 py-1 text-sm text-[#e4e4e7]"
+              className="inline-flex items-center gap-1.5 bg-[var(--bg-surface)] border border-[var(--border)] rounded-full px-3 py-1 text-sm text-[var(--text-primary)]"
             >
               {c.user_name}
               <button
@@ -280,7 +280,7 @@ function CollaboratorSection({ taskUid }: { readonly taskUid: string }) {
             </span>
           ))
         ) : (
-          <span className="text-xs text-[#5a5a6e]">暂无协作人</span>
+          <span className="text-xs text-[var(--text-muted)]">暂无协作人</span>
         )}
       </div>
 
@@ -292,19 +292,19 @@ function CollaboratorSection({ taskUid }: { readonly taskUid: string }) {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="搜索用户名..."
-            className="block w-full rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-3 py-2 text-sm text-[#e4e4e7] placeholder-[#5a5a6e] focus:outline-none focus:ring-1 focus:ring-[#3b82f6]/40"
+            className="block w-full rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-blue)]/40"
           />
           {searchResults.length > 0 && (
-            <div className="mt-2 rounded-xl bg-[#12121a] border border-[#2a2a3a] overflow-hidden">
+            <div className="mt-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden">
               {searchResults.map((u) => (
                 <button
                   key={u.userId}
                   onClick={() => handleAddCollaborator(u.userId, u.userName ?? '')}
                   disabled={submitting}
-                  className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-[#e4e4e7] hover:bg-[#1e1e2e] transition-colors duration-150 disabled:opacity-50"
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors duration-150 disabled:opacity-50"
                 >
                   <span>{u.userName}</span>
-                  <span className="text-xs text-[#5a5a6e]">{u.deptName || ''}</span>
+                  <span className="text-xs text-[var(--text-muted)]">{u.deptName || ''}</span>
                 </button>
               ))}
             </div>
@@ -508,7 +508,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
   if (!authed) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[#5a5a6e]">正在验证登录状态...</p>
+        <p className="text-[var(--text-muted)]">正在验证登录状态...</p>
       </div>
     );
   }
@@ -516,7 +516,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
   if (isLoading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[#5a5a6e]">加载中...</p>
+        <p className="text-[var(--text-muted)]">加载中...</p>
       </div>
     );
   }
@@ -532,7 +532,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
   if (!task) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[#5a5a6e]">任务不存在</p>
+        <p className="text-[var(--text-muted)]">任务不存在</p>
       </div>
     );
   }
@@ -545,14 +545,14 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
       {/* Back */}
       <Link
         href="/tasks"
-        className="inline-block text-sm text-[#3b82f6] transition-all duration-300 ease-out hover:text-[#60a5fa]"
+        className="inline-block text-sm text-[var(--accent-blue)] transition-all duration-300 ease-out hover:text-[var(--accent-blue)]"
       >
         &larr; 返回
       </Link>
 
       {/* Hero title */}
       <div className="mt-4 mb-8">
-        <h2 className="text-2xl font-bold tracking-tight text-[#e4e4e7]">{task.title}</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">{task.title}</h2>
         <div className="mt-3 flex items-center gap-2 flex-wrap">
           {/* Inline status edit */}
           {editingStatus ? (
@@ -560,7 +560,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               <select
                 value={inlineStatus}
                 onChange={(e) => setInlineStatus(e.target.value)}
-                className="rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-2 py-1 text-xs text-[#e4e4e7]"
+                className="rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-primary)]"
               >
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -575,7 +575,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               </button>
               <button
                 onClick={() => { setEditingStatus(false); setInlineStatus(task.status); }}
-                className="rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-2 py-1 text-xs text-[#8b8b9e] hover:text-[#e4e4e7]"
+                className="rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               >
                 取消
               </button>
@@ -592,7 +592,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               <select
                 value={inlinePriority}
                 onChange={(e) => setInlinePriority(e.target.value)}
-                className="rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-2 py-1 text-xs text-[#e4e4e7]"
+                className="rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-primary)]"
               >
                 {PRIORITY_OPTIONS.map((p) => (
                   <option key={p.value} value={p.value}>{p.label}</option>
@@ -607,7 +607,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               </button>
               <button
                 onClick={() => { setEditingPriority(false); setInlinePriority(task.priority); }}
-                className="rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-2 py-1 text-xs text-[#8b8b9e] hover:text-[#e4e4e7]"
+                className="rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               >
                 取消
               </button>
@@ -632,7 +632,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
             className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-all duration-300 ease-out disabled:opacity-50 ${
               isBossAttention
                 ? 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/20 hover:bg-[#f59e0b]/20'
-                : 'bg-[#1e1e2e] text-[#5a5a6e] border-[#2a2a3a] hover:text-[#8b8b9e]'
+                : 'bg-[var(--bg-surface)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-secondary)]'
             }`}
           >
             <svg className="h-3 w-3" fill={isBossAttention ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
@@ -650,12 +650,12 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
       )}
 
       {/* Progress section */}
-      <div className="mb-6 rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6">
+      <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-[#8b8b9e]">完成进度</p>
-          <p className="tabular-nums text-2xl font-bold text-[#e4e4e7]">{currentProgress}%</p>
+          <p className="text-sm font-medium text-[var(--text-secondary)]">完成进度</p>
+          <p className="tabular-nums text-2xl font-bold text-[var(--text-primary)]">{currentProgress}%</p>
         </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#1e1e2e]">
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--bg-surface)]">
           <div
             className="h-full rounded-full bg-[#22c55e] transition-all duration-500 ease-out"
             style={{
@@ -665,7 +665,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
           />
         </div>
         {(task.latest_progress || task.latestProgress) && (
-          <p className="mt-3 text-sm text-[#8b8b9e]">
+          <p className="mt-3 text-sm text-[var(--text-secondary)]">
             {task.latest_progress || task.latestProgress}
           </p>
         )}
@@ -673,31 +673,31 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
 
       {/* Info cards grid */}
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5">
-          <p className="text-xs font-medium text-[#5a5a6e]">任务类型</p>
-          <p className="mt-1 text-sm font-medium text-[#e4e4e7]">
+        <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-5">
+          <p className="text-xs font-medium text-[var(--text-muted)]">任务类型</p>
+          <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">
             {TASK_TYPE_LABELS[task.task_type || task.taskType] || task.task_type || task.taskType || '-'}
           </p>
         </div>
-        <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5">
-          <p className="text-xs font-medium text-[#5a5a6e]">负责人</p>
-          <p className="mt-1 text-sm font-medium text-[#e4e4e7]">{task.assignee_name || task.assigneeName || '-'}</p>
+        <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-5">
+          <p className="text-xs font-medium text-[var(--text-muted)]">负责人</p>
+          <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">{task.assignee_name || task.assigneeName || '-'}</p>
         </div>
-        <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5">
-          <p className="text-xs font-medium text-[#5a5a6e]">创建人</p>
-          <p className="mt-1 text-sm font-medium text-[#e4e4e7]">{task.creator_name || task.creatorName || '-'}</p>
+        <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-5">
+          <p className="text-xs font-medium text-[var(--text-muted)]">创建人</p>
+          <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">{task.creator_name || task.creatorName || '-'}</p>
         </div>
-        <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5">
-          <p className="text-xs font-medium text-[#5a5a6e]">截止时间</p>
-          <p className="mt-1 tabular-nums text-sm font-medium text-[#e4e4e7]">{formatDate(task.due_at || task.dueAt)}</p>
+        <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-5">
+          <p className="text-xs font-medium text-[var(--text-muted)]">截止时间</p>
+          <p className="mt-1 tabular-nums text-sm font-medium text-[var(--text-primary)]">{formatDate(task.due_at || task.dueAt)}</p>
         </div>
-        <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5">
-          <p className="text-xs font-medium text-[#5a5a6e]">开始时间</p>
-          <p className="mt-1 tabular-nums text-sm font-medium text-[#e4e4e7]">{formatDate(task.start_at || task.startAt)}</p>
+        <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-5">
+          <p className="text-xs font-medium text-[var(--text-muted)]">开始时间</p>
+          <p className="mt-1 tabular-nums text-sm font-medium text-[var(--text-primary)]">{formatDate(task.start_at || task.startAt)}</p>
         </div>
-        <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5">
-          <p className="text-xs font-medium text-[#5a5a6e]">创建时间</p>
-          <p className="mt-1 tabular-nums text-sm font-medium text-[#e4e4e7]">{formatDate(task.created_at || task.createdAt)}</p>
+        <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-5">
+          <p className="text-xs font-medium text-[var(--text-muted)]">创建时间</p>
+          <p className="mt-1 tabular-nums text-sm font-medium text-[var(--text-primary)]">{formatDate(task.created_at || task.createdAt)}</p>
         </div>
       </div>
 
@@ -709,9 +709,9 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
 
       {/* Detail section */}
       {task.detail && (
-        <div className="mb-6 rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6">
-          <p className="mb-2 text-xs font-medium text-[#5a5a6e]">详细描述</p>
-          <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#e4e4e7]">{task.detail}</div>
+        <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6">
+          <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">详细描述</p>
+          <div className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--text-primary)]">{task.detail}</div>
         </div>
       )}
 
@@ -732,7 +732,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
         </button>
         <button
           onClick={() => setShowDelayForm((v) => !v)}
-          className="rounded-full bg-[#1e1e2e] border border-[#2a2a3a] px-6 py-2.5 text-sm font-medium text-[#f59e0b] transition-all duration-300 ease-out hover:bg-[#1a1a2e]"
+          className="rounded-full bg-[var(--bg-surface)] border border-[var(--border)] px-6 py-2.5 text-sm font-medium text-[#f59e0b] transition-all duration-300 ease-out hover:bg-[var(--bg-hover)]"
         >
           {showDelayForm ? '取消延期' : '申请延期'}
         </button>
@@ -740,11 +740,11 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
 
       {/* Edit progress form */}
       {editingProgress && (
-        <div className="mb-6 rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6">
-          <h3 className="mb-5 text-lg font-semibold text-[#e4e4e7]">更新进展</h3>
+        <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6">
+          <h3 className="mb-5 text-lg font-semibold text-[var(--text-primary)]">更新进展</h3>
           <div className="space-y-5">
             <div>
-              <label htmlFor="edit_status" className="mb-1.5 block text-xs font-medium text-[#8b8b9e]">状态</label>
+              <label htmlFor="edit_status" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">状态</label>
               <select
                 id="edit_status"
                 value={newStatus}
@@ -757,7 +757,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               </select>
             </div>
             <div>
-              <label htmlFor="edit_percent" className="mb-1.5 block text-xs font-medium text-[#8b8b9e]">
+              <label htmlFor="edit_percent" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
                 进度百分比
               </label>
               <div className="flex items-center gap-4">
@@ -769,13 +769,13 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
                   step={5}
                   value={progressPercent}
                   onChange={(e) => setProgressPercent(Number(e.target.value))}
-                  className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[#1e1e2e] accent-[#3b82f6]"
+                  className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[var(--bg-surface)] accent-[#3b82f6]"
                 />
-                <span className="tabular-nums text-sm font-semibold text-[#e4e4e7]">{progressPercent}%</span>
+                <span className="tabular-nums text-sm font-semibold text-[var(--text-primary)]">{progressPercent}%</span>
               </div>
             </div>
             <div>
-              <label htmlFor="edit_progress" className="mb-1.5 block text-xs font-medium text-[#8b8b9e]">最新进展</label>
+              <label htmlFor="edit_progress" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">最新进展</label>
               <textarea
                 id="edit_progress"
                 rows={3}
@@ -804,7 +804,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
           <h3 className="mb-5 text-lg font-semibold text-[#f59e0b]">申请延期</h3>
           <div className="space-y-5">
             <div>
-              <label htmlFor="new_due_at" className="mb-1.5 block text-xs font-medium text-[#8b8b9e]">新截止时间 *</label>
+              <label htmlFor="new_due_at" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">新截止时间 *</label>
               <input
                 id="new_due_at"
                 type="datetime-local"
@@ -815,7 +815,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
               />
             </div>
             <div>
-              <label htmlFor="delay_reason" className="mb-1.5 block text-xs font-medium text-[#8b8b9e]">延期原因 *</label>
+              <label htmlFor="delay_reason" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">延期原因 *</label>
               <textarea
                 id="delay_reason"
                 rows={3}

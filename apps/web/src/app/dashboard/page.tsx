@@ -96,7 +96,7 @@ function PeriodSelector({
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
       {/* Mode switcher pills */}
-      <div className="flex items-center gap-1 rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] p-1">
+      <div className="flex items-center gap-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] p-1">
         {MODE_LABELS.map((m) => (
           <button
             key={m.mode}
@@ -104,7 +104,7 @@ function PeriodSelector({
             className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
               period.mode === m.mode
                 ? 'bg-[#3b82f6] text-white shadow-sm'
-                : 'text-[#8b8b9e] hover:text-[#e4e4e7] hover:bg-[#2a2a3a]'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border)]'
             }`}
           >
             {m.label}
@@ -122,7 +122,7 @@ function PeriodSelector({
               className={`rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 ease-out ${
                 period.value === o.value
                   ? 'bg-[#3b82f6] text-white'
-                  : 'bg-[#1e1e2e] text-[#8b8b9e] border border-[#2a2a3a] hover:bg-[#1a1a2e] hover:text-[#e4e4e7]'
+                  : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
               }`}
             >
               {o.label}
@@ -137,7 +137,7 @@ function PeriodSelector({
               className={`rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 ease-out ${
                 period.value === o.value
                   ? 'bg-[#3b82f6] text-white'
-                  : 'bg-[#1e1e2e] text-[#8b8b9e] border border-[#2a2a3a] hover:bg-[#1a1a2e] hover:text-[#e4e4e7]'
+                  : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
               }`}
             >
               {o.label}
@@ -201,9 +201,9 @@ function HeroStats({ stats, periodLabel }: { readonly stats: MonthlyStats; reado
   ] as const;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#12121a] to-[#1a1a2e] border border-[#2a2a3a] px-8 py-10 sm:px-10">
+    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#12121a] to-[#1a1a2e] border border-[var(--border)] px-8 py-10 sm:px-10">
       <div className="relative z-10">
-        <p className="mb-1 text-sm font-medium tracking-wide text-[#5a5a6e]">督办概览</p>
+        <p className="mb-1 text-sm font-medium tracking-wide text-[var(--text-muted)]">督办概览</p>
         <h2 className="mb-8 text-3xl font-bold tracking-tight text-white">
           {periodLabel} 督办概览
         </h2>
@@ -211,11 +211,11 @@ function HeroStats({ stats, periodLabel }: { readonly stats: MonthlyStats; reado
           {cards.map((c) => (
             <div
               key={c.label}
-              className="rounded-xl bg-[#0a0a0f]/60 border border-[#2a2a3a] p-4"
+              className="rounded-xl bg-[#0a0a0f]/60 border border-[var(--border)] p-4"
             >
               <div className="h-1 w-8 rounded-full mb-3" style={{ backgroundColor: c.accent }} />
               <p className="tabular-nums text-3xl font-bold text-white">{c.value}</p>
-              <p className="mt-1 text-xs text-[#5a5a6e]">{c.label}</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{c.label}</p>
             </div>
           ))}
         </div>
@@ -271,7 +271,7 @@ function InlineDropdown({
         {options.find((o) => o.value === currentValue)?.label ?? currentValue}
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 min-w-[140px] rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] shadow-xl py-1">
+        <div className="absolute z-50 mt-1 min-w-[140px] rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] shadow-xl py-1">
           {options.map((o) => (
             <button
               key={o.value}
@@ -283,7 +283,7 @@ function InlineDropdown({
               className={`block w-full text-left px-3 py-1.5 text-xs transition-colors duration-150 ${
                 o.value === currentValue
                   ? 'bg-[#3b82f6]/20 text-[#3b82f6]'
-                  : 'text-[#e4e4e7] hover:bg-[#2a2a3a]'
+                  : 'text-[var(--text-primary)] hover:bg-[var(--border)]'
               }`}
             >
               {o.label}
@@ -338,20 +338,20 @@ function FilterBar({
       <div ref={dropdownRef} className="relative">
         <button
           onClick={() => setDropdownOpen(!dropdownOpen)}
-          className="bg-[#1e1e2e] border border-[#2a2a3a] rounded-lg px-3 py-1.5 text-sm text-[#e4e4e7] hover:bg-[#2a2a3a] transition-colors duration-150"
+          className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--border)] transition-colors duration-150"
         >
           人员: {selectedPersons.length === 0 ? '全部' : `${selectedPersons.length} 人`} ▼
         </button>
         {dropdownOpen && (
-          <div className="absolute z-50 mt-1 min-w-[180px] max-h-[300px] overflow-y-auto rounded-xl bg-[#12121a] border border-[#2a2a3a] shadow-lg py-1">
+          <div className="absolute z-50 mt-1 min-w-[180px] max-h-[300px] overflow-y-auto rounded-xl bg-[var(--bg-card)] border border-[var(--border)] shadow-lg py-1">
             {persons.map((name) => {
               const selected = selectedPersons.includes(name);
               return (
                 <button
                   key={name}
                   onClick={() => togglePerson(name)}
-                  className={`flex items-center gap-2 w-full text-left hover:bg-[#1a1a2e] px-3 py-2 text-sm transition-colors duration-150 ${
-                    selected ? 'text-[#3b82f6]' : 'text-[#e4e4e7]'
+                  className={`flex items-center gap-2 w-full text-left hover:bg-[var(--bg-hover)] px-3 py-2 text-sm transition-colors duration-150 ${
+                    selected ? 'text-[#3b82f6]' : 'text-[var(--text-primary)]'
                   }`}
                 >
                   <span className={`inline-flex items-center justify-center w-4 h-4 rounded border text-[10px] ${
@@ -366,7 +366,7 @@ function FilterBar({
               );
             })}
             {persons.length === 0 && (
-              <p className="px-3 py-2 text-xs text-[#5a5a6e]">无人员数据</p>
+              <p className="px-3 py-2 text-xs text-[var(--text-muted)]">无人员数据</p>
             )}
           </div>
         )}
@@ -378,14 +378,14 @@ function FilterBar({
         placeholder="搜索任务标题..."
         value={taskTitle}
         onChange={(e) => onTaskTitleChange(e.target.value)}
-        className="bg-[#1e1e2e] border border-[#2a2a3a] rounded-lg px-3 py-1.5 text-sm text-[#e4e4e7] placeholder-[#5a5a6e] w-60 focus:outline-none focus:border-[#3b82f6] transition-colors duration-150"
+        className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] w-60 focus:outline-none focus:border-[var(--accent-blue)] transition-colors duration-150"
       />
 
       {/* Clear button */}
       {(selectedPersons.length > 0 || taskTitle) && (
         <button
           onClick={() => { onPersonsChange([]); onTaskTitleChange(''); }}
-          className="text-xs text-[#5a5a6e] hover:text-[#e4e4e7] transition-colors duration-150"
+          className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors duration-150"
         >
           清除筛选
         </button>
@@ -428,7 +428,7 @@ function RiskReasonTags({ reasons }: { readonly reasons: readonly string[] }) {
   return (
     <div className="flex flex-wrap gap-1 mt-1">
       {reasons.map((r) => {
-        const style = RISK_REASON_STYLES[r] || { bg: 'bg-[#5a5a6e]/10', text: 'text-[#5a5a6e]', border: 'border-[#5a5a6e]/20' };
+        const style = RISK_REASON_STYLES[r] || { bg: 'bg-[#5a5a6e]/10', text: 'text-[var(--text-muted)]', border: 'border-[#5a5a6e]/20' };
         return (
           <span
             key={r}
@@ -510,13 +510,13 @@ function RiskTaskRow({
   };
 
   return (
-    <tr className="transition-colors duration-200 hover:bg-[#1a1a2e]">
-      <td className="px-5 py-4 font-medium text-[#e4e4e7]">
+    <tr className="transition-colors duration-200 hover:bg-[var(--bg-hover)]">
+      <td className="px-5 py-4 font-medium text-[var(--text-primary)]">
         <span>{task.title}</span>
         <RiskReasonTags reasons={task.riskReasons ?? []} />
       </td>
-      <td className="px-5 py-4 text-[#e4e4e7]">{task.assigneeName || '-'}</td>
-      <td className="px-5 py-4 text-[#8b8b9e]">{task.leaderName || '-'}</td>
+      <td className="px-5 py-4 text-[var(--text-primary)]">{task.assigneeName || '-'}</td>
+      <td className="px-5 py-4 text-[var(--text-secondary)]">{task.leaderName || '-'}</td>
       <td className="px-5 py-4">
         <InlineDropdown
           options={STATUS_OPTIONS}
@@ -531,13 +531,13 @@ function RiskTaskRow({
           onSelect={handlePriorityChange}
         />
       </td>
-      <td className="whitespace-nowrap px-5 py-4 tabular-nums text-[#8b8b9e]">
+      <td className="whitespace-nowrap px-5 py-4 tabular-nums text-[var(--text-secondary)]">
         {task.dueAt ? new Date(task.dueAt).toLocaleDateString('zh-CN') : '-'}
       </td>
-      <td className={`px-5 py-4 tabular-nums ${task.isOverdue ? 'font-semibold text-[#ef4444]' : 'text-[#8b8b9e]'}`}>
+      <td className={`px-5 py-4 tabular-nums ${task.isOverdue ? 'font-semibold text-[#ef4444]' : 'text-[var(--text-secondary)]'}`}>
         {task.daysToDue && task.daysToDue < 0 ? `${Math.abs(task.daysToDue)}天` : '-'}
       </td>
-      <td className={`px-5 py-4 tabular-nums ${task.carryOverCount >= 2 ? 'font-semibold text-[#f59e0b]' : 'text-[#8b8b9e]'}`}>
+      <td className={`px-5 py-4 tabular-nums ${task.carryOverCount >= 2 ? 'font-semibold text-[#f59e0b]' : 'text-[var(--text-secondary)]'}`}>
         {task.carryOverCount}
       </td>
       <td className="px-5 py-4">
@@ -549,7 +549,7 @@ function RiskTaskRow({
             className={`rounded-lg border px-2 py-1 text-xs transition-colors duration-200 ${
               task.bossAttentionFlag
                 ? 'text-[#f59e0b] border-[#f59e0b]/30 bg-[#f59e0b]/10 hover:bg-[#f59e0b]/20'
-                : 'text-[#5a5a6e] border-[#2a2a3a] bg-[#1e1e2e] hover:bg-[#2a2a3a] hover:text-[#f59e0b]'
+                : 'text-[var(--text-muted)] border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--border)] hover:text-[#f59e0b]'
             }`}
           >
             ★
@@ -558,7 +558,7 @@ function RiskTaskRow({
           <button
             onClick={handleNotifyLeader}
             title="催办"
-            className="rounded-lg border border-[#2a2a3a] bg-[#1e1e2e] px-2 py-1 text-xs text-[#5a5a6e] transition-colors duration-200 hover:bg-[#2a2a3a] hover:text-[#e4e4e7]"
+            className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1 text-xs text-[var(--text-muted)] transition-colors duration-200 hover:bg-[var(--border)] hover:text-[var(--text-primary)]"
           >
             催办
           </button>
@@ -599,7 +599,7 @@ function RiskTable({ tasks, onMutate }: { readonly tasks: readonly RiskTask[]; r
   }, [tasks]);
 
   if (tasks.length === 0) {
-    return <p className="py-12 text-center text-[#5a5a6e]">暂无风险任务</p>;
+    return <p className="py-12 text-center text-[var(--text-muted)]">暂无风险任务</p>;
   }
 
   const togglePerson = (name: string) => {
@@ -620,7 +620,7 @@ function RiskTable({ tasks, onMutate }: { readonly tasks: readonly RiskTask[]; r
   return (
     <div className="mt-10">
       <div className="flex items-center justify-between mb-5">
-        <h3 className="text-xl font-semibold tracking-tight text-[#e4e4e7]">风险任务</h3>
+        <h3 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">风险任务</h3>
         <button
           onClick={() => {
             if (allExpanded) {
@@ -629,12 +629,12 @@ function RiskTable({ tasks, onMutate }: { readonly tasks: readonly RiskTask[]; r
               setExpandedPersons(new Set(allPersonKeys));
             }
           }}
-          className="text-xs text-[#5a5a6e] hover:text-[#e4e4e7] transition-colors"
+          className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
         >
           {allExpanded ? '全部收起' : '全部展开'}
         </button>
       </div>
-      <div className="overflow-hidden rounded-2xl bg-[#12121a] border border-[#2a2a3a]">
+      <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">
         {personGroups.map((group) => {
           const expanded = expandedPersons.has(group.name);
           return (
@@ -642,12 +642,12 @@ function RiskTable({ tasks, onMutate }: { readonly tasks: readonly RiskTask[]; r
               {/* Person summary row */}
               <div
                 onClick={() => togglePerson(group.name)}
-                className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-[#1a1a2e] border-b border-[#2a2a3a]"
+                className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-[var(--bg-hover)] border-b border-[var(--border)]"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-[#5a5a6e]">{expanded ? '▼' : '▶'}</span>
-                  <span className="font-medium text-[#e4e4e7]">{group.name}</span>
-                  <span className="text-xs text-[#5a5a6e]">({group.tasks.length} 项风险任务)</span>
+                  <span className="text-[var(--text-muted)]">{expanded ? '▼' : '▶'}</span>
+                  <span className="font-medium text-[var(--text-primary)]">{group.name}</span>
+                  <span className="text-xs text-[var(--text-muted)]">({group.tasks.length} 项风险任务)</span>
                 </div>
                 <div className="flex items-center gap-3 text-xs">
                   {group.overdueCount > 0 && <span className="text-[#ef4444]">延期 {group.overdueCount}</span>}
@@ -661,19 +661,19 @@ function RiskTable({ tasks, onMutate }: { readonly tasks: readonly RiskTask[]; r
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead>
-                      <tr className="bg-[#1e1e2e]">
-                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">标题</th>
-                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">负责人</th>
-                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">Leader</th>
-                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">状态</th>
-                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">优先级</th>
-                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">截止时间</th>
-                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">延期天数</th>
-                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">继承次数</th>
-                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[#5a5a6e]">操作</th>
+                      <tr className="bg-[var(--bg-surface)]">
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)]">标题</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)]">负责人</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)]">Leader</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)]">状态</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)]">优先级</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)]">截止时间</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)]">延期天数</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)]">继承次数</th>
+                        <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)]">操作</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#2a2a3a]">
+                    <tbody className="divide-y divide-[var(--border)]">
                       {group.tasks.map((t, idx) => (
                         <RiskTaskRow key={t.taskUid || `${t.title}-${idx}`} task={t} onMutate={onMutate} />
                       ))}
@@ -705,44 +705,44 @@ interface PersonSummary {
 
 function PersonCard({ person }: { readonly person: PersonSummary }) {
   return (
-    <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6 transition-all duration-300 ease-out hover:bg-[#1a1a2e]">
-      <p className="text-xl font-semibold text-[#e4e4e7]">{person.name}</p>
+    <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6 transition-all duration-300 ease-out hover:bg-[var(--bg-hover)]">
+      <p className="text-xl font-semibold text-[var(--text-primary)]">{person.name}</p>
       {person.leaderName && (
-        <p className="mt-0.5 text-xs text-[#5a5a6e]">Leader: {person.leaderName}</p>
+        <p className="mt-0.5 text-xs text-[var(--text-muted)]">Leader: {person.leaderName}</p>
       )}
       <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-[#3b82f6]" />
-          <span className="tabular-nums text-[#e4e4e7]">{person.total}</span>
-          <span className="text-[#5a5a6e]">总</span>
+          <span className="tabular-nums text-[var(--text-primary)]">{person.total}</span>
+          <span className="text-[var(--text-muted)]">总</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
-          <span className="tabular-nums text-[#e4e4e7]">{person.done}</span>
-          <span className="text-[#5a5a6e]">完成</span>
+          <span className="tabular-nums text-[var(--text-primary)]">{person.done}</span>
+          <span className="text-[var(--text-muted)]">完成</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-[#ef4444]" />
-          <span className="tabular-nums text-[#e4e4e7]">{person.overdue}</span>
-          <span className="text-[#5a5a6e]">延期</span>
+          <span className="tabular-nums text-[var(--text-primary)]">{person.overdue}</span>
+          <span className="text-[var(--text-muted)]">延期</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-[#f59e0b]" />
-          <span className="tabular-nums text-[#e4e4e7]">{person.riskCount}</span>
-          <span className="text-[#5a5a6e]">风险</span>
+          <span className="tabular-nums text-[var(--text-primary)]">{person.riskCount}</span>
+          <span className="text-[var(--text-muted)]">风险</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-[#06b6d4]" />
-          <span className="tabular-nums text-[#e4e4e7]">{person.weeklyNewCount}</span>
-          <span className="text-[#5a5a6e]">新增</span>
+          <span className="tabular-nums text-[var(--text-primary)]">{person.weeklyNewCount}</span>
+          <span className="text-[var(--text-muted)]">新增</span>
         </span>
       </div>
       <div className="mt-3">
-        <div className="flex items-center justify-between text-xs text-[#5a5a6e]">
+        <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
           <span>完成率</span>
-          <span className="tabular-nums font-medium text-[#e4e4e7]">{person.doneRate}%</span>
+          <span className="tabular-nums font-medium text-[var(--text-primary)]">{person.doneRate}%</span>
         </div>
-        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#1e1e2e]">
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--bg-surface)]">
           <div
             className="h-full rounded-full bg-[#22c55e] transition-all duration-500 ease-out"
             style={{
@@ -758,7 +758,7 @@ function PersonCard({ person }: { readonly person: PersonSummary }) {
 
 function PersonCards({ persons }: { readonly persons: readonly PersonSummary[] }) {
   if (persons.length === 0) {
-    return <p className="py-12 text-center text-[#5a5a6e]">暂无人员数据</p>;
+    return <p className="py-12 text-center text-[var(--text-muted)]">暂无人员数据</p>;
   }
 
   return (
@@ -788,7 +788,7 @@ function GroupToggle({
   readonly onChange: (m: GroupMode) => void;
 }) {
   return (
-    <div className="flex items-center gap-1 rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] p-1">
+    <div className="flex items-center gap-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] p-1">
       {GROUP_MODE_LABELS.map((m) => (
         <button
           key={m.mode}
@@ -796,7 +796,7 @@ function GroupToggle({
           className={`rounded-md px-4 py-1.5 text-xs font-medium transition-all duration-200 ${
             groupMode === m.mode
               ? 'bg-[#3b82f6] text-white shadow-sm'
-              : 'text-[#8b8b9e] hover:text-[#e4e4e7] hover:bg-[#2a2a3a]'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border)]'
           }`}
         >
           {m.label}
@@ -834,55 +834,55 @@ function LeaderCard({ leader }: { readonly leader: LeaderSummary }) {
   const weeklyNew = leader.weeklyNewCount ?? 0;
 
   return (
-    <div className="group rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6 transition-all duration-300 ease-out hover:bg-[#1a1a2e]">
+    <div className="group rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6 transition-all duration-300 ease-out hover:bg-[var(--bg-hover)]">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full text-left"
       >
         <div className="flex items-center justify-between">
-          <p className="text-xl font-semibold text-[#e4e4e7]">{leader.leaderName}</p>
-          <span className="text-xs text-[#5a5a6e] transition-all duration-300 ease-out">
+          <p className="text-xl font-semibold text-[var(--text-primary)]">{leader.leaderName}</p>
+          <span className="text-xs text-[var(--text-muted)] transition-all duration-300 ease-out">
             {expanded ? '收起' : '展开'}
           </span>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-[#3b82f6]" />
-            <span className="tabular-nums text-[#e4e4e7]">{leader.total}</span>
-            <span className="text-[#5a5a6e]">总计</span>
+            <span className="tabular-nums text-[var(--text-primary)]">{leader.total}</span>
+            <span className="text-[var(--text-muted)]">总计</span>
           </span>
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
-            <span className="tabular-nums text-[#e4e4e7]">{leader.done}</span>
-            <span className="text-[#5a5a6e]">完成</span>
+            <span className="tabular-nums text-[var(--text-primary)]">{leader.done}</span>
+            <span className="text-[var(--text-muted)]">完成</span>
           </span>
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-[#ef4444]" />
-            <span className="tabular-nums text-[#e4e4e7]">{leader.overdue}</span>
-            <span className="text-[#5a5a6e]">延期</span>
+            <span className="tabular-nums text-[var(--text-primary)]">{leader.overdue}</span>
+            <span className="text-[var(--text-muted)]">延期</span>
           </span>
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-[#f59e0b]" />
-            <span className="tabular-nums text-[#e4e4e7]">{leader.carryOver}</span>
-            <span className="text-[#5a5a6e]">继承</span>
+            <span className="tabular-nums text-[var(--text-primary)]">{leader.carryOver}</span>
+            <span className="text-[var(--text-muted)]">继承</span>
           </span>
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-[#8b5cf6]" />
-            <span className="tabular-nums text-[#e4e4e7]">{riskCount}</span>
-            <span className="text-[#5a5a6e]">风险</span>
+            <span className="tabular-nums text-[var(--text-primary)]">{riskCount}</span>
+            <span className="text-[var(--text-muted)]">风险</span>
           </span>
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-[#06b6d4]" />
-            <span className="tabular-nums text-[#e4e4e7]">{weeklyNew}</span>
-            <span className="text-[#5a5a6e]">本周新增</span>
+            <span className="tabular-nums text-[var(--text-primary)]">{weeklyNew}</span>
+            <span className="text-[var(--text-muted)]">本周新增</span>
           </span>
         </div>
         <div className="mt-3">
-          <div className="flex items-center justify-between text-xs text-[#5a5a6e]">
+          <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
             <span>完成率</span>
-            <span className="tabular-nums font-medium text-[#e4e4e7]">{leader.doneRate}%</span>
+            <span className="tabular-nums font-medium text-[var(--text-primary)]">{leader.doneRate}%</span>
           </div>
-          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#1e1e2e]">
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--bg-surface)]">
             <div
               className="h-full rounded-full bg-[#22c55e] transition-all duration-500 ease-out"
               style={{
@@ -899,16 +899,16 @@ function LeaderCard({ leader }: { readonly leader: LeaderSummary }) {
           expanded && leader.members.length > 0 ? 'mt-5 max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
         }`}
       >
-        <div className="border-t border-[#2a2a3a] pt-4">
-          <p className="mb-3 text-xs font-medium text-[#5a5a6e]">团队成员明细</p>
+        <div className="border-t border-[var(--border)] pt-4">
+          <p className="mb-3 text-xs font-medium text-[var(--text-muted)]">团队成员明细</p>
           <div className="space-y-2">
             {leader.members.map((m) => (
-              <div key={m.userId} className="flex items-center justify-between rounded-xl bg-[#1e1e2e] px-4 py-2.5">
-                <span className="text-sm font-medium text-[#e4e4e7]">{m.name}</span>
+              <div key={m.userId} className="flex items-center justify-between rounded-xl bg-[var(--bg-surface)] px-4 py-2.5">
+                <span className="text-sm font-medium text-[var(--text-primary)]">{m.name}</span>
                 <div className="flex items-center gap-4 text-xs tabular-nums">
-                  <span className="text-[#8b8b9e]">总 {m.total}</span>
+                  <span className="text-[var(--text-secondary)]">总 {m.total}</span>
                   <span className="text-[#22c55e]">完 {m.done}</span>
-                  <span className={m.overdue > 0 ? 'font-semibold text-[#ef4444]' : 'text-[#8b8b9e]'}>
+                  <span className={m.overdue > 0 ? 'font-semibold text-[#ef4444]' : 'text-[var(--text-secondary)]'}>
                     延 {m.overdue}
                   </span>
                   <a
@@ -930,7 +930,7 @@ function LeaderCard({ leader }: { readonly leader: LeaderSummary }) {
 
 function LeaderCards({ leaders }: { readonly leaders: readonly LeaderSummary[] }) {
   if (leaders.length === 0) {
-    return <p className="py-12 text-center text-[#5a5a6e]">暂无负责人数据</p>;
+    return <p className="py-12 text-center text-[var(--text-muted)]">暂无负责人数据</p>;
   }
 
   return (
@@ -956,36 +956,36 @@ interface ProjectSummary {
 
 function ProjectCard({ project }: { readonly project: ProjectSummary }) {
   return (
-    <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-6 transition-all duration-300 ease-out hover:bg-[#1a1a2e]">
-      <p className="text-xl font-semibold text-[#e4e4e7]">{project.projectName}</p>
+    <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6 transition-all duration-300 ease-out hover:bg-[var(--bg-hover)]">
+      <p className="text-xl font-semibold text-[var(--text-primary)]">{project.projectName}</p>
       <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-[#3b82f6]" />
-          <span className="tabular-nums text-[#e4e4e7]">{project.total}</span>
-          <span className="text-[#5a5a6e]">总</span>
+          <span className="tabular-nums text-[var(--text-primary)]">{project.total}</span>
+          <span className="text-[var(--text-muted)]">总</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
-          <span className="tabular-nums text-[#e4e4e7]">{project.done}</span>
-          <span className="text-[#5a5a6e]">完成</span>
+          <span className="tabular-nums text-[var(--text-primary)]">{project.done}</span>
+          <span className="text-[var(--text-muted)]">完成</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-[#ef4444]" />
-          <span className="tabular-nums text-[#e4e4e7]">{project.overdue}</span>
-          <span className="text-[#5a5a6e]">延期</span>
+          <span className="tabular-nums text-[var(--text-primary)]">{project.overdue}</span>
+          <span className="text-[var(--text-muted)]">延期</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-[#f59e0b]" />
-          <span className="tabular-nums text-[#e4e4e7]">{project.riskCount}</span>
-          <span className="text-[#5a5a6e]">风险</span>
+          <span className="tabular-nums text-[var(--text-primary)]">{project.riskCount}</span>
+          <span className="text-[var(--text-muted)]">风险</span>
         </span>
       </div>
       <div className="mt-3">
-        <div className="flex items-center justify-between text-xs text-[#5a5a6e]">
+        <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
           <span>完成率</span>
-          <span className="tabular-nums font-medium text-[#e4e4e7]">{project.doneRate}%</span>
+          <span className="tabular-nums font-medium text-[var(--text-primary)]">{project.doneRate}%</span>
         </div>
-        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#1e1e2e]">
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--bg-surface)]">
           <div
             className="h-full rounded-full bg-[#22c55e] transition-all duration-500 ease-out"
             style={{
@@ -1001,7 +1001,7 @@ function ProjectCard({ project }: { readonly project: ProjectSummary }) {
 
 function ProjectCards({ projects }: { readonly projects: readonly ProjectSummary[] }) {
   if (projects.length === 0) {
-    return <p className="py-12 text-center text-[#5a5a6e]">暂无项目数据</p>;
+    return <p className="py-12 text-center text-[var(--text-muted)]">暂无项目数据</p>;
   }
 
   return (
@@ -1030,7 +1030,7 @@ function ViewSwitcher({
   readonly onChange: (v: DashboardView) => void;
 }) {
   return (
-    <div className="flex items-center gap-1 rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] p-1">
+    <div className="flex items-center gap-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] p-1">
       {VIEW_TABS.map((tab) => (
         <button
           key={tab.view}
@@ -1038,7 +1038,7 @@ function ViewSwitcher({
           className={`rounded-md px-4 py-1.5 text-xs font-medium transition-all duration-200 ${
             activeView === tab.view
               ? 'bg-[#3b82f6] text-white shadow-sm'
-              : 'text-[#8b8b9e] hover:text-[#e4e4e7] hover:bg-[#2a2a3a]'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border)]'
           }`}
         >
           {tab.label}
@@ -1125,7 +1125,7 @@ function DashboardContent() {
   if (!authed) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[#5a5a6e]">正在验证登录状态...</p>
+        <p className="text-[var(--text-muted)]">正在验证登录状态...</p>
       </div>
     );
   }
@@ -1157,7 +1157,7 @@ function DashboardContent() {
         </>
       ) : isLoading ? (
         <div className="flex min-h-[40vh] items-center justify-center">
-          <p className="text-[#5a5a6e]">加载中...</p>
+          <p className="text-[var(--text-muted)]">加载中...</p>
         </div>
       ) : error ? (
         <div className="flex min-h-[40vh] items-center justify-center">
@@ -1178,7 +1178,7 @@ function DashboardContent() {
           />
           <div className="mt-10">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-xl font-semibold tracking-tight text-[#e4e4e7]">
+              <h3 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
                 {groupMode === 'person' ? '人员概览' : groupMode === 'leader' ? 'Leader 概览' : '项目概览'}
               </h3>
               <GroupToggle groupMode={groupMode} onChange={setGroupMode} />
@@ -1212,7 +1212,7 @@ export default function DashboardPage() {
     <Suspense
       fallback={
         <div className="flex min-h-[60vh] items-center justify-center">
-          <p className="text-[#5a5a6e]">加载中...</p>
+          <p className="text-[var(--text-muted)]">加载中...</p>
         </div>
       }
     >

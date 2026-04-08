@@ -148,15 +148,15 @@ function TaskTooltip({
   const dueStr = new Date(task.dueAt).toLocaleDateString('zh-CN');
 
   return (
-    <div className="absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-[#1e1e2e] border border-[#2a2a3a] px-3 py-2 text-xs text-[#e4e4e7] shadow-xl pointer-events-none">
+    <div className="absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-3 py-2 text-xs text-[var(--text-primary)] shadow-xl pointer-events-none">
       <p className="font-medium">{task.title}</p>
-      <p className="mt-1 text-[#8b8b9e]">
+      <p className="mt-1 text-[var(--text-secondary)]">
         {task.assigneeName} &middot; {getStatusLabel(task.status)}
       </p>
-      <p className="text-[#8b8b9e]">
+      <p className="text-[var(--text-secondary)]">
         {startStr} - {dueStr}
       </p>
-      <p className="text-[#8b8b9e]">
+      <p className="text-[var(--text-secondary)]">
         进度: {task.progressPercent}%
         {task.isOverdue ? ' (已延期)' : ''}
       </p>
@@ -226,8 +226,13 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
   const computed = useMemo(() => {
     if (!data?.groups || !data.timeRange) return null;
 
+    if (!data.timeRange.min || !data.timeRange.max) return null;
+
     const minDate = toStartOfDay(new Date(data.timeRange.min));
     const maxDate = toStartOfDay(new Date(data.timeRange.max));
+
+    if (isNaN(minDate.getTime()) || isNaN(maxDate.getTime())) return null;
+
     const totalDays = daysBetween(minDate, maxDate);
 
     if (totalDays <= 0) return null;
@@ -242,8 +247,10 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
     const activeFilterTitle = filterTaskTitle ?? '';
 
     const groups: ComputedLeaderGroup[] = data.groups.map((group) => {
-      // Filter tasks first
+      // Filter tasks: skip tasks without dueAt and apply user filters
       const filteredTasks = group.tasks.filter((task) => {
+        // Skip tasks that have no dueAt — can't render a bar without an end date
+        if (!task.dueAt) return false;
         if (activeFilterPersons.length > 0 && !activeFilterPersons.includes(task.assigneeName)) {
           return false;
         }
@@ -266,12 +273,23 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
       }
 
       const personSubGroups: PersonSubGroup[] = Array.from(personMap.entries()).map(([personName, tasks]) => {
-        const bars = tasks.map((task) => {
-          const start = toStartOfDay(new Date(task.startAt));
-          const due = toStartOfDay(new Date(task.dueAt));
+        const bars = tasks.reduce<{ task: GanttTask; leftPct: number; widthPct: number }[]>((acc, task) => {
+          const dueMs = new Date(task.dueAt).getTime();
+          if (!dueMs || isNaN(dueMs)) return acc;
+
+          // If startAt is missing, use dueAt - 7 days as a 1-week default bar
+          const rawStartAt = task.startAt || undefined;
+          const startMs = rawStartAt ? new Date(rawStartAt).getTime() : dueMs - 7 * 24 * 60 * 60 * 1000;
+          if (isNaN(startMs)) return acc;
+
+          const start = toStartOfDay(new Date(startMs));
+          const due = toStartOfDay(new Date(dueMs));
 
           let leftPct = (daysBetween(minDate, start) / totalDays) * 100;
           let widthPct = (daysBetween(start, due) / totalDays) * 100;
+
+          // Protect against NaN
+          if (isNaN(leftPct) || isNaN(widthPct)) return acc;
 
           // Clamp to visible area
           if (leftPct < 0) {
@@ -285,8 +303,9 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
           // Minimum width
           if (widthPct < 2) widthPct = 2;
 
-          return { task, leftPct, widthPct };
-        });
+          acc.push({ task, leftPct, widthPct });
+          return acc;
+        }, []);
 
         return {
           personName,
@@ -324,7 +343,7 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
   if (isLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-[#5a5a6e]">加载中...</p>
+        <p className="text-[var(--text-muted)]">加载中...</p>
       </div>
     );
   }
@@ -339,7 +358,7 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
 
   if (!computed || !data?.groups?.length) {
     return (
-      <p className="py-12 text-center text-[#5a5a6e]">暂无甘特图数据</p>
+      <p className="py-12 text-center text-[var(--text-muted)]">暂无甘特图数据</p>
     );
   }
 
@@ -369,10 +388,10 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
   }, [groups]);
 
   return (
-    <div className="overflow-hidden rounded-2xl bg-[#12121a] border border-[#2a2a3a]">
+    <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">
       {/* Chart header with task count and expand/collapse toggle */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a3a]">
-        <p className="text-sm text-[#5a5a6e]">{totalTasks} 项任务</p>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+        <p className="text-sm text-[var(--text-muted)]">{totalTasks} 项任务</p>
         <button
           onClick={() => {
             if (allExpanded) {
@@ -381,7 +400,7 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
               setExpandedPersons(new Set(allPersonKeys));
             }
           }}
-          className="text-xs text-[#5a5a6e] hover:text-[#e4e4e7] transition-colors"
+          className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
         >
           {allExpanded ? '全部收起' : '全部展开'}
         </button>
@@ -389,18 +408,18 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
       <div className="overflow-x-auto">
         <div style={{ minWidth: 800 }}>
           {/* Timeline header */}
-          <div className="flex border-b border-[#2a2a3a]">
+          <div className="flex border-b border-[var(--border)]">
             <div
-              className="shrink-0 bg-[#1e1e2e] px-4 py-3 text-xs font-medium text-[#5a5a6e]"
+              className="shrink-0 bg-[var(--bg-surface)] px-4 py-3 text-xs font-medium text-[var(--text-muted)]"
               style={{ width: LEADER_COL_WIDTH }}
             >
               Leader / 人员
             </div>
-            <div className="relative flex-1 bg-[#1e1e2e] py-3">
+            <div className="relative flex-1 bg-[var(--bg-surface)] py-3">
               {markerPositions.map((m, i) => (
                 <span
                   key={`${m.label}-${i}`}
-                  className="absolute top-1/2 -translate-y-1/2 text-[10px] text-[#5a5a6e] font-medium"
+                  className="absolute top-1/2 -translate-y-1/2 text-[10px] text-[var(--text-muted)] font-medium"
                   style={{ left: `${m.leftPct}%` }}
                 >
                   {m.label}
@@ -413,12 +432,12 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
           {groups.map((group) => (
             <div
               key={group.leaderId}
-              className="border-b border-[#2a2a3a] last:border-b-0"
+              className="border-b border-[var(--border)] last:border-b-0"
             >
               {/* Leader header row */}
-              <div className="flex bg-[#0a0a0f] border-b border-[#2a2a3a]">
+              <div className="flex bg-[var(--bg-page)] border-b border-[var(--border)]">
                 <div
-                  className="shrink-0 px-4 py-3 text-sm font-semibold text-[#e4e4e7]"
+                  className="shrink-0 px-4 py-3 text-sm font-semibold text-[var(--text-primary)]"
                   style={{ width: LEADER_COL_WIDTH }}
                 >
                   {group.leaderName}
@@ -428,7 +447,7 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
                   {markerPositions.map((m, i) => (
                     <div
                       key={`leader-grid-${m.label}-${i}`}
-                      className="absolute top-0 bottom-0 w-px bg-[#1e1e2e]"
+                      className="absolute top-0 bottom-0 w-px bg-[var(--bg-surface)]"
                       style={{ left: `${m.leftPct}%` }}
                     />
                   ))}
@@ -445,20 +464,20 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
                     {/* Person row (collapsible header) */}
                     <div className="flex">
                       <div
-                        className="shrink-0 px-4 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-[#1a1a2e] transition-colors duration-150"
+                        className="shrink-0 px-4 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-[var(--bg-hover)] transition-colors duration-150"
                         style={{ width: LEADER_COL_WIDTH }}
                         onClick={() => togglePerson(personGroup.personKey)}
                       >
-                        <span className="text-[#5a5a6e] text-xs">{expanded ? '▼' : '▶'}</span>
-                        <span className="text-sm font-medium text-[#e4e4e7] truncate">{personGroup.personName}</span>
-                        <span className="text-[10px] text-[#5a5a6e] whitespace-nowrap">({taskCount})</span>
+                        <span className="text-[var(--text-muted)] text-xs">{expanded ? '▼' : '▶'}</span>
+                        <span className="text-sm font-medium text-[var(--text-primary)] truncate">{personGroup.personName}</span>
+                        <span className="text-[10px] text-[var(--text-muted)] whitespace-nowrap">({taskCount})</span>
                       </div>
                       <div className="relative flex-1 py-2">
                         {/* Grid lines */}
                         {markerPositions.map((m, i) => (
                           <div
                             key={`person-grid-${m.label}-${i}`}
-                            className="absolute top-0 bottom-0 w-px bg-[#1e1e2e]"
+                            className="absolute top-0 bottom-0 w-px bg-[var(--bg-surface)]"
                             style={{ left: `${m.leftPct}%` }}
                           />
                         ))}
@@ -474,7 +493,7 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
 
                     {/* Expanded task bars */}
                     {expanded && (
-                      <div className="border-t border-[#2a2a3a]/50">
+                      <div className="border-t border-[var(--border)]/50">
                         {personGroup.bars.map((bar) => (
                           <div key={bar.task.taskUid} className="flex">
                             <div
@@ -486,7 +505,7 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
                               {markerPositions.map((m, i) => (
                                 <div
                                   key={`bar-grid-${m.label}-${i}`}
-                                  className="absolute top-0 bottom-0 w-px bg-[#1e1e2e]"
+                                  className="absolute top-0 bottom-0 w-px bg-[var(--bg-surface)]"
                                   style={{ left: `${m.leftPct}%` }}
                                 />
                               ))}
@@ -514,7 +533,7 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
               {/* Empty state if leader has no person sub-groups after filtering */}
               {group.personSubGroups.length === 0 && (
                 <div className="flex items-center h-8 px-4">
-                  <span className="text-[10px] text-[#5a5a6e]">无任务</span>
+                  <span className="text-[10px] text-[var(--text-muted)]">无任务</span>
                 </div>
               )}
             </div>
