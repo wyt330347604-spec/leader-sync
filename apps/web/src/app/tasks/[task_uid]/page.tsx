@@ -334,10 +334,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
   const [inlineStatus, setInlineStatus] = useState('');
   const [inlinePriority, setInlinePriority] = useState('');
 
-  // Delay form state
-  const [showDelayForm, setShowDelayForm] = useState(false);
-  const [newDueAt, setNewDueAt] = useState('');
-  const [delayReason, setDelayReason] = useState('');
+  // Delay state
+  const [showDelayPicker, setShowDelayPicker] = useState(false);
   const [delaySubmitting, setDelaySubmitting] = useState(false);
 
   // Boss attention toggle state
@@ -475,17 +473,15 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
     }
   }
 
-  async function handleDelay() {
-    if (!newDueAt || !delayReason.trim()) return;
+  async function handleDelay(newDate: string) {
+    if (!newDate) return;
     setDelaySubmitting(true);
     setSaveError('');
     try {
       await apiFetch(`/api/v1/tasks/${taskUid}/delay`, {
         method: 'POST',
         body: JSON.stringify({
-          new_due_at: new Date(newDueAt).toISOString(),
-          delay_reason: delayReason,
-          version: task.version,
+          new_due_at: `${newDate}T23:59:59+08:00`,
         }),
       });
       router.push('/tasks');
@@ -494,7 +490,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
         alert('数据已被修改，请刷新');
         await mutate();
       } else {
-        setSaveError(err.message || '申请延期失败');
+        setSaveError(err.message || '延期失败');
       }
     } finally {
       setDelaySubmitting(false);
@@ -727,10 +723,10 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
           提交完成
         </button>
         <button
-          onClick={() => setShowDelayForm((v) => !v)}
+          onClick={() => setShowDelayPicker((v) => !v)}
           className="rounded-full bg-[var(--bg-surface)] border border-[var(--border)] px-6 py-2.5 text-sm font-medium text-[#f59e0b] transition-all duration-300 ease-out hover:bg-[var(--bg-hover)]"
         >
-          {showDelayForm ? '取消延期' : '申请延期'}
+          延期
         </button>
       </div>
 
@@ -794,44 +790,19 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
         </div>
       )}
 
-      {/* Delay form */}
-      {showDelayForm && (
-        <div className="mb-6 rounded-2xl bg-[#f59e0b]/5 border border-[#f59e0b]/20 p-6">
-          <h3 className="mb-5 text-lg font-semibold text-[#f59e0b]">申请延期</h3>
-          <div className="space-y-5">
-            <div>
-              <label htmlFor="new_due_at" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">新截止时间 *</label>
-              <input
-                id="new_due_at"
-                type="datetime-local"
-                required
-                value={newDueAt}
-                onChange={(e) => setNewDueAt(e.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="delay_reason" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">延期原因 *</label>
-              <textarea
-                id="delay_reason"
-                rows={3}
-                required
-                value={delayReason}
-                onChange={(e) => setDelayReason(e.target.value)}
-                className={inputClass}
-                placeholder="请说明延期原因..."
-              />
-            </div>
-            <div className="flex justify-end">
-              <button
-                onClick={handleDelay}
-                disabled={delaySubmitting || !newDueAt || !delayReason.trim()}
-                className="rounded-full bg-[#f59e0b] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#d97706] disabled:opacity-50"
-              >
-                {delaySubmitting ? '提交中...' : '提交延期申请'}
-              </button>
-            </div>
-          </div>
+      {/* Delay date picker */}
+      {showDelayPicker && (
+        <div className="mb-6 rounded-2xl bg-[#f59e0b]/5 border border-[#f59e0b]/20 p-5">
+          <p className="mb-3 text-sm font-medium text-[#f59e0b]">选择新的截止日期</p>
+          <input
+            type="date"
+            onChange={(e) => {
+              if (e.target.value) handleDelay(e.target.value);
+            }}
+            disabled={delaySubmitting}
+            className="w-full rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-primary)] [color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-[#f59e0b]/40"
+          />
+          {delaySubmitting && <p className="mt-2 text-xs text-[var(--text-muted)]">提交中...</p>}
         </div>
       )}
     </div>

@@ -42,7 +42,7 @@ export interface CompleteTaskDto {
 
 export interface DelayTaskDto {
   new_due_at: string;
-  delay_reason: string;
+  delay_reason?: string;
 }
 
 export interface TaskListQuery {
