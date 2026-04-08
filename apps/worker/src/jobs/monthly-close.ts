@@ -125,68 +125,34 @@ export async function runMonthlyClose(): Promise<void> {
 
   console.log(`  Snapshots: 1 company + ${byAssignee.size} employees`);
 
-  // --- Step 5: Carry over ---
+  // --- Step 5: Carry over (MOVE strategy — update month_bucket, no new records) ---
   let carriedCount = 0;
   for (const t of carryOverCandidates) {
-    const newTaskUid = generateTaskUid();
-    const newTask = {
-      taskUid: newTaskUid,
-      title: t.title,
-      detail: t.detail,
-      taskType: 'carry_over' as const,
-      priority: t.priority,
-      status: t.status === 'stalled' ? 'stalled' : 'not_started',
-      progressPercent: 0,
-      latestProgress: null as string | null,
-      assigneeUserId: t.assigneeUserId,
-      assigneeName: t.assigneeName,
-      assigneeManagerUserId: t.assigneeManagerUserId,
-      assigneeManagerName: t.assigneeManagerName,
-      assigneeDeptName: t.assigneeDeptName,
-      leaderUserId: t.leaderUserId,
-      leaderName: t.leaderName,
-      issuerUserId: t.issuerUserId,
-      assignerUserId: t.assignerUserId,
-      assignmentType: 'carry_over' as const,
-      dueAt: t.dueAt,
-      startAt: t.startAt,
+    await db.update(task).set({
       monthBucket: thisMonth,
       sourceMonth: t.sourceMonth || t.monthBucket,
+      taskType: 'carry_over',
       isCarriedOver: true,
-      carriedFromTaskUid: t.taskUid,
       carryOverCount: (t.carryOverCount || 0) + 1,
-      bossAttentionFlag: t.bossAttentionFlag,
-      version: 1,
-      createdBy: 'monthly_close',
-      createdAt: now,
       updatedAt: now,
-    };
+    }).where(eq(task.taskUid, t.taskUid));
 
-    await db.insert(task).values(newTask);
-
-    // Create Bitable record for carried-over task
-    const bitableFields = taskToBitableFields({ ...newTask, isOverdue: false, daysToDue: null });
-    try {
-      const recordIds = await feishuApi.createBitableRecords([{ fields: bitableFields }]);
-      if (recordIds[0]) {
-        await db.insert(externalMapping).values({
-          taskUid: newTaskUid,
-          sourceType: 'bitable',
-          externalObjectId: recordIds[0],
-          externalParentId: `${config.bitableAppToken}/${config.bitableTableId}`,
-          syncVersion: 1,
-          lastSyncHash: computeHash(bitableFields),
-          lastSyncAt: now,
-          syncStatus: 'success',
-        });
+    // Update existing Bitable record if mapped
+    const mappings = await db.select().from(externalMapping)
+      .where(and(eq(externalMapping.taskUid, t.taskUid), eq(externalMapping.sourceType, 'bitable')));
+    if (mappings[0]) {
+      const updatedTask = { ...t, monthBucket: thisMonth, taskType: 'carry_over', isCarriedOver: true };
+      const bitableFields = taskToBitableFields({ ...updatedTask, isOverdue: false, daysToDue: null });
+      try {
+        await feishuApi.updateBitableRecord(mappings[0].externalObjectId, bitableFields);
+      } catch (err) {
+        console.warn(`  Failed to update Bitable for ${t.taskUid}:`, (err as Error).message);
       }
-    } catch (err) {
-      console.warn(`  Failed to create Bitable record for carried task ${newTaskUid}:`, (err as Error).message);
     }
 
     carriedCount++;
   }
-  console.log(`  Carried over: ${carriedCount} tasks to ${thisMonth}`);
+  console.log(`  Carried over (moved): ${carriedCount} tasks to ${thisMonth}`);
 
   // --- Step 6: Send monthly reports ---
   let reportsSent = 0;
