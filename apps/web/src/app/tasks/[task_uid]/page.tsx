@@ -9,14 +9,12 @@ import { apiFetch, ApiError } from '@/lib/api-client';
 import { ensureAuth } from '@/lib/auth';
 
 const STATUS_OPTIONS = [
-  { value: 'draft', label: '草稿' },
-  { value: 'assigned', label: '已指派' },
+  { value: 'pending', label: '待办' },
+  { value: 'not_started', label: '待开始' },
   { value: 'in_progress', label: '进行中' },
-  { value: 'blocked', label: '阻塞' },
-  { value: 'pending_review', label: '待验收' },
+  { value: 'stalled', label: '已停滞' },
   { value: 'done', label: '已完成' },
-  { value: 'reopened', label: '重新打开' },
-  { value: 'cancelled', label: '已取消' },
+  { value: 'shelved', label: '已搁置' },
   { value: 'closed', label: '已归档' },
 ];
 
@@ -458,7 +456,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
       await apiFetch(`/api/v1/tasks/${taskUid}`, {
         method: 'PATCH',
         body: JSON.stringify({
-          status: 'pending_review',
+          status: 'done',
           progress_percent: 100,
           version: task.version,
         }),
