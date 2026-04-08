@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { useTask } from '@/hooks/use-task';
 import { StatusBadge } from '@/components/status-badge';
@@ -315,6 +316,7 @@ function CollaboratorSection({ taskUid }: { readonly taskUid: string }) {
 
 export default function TaskDetailPage({ params }: { params: Promise<{ task_uid: string }> }) {
   const { task_uid: taskUid } = use(params);
+  const router = useRouter();
   const { data: task, error, isLoading, mutate } = useTask(taskUid);
   const [authed, setAuthed] = useState(false);
 
@@ -369,8 +371,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
           version,
         }),
       });
-      await mutate();
-      setEditingProgress(false);
+      router.push('/tasks');
     } catch (err: any) {
       if (err instanceof ApiError && err.code === 409) {
         alert('数据已被修改，请刷新');
@@ -461,7 +462,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
           version: task.version,
         }),
       });
-      await mutate();
+      router.push('/tasks');
     } catch (err: any) {
       if (err instanceof ApiError && err.code === 409) {
         alert('数据已被修改，请刷新');
@@ -487,10 +488,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
           version: task.version,
         }),
       });
-      await mutate();
-      setShowDelayForm(false);
-      setNewDueAt('');
-      setDelayReason('');
+      router.push('/tasks');
     } catch (err: any) {
       if (err instanceof ApiError && err.code === 409) {
         alert('数据已被修改，请刷新');
