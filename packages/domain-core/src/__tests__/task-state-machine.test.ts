@@ -3,17 +3,31 @@ import { canTransition, validateTransition, InvalidTransitionError, MissingStall
 
 describe('canTransition', () => {
   const validCases: [string, string][] = [
+    // pending can go to many places (all active states treated as "进行中")
     ['pending', 'not_started'],
+    ['pending', 'in_progress'],
+    ['pending', 'done'],
     ['pending', 'shelved'],
+    // not_started
     ['not_started', 'in_progress'],
+    ['not_started', 'done'],
     ['not_started', 'shelved'],
+    // in_progress
     ['in_progress', 'stalled'],
     ['in_progress', 'done'],
+    ['in_progress', 'shelved'],
+    // stalled
     ['stalled', 'in_progress'],
+    ['stalled', 'done'],
     ['stalled', 'shelved'],
+    // done
     ['done', 'reopened'],
     ['done', 'closed'],
+    // reopened
     ['reopened', 'in_progress'],
+    ['reopened', 'done'],
+    // shelved
+    ['shelved', 'in_progress'],
     ['shelved', 'closed'],
   ];
 
@@ -22,13 +36,9 @@ describe('canTransition', () => {
   });
 
   const invalidCases: [string, string][] = [
-    ['pending', 'done'],
-    ['pending', 'in_progress'],
     ['pending', 'stalled'],
-    ['not_started', 'done'],
     ['not_started', 'pending'],
     ['in_progress', 'pending'],
-    ['in_progress', 'shelved'],
     ['done', 'in_progress'],
     ['done', 'pending'],
     ['closed', 'pending'],
@@ -39,11 +49,8 @@ describe('canTransition', () => {
     ['closed', 'reopened'],
     ['closed', 'shelved'],
     ['closed', 'closed'],
-    ['shelved', 'in_progress'],
     ['shelved', 'pending'],
-    ['reopened', 'done'],
     ['reopened', 'pending'],
-    ['stalled', 'done'],
     ['stalled', 'pending'],
   ];
 
@@ -58,11 +65,11 @@ describe('canTransition', () => {
 
 describe('validateTransition', () => {
   it('should not throw for valid transition', () => {
-    expect(() => validateTransition('pending', 'not_started')).not.toThrow();
+    expect(() => validateTransition('pending', 'done')).not.toThrow();
   });
 
   it('should throw InvalidTransitionError for invalid transition', () => {
-    expect(() => validateTransition('pending', 'done')).toThrow(InvalidTransitionError);
+    expect(() => validateTransition('closed', 'done')).toThrow(InvalidTransitionError);
   });
 
   it('should throw MissingStallReasonError when transitioning to stalled without reason', () => {

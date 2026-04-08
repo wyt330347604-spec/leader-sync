@@ -1,13 +1,13 @@
 import { TaskStatus } from '@leader-sync/shared-types';
 
 const VALID_TRANSITIONS: Record<string, readonly string[]> = {
-  [TaskStatus.PENDING]: [TaskStatus.NOT_STARTED, TaskStatus.SHELVED],
-  [TaskStatus.NOT_STARTED]: [TaskStatus.IN_PROGRESS, TaskStatus.SHELVED],
-  [TaskStatus.IN_PROGRESS]: [TaskStatus.STALLED, TaskStatus.DONE],
-  [TaskStatus.STALLED]: [TaskStatus.IN_PROGRESS, TaskStatus.SHELVED],
+  [TaskStatus.PENDING]: [TaskStatus.NOT_STARTED, TaskStatus.IN_PROGRESS, TaskStatus.DONE, TaskStatus.SHELVED],
+  [TaskStatus.NOT_STARTED]: [TaskStatus.IN_PROGRESS, TaskStatus.DONE, TaskStatus.SHELVED],
+  [TaskStatus.IN_PROGRESS]: [TaskStatus.STALLED, TaskStatus.DONE, TaskStatus.SHELVED],
+  [TaskStatus.STALLED]: [TaskStatus.IN_PROGRESS, TaskStatus.DONE, TaskStatus.SHELVED],
   [TaskStatus.DONE]: [TaskStatus.REOPENED, TaskStatus.CLOSED],
-  [TaskStatus.REOPENED]: [TaskStatus.IN_PROGRESS],
-  [TaskStatus.SHELVED]: [TaskStatus.CLOSED],
+  [TaskStatus.REOPENED]: [TaskStatus.IN_PROGRESS, TaskStatus.DONE],
+  [TaskStatus.SHELVED]: [TaskStatus.IN_PROGRESS, TaskStatus.CLOSED],
   [TaskStatus.CLOSED]: [],
 };
 
