@@ -198,7 +198,7 @@ describe('TaskService', () => {
     });
 
     it('throws INVALID_STATUS_TRANSITION for invalid transition', async () => {
-      const current = makeFakeTask({ status: TaskStatus.PENDING, version: 1 });
+      const current = makeFakeTask({ status: TaskStatus.CLOSED, version: 1 });
       repo.findByUid.mockResolvedValue(current);
 
       try {
