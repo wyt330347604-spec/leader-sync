@@ -47,7 +47,10 @@ export default function TaskCreatePage() {
   const [selectedAssignee, setSelectedAssignee] = useState<{ userId: string; userName: string } | null>(null);
   const [dueAt, setDueAt] = useState('');
   const [detail, setDetail] = useState('');
-  const [startAt, setStartAt] = useState('');
+  const [startAt, setStartAt] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  });
   const [bossAttentionFlag, setBossAttentionFlag] = useState(false);
   const [projects, setProjects] = useState<{projectUid: string; name: string; isDefault: boolean}[]>([]);
   const [projectUid, setProjectUid] = useState('');
@@ -229,23 +232,27 @@ export default function TaskCreatePage() {
                 placeholder="搜索负责人姓名..."
                 className={inputClass}
               />
-              {assigneeResults.length > 0 && (
+              {assigneeSearch.length >= 1 && (
                 <div className="absolute z-50 mt-1 w-full rounded-xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden shadow-lg">
-                  {assigneeResults.map((u) => (
-                    <button
-                      key={u.userId}
-                      type="button"
-                      onClick={() => {
-                        setSelectedAssignee({ userId: u.userId, userName: u.userName ?? '' });
-                        setAssigneeSearch('');
-                        setAssigneeResults([]);
-                      }}
-                      className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors duration-150"
-                    >
-                      <span>{u.userName}</span>
-                      <span className="text-xs text-[var(--text-muted)]">{u.deptName || ''}</span>
-                    </button>
-                  ))}
+                  {assigneeResults.length > 0 ? (
+                    assigneeResults.map((u) => (
+                      <button
+                        key={u.userId}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAssignee({ userId: u.userId, userName: u.userName ?? '' });
+                          setAssigneeSearch('');
+                          setAssigneeResults([]);
+                        }}
+                        className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors duration-150"
+                      >
+                        <span>{u.userName}</span>
+                        <span className="text-xs text-[var(--text-muted)]">{u.deptName || ''}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-4 py-3 text-sm text-[var(--text-muted)]">未找到匹配人员</div>
+                  )}
                 </div>
               )}
             </div>
@@ -361,25 +368,29 @@ export default function TaskCreatePage() {
             className="block w-full rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-blue)]/40"
           />
           {/* Search results dropdown */}
-          {collabResults.length > 0 && (
+          {collabSearch.length >= 1 && (
             <div className="mt-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden">
-              {collabResults.map((u) => (
-                <button
-                  key={u.userId}
-                  type="button"
-                  onClick={() => {
-                    if (!collaborators.some((c) => c.user_id === u.userId)) {
-                      setCollaborators((prev) => [...prev, { user_id: u.userId, user_name: u.userName ?? '' }]);
-                    }
-                    setCollabSearch('');
-                    setCollabResults([]);
-                  }}
-                  className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors duration-150"
-                >
-                  <span>{u.userName}</span>
-                  <span className="text-xs text-[var(--text-muted)]">{u.deptName || ''}</span>
-                </button>
-              ))}
+              {collabResults.length > 0 ? (
+                collabResults.map((u) => (
+                  <button
+                    key={u.userId}
+                    type="button"
+                    onClick={() => {
+                      if (!collaborators.some((c) => c.user_id === u.userId)) {
+                        setCollaborators((prev) => [...prev, { user_id: u.userId, user_name: u.userName ?? '' }]);
+                      }
+                      setCollabSearch('');
+                      setCollabResults([]);
+                    }}
+                    className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors duration-150"
+                  >
+                    <span>{u.userName}</span>
+                    <span className="text-xs text-[var(--text-muted)]">{u.deptName || ''}</span>
+                  </button>
+                ))
+              ) : (
+                <div className="px-4 py-3 text-sm text-[var(--text-muted)]">未找到匹配人员</div>
+              )}
             </div>
           )}
         </div>
@@ -387,10 +398,10 @@ export default function TaskCreatePage() {
         {/* Submit */}
         <button
           type="submit"
-          disabled={submitting}
-          className="w-full rounded-full bg-[#3b82f6] py-3.5 text-base font-medium text-white transition-all duration-300 ease-out hover:bg-[#2563eb] disabled:opacity-50"
+          disabled={submitting || !selectedAssignee}
+          className="w-full rounded-full bg-[#3b82f6] py-3.5 text-base font-medium text-white transition-all duration-300 ease-out hover:bg-[#2563eb] disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {submitting ? '提交中...' : '创建任务'}
+          {submitting ? '提交中...' : !selectedAssignee ? '请先选择负责人' : '创建任务'}
         </button>
 
         <Link
