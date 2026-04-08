@@ -255,8 +255,7 @@ export class TaskService {
       current.version,
       {
         dueAt: new Date(dto.new_due_at),
-        delayReason: dto.delay_reason,
-        monthBucket: dto.new_due_at.slice(0, 7),
+        delayReason: dto.delay_reason || null,
         updatedBy: userId,
       },
     );

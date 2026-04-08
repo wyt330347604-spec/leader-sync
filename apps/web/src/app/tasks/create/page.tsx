@@ -360,16 +360,17 @@ export default function TaskCreatePage() {
             ))}
           </div>
           {/* Search input */}
+          <div className="relative">
           <input
             type="text"
             value={collabSearch}
             onChange={(e) => setCollabSearch(e.target.value)}
             placeholder="搜索用户名添加协作人..."
-            className="block w-full rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-blue)]/40"
+            className={inputClass}
           />
           {/* Search results dropdown */}
           {collabSearch.length >= 1 && (
-            <div className="mt-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden">
+            <div className="absolute z-50 mt-1 w-full rounded-xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden shadow-lg">
               {collabResults.length > 0 ? (
                 collabResults.map((u) => (
                   <button
@@ -393,6 +394,7 @@ export default function TaskCreatePage() {
               )}
             </div>
           )}
+          </div>
         </div>
 
         {/* Submit */}

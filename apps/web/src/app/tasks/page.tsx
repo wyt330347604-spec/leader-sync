@@ -42,7 +42,7 @@ const monthOptions = buildMonthOptions();
 function TaskListContent() {
   const [status, setStatus] = useState('active');
   const [role, setRole] = useState('all');
-  const [bucket, setBucket] = useState(() => getCurrentMonth());
+  const [bucket, setBucket] = useState('');
   const [page, setPage] = useState(1);
   const [authed, setAuthed] = useState(false);
   const router = useRouter();
