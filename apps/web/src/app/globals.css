@@ -13,6 +13,11 @@
   --accent-green: #22c55e;
   --accent-red: #ef4444;
   --accent-orange: #f59e0b;
+  --border-strong: #3a3a4a;
+  --hero-gradient-from: #12121a;
+  --hero-gradient-to: #1a1a2e;
+  --hero-card-bg: rgba(10, 10, 15, 0.6);
+  --hero-text: #ffffff;
   color-scheme: dark;
 }
 
@@ -29,6 +34,11 @@
   --accent-green: #16a34a;
   --accent-red: #dc2626;
   --accent-orange: #d97706;
+  --border-strong: #d1d5db;
+  --hero-gradient-from: #eff6ff;
+  --hero-gradient-to: #f0f9ff;
+  --hero-card-bg: rgba(255, 255, 255, 0.8);
+  --hero-text: #111827;
   color-scheme: light;
 }
 

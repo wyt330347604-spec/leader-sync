@@ -9,19 +9,20 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@leader-sync/shared-types": "workspace:*",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "swr": "^2.3.0",
-    "@leader-sync/shared-types": "workspace:*"
+    "tiny-pinyin": "^1.3.2"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.9.0",
+    "postcss": "^8.0.0",
     "tailwindcss": "^4.0.0",
-    "@tailwindcss/postcss": "^4.0.0",
-    "postcss": "^8.0.0"
+    "typescript": "^5.9.0"
   }
 }

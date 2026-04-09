@@ -52,14 +52,14 @@ function formatDateShort(d: Date): string {
 }
 
 function getBarColor(status: string, isOverdue: boolean): string {
-  if (isOverdue) return 'bg-[#ef4444]';
+  if (isOverdue) return 'bg-[var(--accent-red)]';
   switch (status) {
     case 'done':
-      return 'bg-[#22c55e]';
+      return 'bg-[var(--accent-green)]';
     case 'in_progress':
-      return 'bg-[#3b82f6]';
+      return 'bg-[var(--accent-blue)]';
     case 'stalled':
-      return 'bg-[#ef4444]';
+      return 'bg-[var(--accent-red)]';
     case 'pending':
     case 'not_started':
       return 'bg-[#5a5a6e]';
@@ -161,7 +161,7 @@ function TaskTooltip({
         {task.isOverdue ? ' (已延期)' : ''}
       </p>
       {task.bossAttentionFlag && (
-        <p className="text-[#f59e0b]">重点任务</p>
+        <p className="text-[var(--accent-orange)]">重点任务</p>
       )}
     </div>
   );
@@ -205,7 +205,7 @@ function TaskBar({
         {/* Label */}
         <div className="absolute inset-0 flex items-center gap-1 px-1.5 overflow-hidden">
           {task.bossAttentionFlag && (
-            <span className="shrink-0 text-[10px] text-[#f59e0b]" title="重点任务">
+            <span className="shrink-0 text-[10px] text-[var(--accent-orange)]" title="重点任务">
               ★
             </span>
           )}
@@ -340,29 +340,10 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
     });
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-[var(--text-muted)]">加载中...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-[#ef4444]">加载失败: {error.message}</p>
-      </div>
-    );
-  }
-
-  if (!computed || !data?.groups?.length) {
-    return (
-      <p className="py-12 text-center text-[var(--text-muted)]">暂无甘特图数据</p>
-    );
-  }
-
-  const { groups, markerPositions, showToday, todayPct } = computed;
+  const groups = computed?.groups ?? [];
+  const markerPositions = computed?.markerPositions ?? [];
+  const showToday = computed?.showToday ?? false;
+  const todayPct = computed?.todayPct ?? 0;
   const LEADER_COL_WIDTH = 150;
 
   const allPersonKeys = useMemo(() => {
@@ -386,6 +367,28 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
     }
     return count;
   }, [groups]);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <p className="text-[var(--text-muted)]">加载中...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <p className="text-[var(--accent-red)]">加载失败: {error.message}</p>
+      </div>
+    );
+  }
+
+  if (!computed || !data?.groups?.length) {
+    return (
+      <p className="py-12 text-center text-[var(--text-muted)]">暂无甘特图数据</p>
+    );
+  }
 
   return (
     <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">
@@ -447,7 +450,7 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
                   {markerPositions.map((m, i) => (
                     <div
                       key={`leader-grid-${m.label}-${i}`}
-                      className="absolute top-0 bottom-0 w-px bg-[var(--bg-surface)]"
+                      className="absolute top-0 bottom-0 w-px bg-[var(--border-strong)]"
                       style={{ left: `${m.leftPct}%` }}
                     />
                   ))}
@@ -477,14 +480,14 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
                         {markerPositions.map((m, i) => (
                           <div
                             key={`person-grid-${m.label}-${i}`}
-                            className="absolute top-0 bottom-0 w-px bg-[var(--bg-surface)]"
+                            className="absolute top-0 bottom-0 w-px bg-[var(--border-strong)]"
                             style={{ left: `${m.leftPct}%` }}
                           />
                         ))}
                         {/* Today line */}
                         {showToday && (
                           <div
-                            className="absolute top-0 bottom-0 w-px border-l border-dashed border-[#ef4444] z-10"
+                            className="absolute top-0 bottom-0 w-px border-l border-dashed border-[var(--accent-red)] z-10"
                             style={{ left: `${todayPct}%` }}
                           />
                         )}
@@ -505,14 +508,14 @@ export function GanttChart({ data, isLoading, error, filterPersons, filterTaskTi
                               {markerPositions.map((m, i) => (
                                 <div
                                   key={`bar-grid-${m.label}-${i}`}
-                                  className="absolute top-0 bottom-0 w-px bg-[var(--bg-surface)]"
+                                  className="absolute top-0 bottom-0 w-px bg-[var(--border-strong)]"
                                   style={{ left: `${m.leftPct}%` }}
                                 />
                               ))}
                               {/* Today line */}
                               {showToday && (
                                 <div
-                                  className="absolute top-0 bottom-0 w-px border-l border-dashed border-[#ef4444] z-10"
+                                  className="absolute top-0 bottom-0 w-px border-l border-dashed border-[var(--accent-red)] z-10"
                                   style={{ left: `${todayPct}%` }}
                                 />
                               )}

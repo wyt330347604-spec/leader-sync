@@ -7,8 +7,28 @@ import { ensureAuth } from '@/lib/auth';
 import { apiFetch, ApiError } from '@/lib/api-client';
 import { TaskStatusLabel, PriorityLabel } from '@leader-sync/shared-types';
 import { GanttChart } from '@/components/gantt-chart';
+import TinyPinyin from 'tiny-pinyin';
 
 /* ---------- helpers ---------- */
+
+function matchesPersonQuery(name: string, query: string): boolean {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  if (name.toLowerCase().includes(q)) return true;
+  if (TinyPinyin.isSupported()) {
+    const fullPinyin = TinyPinyin.convertToPinyin(name, '', true);
+    if (fullPinyin.includes(q)) return true;
+    const firstLetters = name
+      .split('')
+      .map((ch) => {
+        const py = TinyPinyin.convertToPinyin(ch, '', true);
+        return py ? py[0] : ch;
+      })
+      .join('');
+    if (firstLetters.includes(q)) return true;
+  }
+  return false;
+}
 
 function formatMonth(date: Date): string {
   const y = date.getFullYear();
@@ -16,31 +36,6 @@ function formatMonth(date: Date): string {
   return `${y}-${m}`;
 }
 
-function buildMonthOptions(): readonly { label: string; value: string }[] {
-  const now = new Date();
-  const options: { label: string; value: string }[] = [];
-  for (let i = 2; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const value = formatMonth(d);
-    options.push({ label: `${d.getMonth() + 1}月`, value });
-  }
-  return options;
-}
-
-function buildQuarterOptions(): readonly { label: string; value: string }[] {
-  const year = new Date().getFullYear();
-  return [
-    { label: 'Q1', value: `${year}-Q1` },
-    { label: 'Q2', value: `${year}-Q2` },
-    { label: 'Q3', value: `${year}-Q3` },
-    { label: 'Q4', value: `${year}-Q4` },
-  ];
-}
-
-function buildYearOption(): { label: string; value: string } {
-  const year = new Date().getFullYear();
-  return { label: `${year}年`, value: String(year) };
-}
 
 function getCurrentQuarter(): string {
   const now = new Date();
@@ -54,22 +49,33 @@ function getPeriodDisplayLabel(period: DashboardPeriod): string {
     if (parts.length === 2) return `${parseInt(parts[1], 10)}月`;
     return period.value;
   }
-  if (period.mode === 'quarter') {
-    const parts = period.value.split('-');
-    return parts.length === 2 ? parts[1] : period.value;
-  }
-  return `${period.value}年`;
+  const parts = period.value.split('-');
+  return parts.length === 2 ? parts[1] : period.value;
 }
 
 /* ---------- Section A: Period Selector ---------- */
 
-type PeriodMode = 'month' | 'quarter' | 'year';
+type PeriodMode = 'month' | 'quarter';
 
-const MODE_LABELS: readonly { mode: PeriodMode; label: string }[] = [
-  { mode: 'month', label: '月' },
-  { mode: 'quarter', label: '季' },
-  { mode: 'year', label: '年' },
-];
+const CHEVRON_SVG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`;
+
+function buildMonthSelectOptions(): readonly { label: string; value: string }[] {
+  const year = new Date().getFullYear();
+  return Array.from({ length: 12 }, (_, i) => {
+    const m = String(i + 1).padStart(2, '0');
+    return { label: `${year}年${i + 1}月`, value: `${year}-${m}` };
+  });
+}
+
+function buildQuarterSelectOptions(): readonly { label: string; value: string }[] {
+  const year = new Date().getFullYear();
+  return [
+    { label: `${year}年 Q1`, value: `${year}-Q1` },
+    { label: `${year}年 Q2`, value: `${year}-Q2` },
+    { label: `${year}年 Q3`, value: `${year}-Q3` },
+    { label: `${year}年 Q4`, value: `${year}-Q4` },
+  ];
+}
 
 function PeriodSelector({
   period,
@@ -78,32 +84,36 @@ function PeriodSelector({
   readonly period: DashboardPeriod;
   readonly onChange: (p: DashboardPeriod) => void;
 }) {
-  const monthOptions = buildMonthOptions();
-  const quarterOptions = buildQuarterOptions();
-  const yearOption = buildYearOption();
+  const modes: readonly { mode: PeriodMode; label: string }[] = [
+    { mode: 'month', label: '月' },
+    { mode: 'quarter', label: '季' },
+  ];
+
+  const options =
+    period.mode === 'month'
+      ? buildMonthSelectOptions()
+      : buildQuarterSelectOptions();
 
   const handleModeChange = (mode: PeriodMode) => {
     if (mode === period.mode) return;
     if (mode === 'month') {
       onChange({ mode: 'month', value: formatMonth(new Date()) });
-    } else if (mode === 'quarter') {
-      onChange({ mode: 'quarter', value: getCurrentQuarter() });
     } else {
-      onChange({ mode: 'year', value: String(new Date().getFullYear()) });
+      onChange({ mode: 'quarter', value: getCurrentQuarter() });
     }
   };
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-      {/* Mode switcher pills */}
+    <div className="flex items-center gap-3">
+      {/* Tab pills */}
       <div className="flex items-center gap-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] p-1">
-        {MODE_LABELS.map((m) => (
+        {modes.map((m) => (
           <button
             key={m.mode}
             onClick={() => handleModeChange(m.mode)}
             className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
               period.mode === m.mode
-                ? 'bg-[#3b82f6] text-white shadow-sm'
+                ? 'bg-[var(--accent-blue)] text-white shadow-sm'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border)]'
             }`}
           >
@@ -112,46 +122,24 @@ function PeriodSelector({
         ))}
       </div>
 
-      {/* Period-specific options */}
-      <div className="flex items-center gap-2">
-        {period.mode === 'month' &&
-          monthOptions.map((o) => (
-            <button
-              key={o.value}
-              onClick={() => onChange({ mode: 'month', value: o.value })}
-              className={`rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 ease-out ${
-                period.value === o.value
-                  ? 'bg-[#3b82f6] text-white'
-                  : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
-
-        {period.mode === 'quarter' &&
-          quarterOptions.map((o) => (
-            <button
-              key={o.value}
-              onClick={() => onChange({ mode: 'quarter', value: o.value })}
-              className={`rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 ease-out ${
-                period.value === o.value
-                  ? 'bg-[#3b82f6] text-white'
-                  : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
-
-        {period.mode === 'year' && (
-          <button
-            className="rounded-full px-5 py-2 text-sm font-medium bg-[#3b82f6] text-white"
-          >
-            {yearOption.label}
-          </button>
-        )}
-      </div>
+      {/* Dropdown */}
+      <select
+        value={period.value}
+        onChange={(e) => onChange({ mode: period.mode, value: e.target.value })}
+        className="appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 py-1.5 pr-7 text-sm text-[var(--text-primary)] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--accent-blue)]/30"
+        style={{
+          backgroundImage: CHEVRON_SVG,
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 0.5rem center',
+          backgroundSize: '12px 12px',
+        }}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -173,14 +161,14 @@ function pct(part: number, total: number): string {
 }
 
 const STAT_ACCENT_COLORS = [
-  '#3b82f6', // blue - total
-  '#22c55e', // green - done
-  '#ef4444', // red - overdue
-  '#f59e0b', // orange - risk
-  '#8b5cf6', // purple - carry over
-  '#3b82f6', // blue - weekly new
-  '#22c55e', // green - done rate
-  '#ef4444', // red - overdue rate
+  'var(--accent-blue)',   // blue - total
+  'var(--accent-green)',  // green - done
+  'var(--accent-red)',    // red - overdue
+  'var(--accent-orange)', // orange - risk
+  '#8b5cf6',              // purple - carry over
+  'var(--accent-blue)',   // blue - weekly new
+  'var(--accent-green)',  // green - done rate
+  'var(--accent-red)',    // red - overdue rate
 ] as const;
 
 function HeroStats({ stats, periodLabel }: { readonly stats: MonthlyStats; readonly periodLabel: string }) {
@@ -201,27 +189,28 @@ function HeroStats({ stats, periodLabel }: { readonly stats: MonthlyStats; reado
   ] as const;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#12121a] to-[#1a1a2e] border border-[var(--border)] px-8 py-10 sm:px-10">
+    <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] px-8 py-10 sm:px-10" style={{ background: 'linear-gradient(to bottom right, var(--hero-gradient-from), var(--hero-gradient-to))' }}>
       <div className="relative z-10">
         <p className="mb-1 text-sm font-medium tracking-wide text-[var(--text-muted)]">督办概览</p>
-        <h2 className="mb-8 text-3xl font-bold tracking-tight text-white">
+        <h2 className="mb-8 text-3xl font-bold tracking-tight text-[var(--hero-text)]">
           {periodLabel} 督办概览
         </h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {cards.map((c) => (
             <div
               key={c.label}
-              className="rounded-xl bg-[#0a0a0f]/60 border border-[var(--border)] p-4"
+              className="rounded-xl border border-[var(--border)] p-4"
+              style={{ backgroundColor: 'var(--hero-card-bg)' }}
             >
               <div className="h-1 w-8 rounded-full mb-3" style={{ backgroundColor: c.accent }} />
-              <p className="tabular-nums text-3xl font-bold text-white">{c.value}</p>
+              <p className="tabular-nums text-3xl font-bold text-[var(--hero-text)]">{c.value}</p>
               <p className="mt-1 text-xs text-[var(--text-muted)]">{c.label}</p>
             </div>
           ))}
         </div>
       </div>
       {/* Decorative gradient orb */}
-      <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#3b82f6]/5 blur-3xl" />
+      <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[var(--accent-blue)]/5 blur-3xl" />
     </div>
   );
 }
@@ -230,7 +219,7 @@ function HeroStats({ stats, periodLabel }: { readonly stats: MonthlyStats; reado
 
 function InlineFeedback({ message, isError }: { readonly message: string; readonly isError?: boolean }) {
   return (
-    <span className={`ml-2 text-xs font-medium animate-pulse ${isError ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
+    <span className={`ml-2 text-xs font-medium animate-pulse ${isError ? 'text-[var(--accent-red)]' : 'text-[var(--accent-green)]'}`}>
       {message}
     </span>
   );
@@ -271,7 +260,7 @@ function InlineDropdown({
         {options.find((o) => o.value === currentValue)?.label ?? currentValue}
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 min-w-[140px] rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] shadow-xl py-1">
+        <div className="absolute z-50 mt-1 min-w-[140px] rounded-lg bg-[var(--bg-card)] border border-[var(--border)] shadow-lg py-1">
           {options.map((o) => (
             <button
               key={o.value}
@@ -282,7 +271,7 @@ function InlineDropdown({
               }}
               className={`block w-full text-left px-3 py-1.5 text-xs transition-colors duration-150 ${
                 o.value === currentValue
-                  ? 'bg-[#3b82f6]/20 text-[#3b82f6]'
+                  ? 'bg-[var(--accent-blue)]/20 text-[var(--accent-blue)]'
                   : 'text-[var(--text-primary)] hover:bg-[var(--border)]'
               }`}
             >
@@ -311,12 +300,15 @@ function FilterBar({
   readonly onTaskTitleChange: (v: string) => void;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setDropdownOpen(false);
+        setSearchQuery('');
       }
     }
     if (dropdownOpen) {
@@ -325,6 +317,17 @@ function FilterBar({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [dropdownOpen]);
 
+  useEffect(() => {
+    if (dropdownOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [dropdownOpen]);
+
+  const filteredPersons = useMemo(
+    () => persons.filter((name) => matchesPersonQuery(name, searchQuery)),
+    [persons, searchQuery],
+  );
+
   const togglePerson = (name: string) => {
     const next = selectedPersons.includes(name)
       ? selectedPersons.filter((p) => p !== name)
@@ -332,42 +335,88 @@ function FilterBar({
     onPersonsChange(next);
   };
 
+  const triggerLabel = (() => {
+    if (selectedPersons.length === 0) return '全部人员';
+    if (selectedPersons.length <= 2) return selectedPersons.join(', ');
+    return `${selectedPersons.slice(0, 2).join(', ')} +${selectedPersons.length - 2}`;
+  })();
+
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
-      {/* Person multi-select dropdown */}
+      {/* Person combobox */}
       <div ref={dropdownRef} className="relative">
         <button
           onClick={() => setDropdownOpen(!dropdownOpen)}
-          className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--border)] transition-colors duration-150"
+          className="inline-flex items-center gap-1.5 bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--border)] transition-colors duration-150"
         >
-          人员: {selectedPersons.length === 0 ? '全部' : `${selectedPersons.length} 人`} ▼
+          <span>{triggerLabel}</span>
+          <svg
+            className={`w-3.5 h-3.5 text-[var(--text-muted)] transition-transform duration-150 ${dropdownOpen ? 'rotate-180' : ''}`}
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 4.5l3 3 3-3" />
+          </svg>
         </button>
         {dropdownOpen && (
-          <div className="absolute z-50 mt-1 min-w-[180px] max-h-[300px] overflow-y-auto rounded-xl bg-[var(--bg-card)] border border-[var(--border)] shadow-lg py-1">
-            {persons.map((name) => {
-              const selected = selectedPersons.includes(name);
-              return (
-                <button
-                  key={name}
-                  onClick={() => togglePerson(name)}
-                  className={`flex items-center gap-2 w-full text-left hover:bg-[var(--bg-hover)] px-3 py-2 text-sm transition-colors duration-150 ${
-                    selected ? 'text-[#3b82f6]' : 'text-[var(--text-primary)]'
-                  }`}
-                >
-                  <span className={`inline-flex items-center justify-center w-4 h-4 rounded border text-[10px] ${
-                    selected
-                      ? 'bg-[#3b82f6] border-[#3b82f6] text-white'
-                      : 'border-[#5a5a6e] text-transparent'
-                  }`}>
-                    ✓
-                  </span>
-                  {name}
-                </button>
-              );
-            })}
-            {persons.length === 0 && (
-              <p className="px-3 py-2 text-xs text-[var(--text-muted)]">无人员数据</p>
-            )}
+          <div className="absolute z-50 mt-1 min-w-[220px] rounded-xl bg-[var(--bg-card)] border border-[var(--border)] shadow-lg flex flex-col">
+            {/* Search input */}
+            <div className="p-2">
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="搜索人员..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] transition-colors duration-150"
+              />
+            </div>
+            {/* Person list */}
+            <div className="max-h-[240px] overflow-y-auto px-1">
+              {filteredPersons.map((name) => {
+                const selected = selectedPersons.includes(name);
+                return (
+                  <button
+                    key={name}
+                    onClick={() => togglePerson(name)}
+                    className={`flex items-center gap-2 w-full text-left hover:bg-[var(--bg-hover)] rounded-lg px-2.5 py-2 text-sm transition-colors duration-150 ${
+                      selected ? 'text-[var(--accent-blue)]' : 'text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <span className={`inline-flex items-center justify-center w-4 h-4 rounded border text-[10px] ${
+                      selected
+                        ? 'bg-[var(--accent-blue)] border-[var(--accent-blue)] text-white'
+                        : 'border-[var(--text-muted)] text-transparent'
+                    }`}>
+                      ✓
+                    </span>
+                    {name}
+                  </button>
+                );
+              })}
+              {filteredPersons.length === 0 && (
+                <p className="px-2.5 py-2 text-xs text-[var(--text-muted)]">无匹配人员</p>
+              )}
+            </div>
+            {/* Footer actions */}
+            <div className="flex items-center justify-between border-t border-[var(--border)] px-2.5 py-2">
+              <button
+                onClick={() => onPersonsChange(searchQuery ? [...filteredPersons] : [...persons])}
+                className="text-xs text-[var(--accent-blue)] hover:underline"
+              >
+                全选
+              </button>
+              <button
+                onClick={() => onPersonsChange([])}
+                className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              >
+                清除
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -413,11 +462,11 @@ interface RiskTask {
 }
 
 const RISK_REASON_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-  '延期': { bg: 'bg-[#ef4444]/10', text: 'text-[#ef4444]', border: 'border-[#ef4444]/20' },
-  '继承': { bg: 'bg-[#f59e0b]/10', text: 'text-[#f59e0b]', border: 'border-[#f59e0b]/20' },
+  '延期': { bg: 'bg-[var(--accent-red)]/10', text: 'text-[var(--accent-red)]', border: 'border-[var(--accent-red)]/20' },
+  '继承': { bg: 'bg-[var(--accent-orange)]/10', text: 'text-[var(--accent-orange)]', border: 'border-[var(--accent-orange)]/20' },
   '停滞': { bg: 'bg-[#8b5cf6]/10', text: 'text-[#8b5cf6]', border: 'border-[#8b5cf6]/20' },
   '临期': { bg: 'bg-[#eab308]/10', text: 'text-[#eab308]', border: 'border-[#eab308]/20' },
-  '重点无进度': { bg: 'bg-[#3b82f6]/10', text: 'text-[#3b82f6]', border: 'border-[#3b82f6]/20' },
+  '重点无进度': { bg: 'bg-[var(--accent-blue)]/10', text: 'text-[var(--accent-blue)]', border: 'border-[var(--accent-blue)]/20' },
 };
 
 const STATUS_OPTIONS = Object.entries(TaskStatusLabel).map(([value, label]) => ({ value, label }));
@@ -534,10 +583,10 @@ function RiskTaskRow({
       <td className="whitespace-nowrap px-5 py-4 tabular-nums text-[var(--text-secondary)]">
         {task.dueAt ? new Date(task.dueAt).toLocaleDateString('zh-CN') : '-'}
       </td>
-      <td className={`px-5 py-4 tabular-nums ${task.isOverdue ? 'font-semibold text-[#ef4444]' : 'text-[var(--text-secondary)]'}`}>
+      <td className={`px-5 py-4 tabular-nums ${task.isOverdue ? 'font-semibold text-[var(--accent-red)]' : 'text-[var(--text-secondary)]'}`}>
         {task.daysToDue && task.daysToDue < 0 ? `${Math.abs(task.daysToDue)}天` : '-'}
       </td>
-      <td className={`px-5 py-4 tabular-nums ${task.carryOverCount >= 2 ? 'font-semibold text-[#f59e0b]' : 'text-[var(--text-secondary)]'}`}>
+      <td className={`px-5 py-4 tabular-nums ${task.carryOverCount >= 2 ? 'font-semibold text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}`}>
         {task.carryOverCount}
       </td>
       <td className="px-5 py-4">
@@ -548,8 +597,8 @@ function RiskTaskRow({
             title={task.bossAttentionFlag ? '取消重点' : '标记重点'}
             className={`rounded-lg border px-2 py-1 text-xs transition-colors duration-200 ${
               task.bossAttentionFlag
-                ? 'text-[#f59e0b] border-[#f59e0b]/30 bg-[#f59e0b]/10 hover:bg-[#f59e0b]/20'
-                : 'text-[var(--text-muted)] border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--border)] hover:text-[#f59e0b]'
+                ? 'text-[var(--accent-orange)] border-[var(--accent-orange)]/30 bg-[var(--accent-orange)]/10 hover:bg-[var(--accent-orange)]/20'
+                : 'text-[var(--text-muted)] border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--border)] hover:text-[var(--accent-orange)]'
             }`}
           >
             ★
@@ -650,9 +699,9 @@ function RiskTable({ tasks, onMutate }: { readonly tasks: readonly RiskTask[]; r
                   <span className="text-xs text-[var(--text-muted)]">({group.tasks.length} 项风险任务)</span>
                 </div>
                 <div className="flex items-center gap-3 text-xs">
-                  {group.overdueCount > 0 && <span className="text-[#ef4444]">延期 {group.overdueCount}</span>}
+                  {group.overdueCount > 0 && <span className="text-[var(--accent-red)]">延期 {group.overdueCount}</span>}
                   {group.stalledCount > 0 && <span className="text-[#8b5cf6]">停滞 {group.stalledCount}</span>}
-                  {group.nearDueCount > 0 && <span className="text-[#f59e0b]">临期 {group.nearDueCount}</span>}
+                  {group.nearDueCount > 0 && <span className="text-[var(--accent-orange)]">临期 {group.nearDueCount}</span>}
                 </div>
               </div>
 
@@ -689,7 +738,7 @@ function RiskTable({ tasks, onMutate }: { readonly tasks: readonly RiskTask[]; r
   );
 }
 
-/* ---------- Section D-0: Person card (flat view) ---------- */
+/* ---------- Section D-0: Person table (flat view) ---------- */
 
 interface PersonSummary {
   readonly userId: string;
@@ -703,69 +752,80 @@ interface PersonSummary {
   readonly doneRate: number;
 }
 
-function PersonCard({ person }: { readonly person: PersonSummary }) {
-  return (
-    <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6 transition-all duration-300 ease-out hover:bg-[var(--bg-hover)]">
-      <p className="text-xl font-semibold text-[var(--text-primary)]">{person.name}</p>
-      {person.leaderName && (
-        <p className="mt-0.5 text-xs text-[var(--text-muted)]">Leader: {person.leaderName}</p>
-      )}
-      <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-[#3b82f6]" />
-          <span className="tabular-nums text-[var(--text-primary)]">{person.total}</span>
-          <span className="text-[var(--text-muted)]">总</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
-          <span className="tabular-nums text-[var(--text-primary)]">{person.done}</span>
-          <span className="text-[var(--text-muted)]">完成</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-[#ef4444]" />
-          <span className="tabular-nums text-[var(--text-primary)]">{person.overdue}</span>
-          <span className="text-[var(--text-muted)]">延期</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-[#f59e0b]" />
-          <span className="tabular-nums text-[var(--text-primary)]">{person.riskCount}</span>
-          <span className="text-[var(--text-muted)]">风险</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-[#06b6d4]" />
-          <span className="tabular-nums text-[var(--text-primary)]">{person.weeklyNewCount}</span>
-          <span className="text-[var(--text-muted)]">新增</span>
-        </span>
-      </div>
-      <div className="mt-3">
-        <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
-          <span>完成率</span>
-          <span className="tabular-nums font-medium text-[var(--text-primary)]">{person.doneRate}%</span>
-        </div>
-        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--bg-surface)]">
-          <div
-            className="h-full rounded-full bg-[#22c55e] transition-all duration-500 ease-out"
-            style={{
-              width: `${Math.min(person.doneRate, 100)}%`,
-              boxShadow: '0 0 8px rgba(34,197,94,0.4)',
-            }}
-          />
-        </div>
-      </div>
-    </div>
-  );
+function rateColor(rate: number): string {
+  if (rate >= 80) return 'var(--accent-green)';
+  if (rate >= 50) return 'var(--accent-blue)';
+  return 'var(--accent-red)';
 }
 
-function PersonCards({ persons }: { readonly persons: readonly PersonSummary[] }) {
+function PersonTable({ persons }: { readonly persons: readonly PersonSummary[] }) {
   if (persons.length === 0) {
     return <p className="py-12 text-center text-[var(--text-muted)]">暂无人员数据</p>;
   }
 
+  const sorted = [...persons].sort((a, b) => b.doneRate - a.doneRate);
+
   return (
-    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-      {persons.map((p) => (
-        <PersonCard key={p.userId} person={p} />
-      ))}
+    <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="bg-[var(--bg-surface)]">
+              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)]">姓名</th>
+              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)]">Leader</th>
+              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)] text-right">总任务</th>
+              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)] text-right">完成</th>
+              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)] text-right">延期</th>
+              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)] text-right">风险</th>
+              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)] text-right">新增</th>
+              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)] w-36">完成率</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border)]">
+            {sorted.map((p) => (
+              <tr key={p.userId} className="transition-colors duration-150 hover:bg-[var(--bg-hover)]">
+                <td className="whitespace-nowrap px-5 py-3 font-medium text-[var(--text-primary)]">{p.name}</td>
+                <td className="whitespace-nowrap px-5 py-3 text-[var(--text-muted)]">{p.leaderName || '—'}</td>
+                <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums text-[var(--text-primary)]">{p.total}</td>
+                <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums text-[var(--text-primary)]">{p.done}</td>
+                <td className="whitespace-nowrap px-5 py-3 text-right">
+                  {p.overdue > 0 ? (
+                    <span className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-[var(--accent-red)] px-2 py-0.5 text-xs font-medium text-white">
+                      {p.overdue}
+                    </span>
+                  ) : (
+                    <span className="tabular-nums text-[var(--text-muted)]">0</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-5 py-3 text-right">
+                  {p.riskCount > 0 ? (
+                    <span className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-[var(--accent-orange)] px-2 py-0.5 text-xs font-medium text-white">
+                      {p.riskCount}
+                    </span>
+                  ) : (
+                    <span className="tabular-nums text-[var(--text-muted)]">0</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums text-[var(--text-primary)]">{p.weeklyNewCount}</td>
+                <td className="whitespace-nowrap px-5 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--bg-surface)]">
+                      <div
+                        className="h-full rounded-full transition-all duration-500 ease-out"
+                        style={{
+                          width: `${Math.min(p.doneRate, 100)}%`,
+                          backgroundColor: rateColor(p.doneRate),
+                        }}
+                      />
+                    </div>
+                    <span className="tabular-nums text-xs font-medium text-[var(--text-primary)]">{p.doneRate}%</span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -795,7 +855,7 @@ function GroupToggle({
           onClick={() => onChange(m.mode)}
           className={`rounded-md px-4 py-1.5 text-xs font-medium transition-all duration-200 ${
             groupMode === m.mode
-              ? 'bg-[#3b82f6] text-white shadow-sm'
+              ? 'bg-[var(--accent-blue)] text-white shadow-sm'
               : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border)]'
           }`}
         >
@@ -847,22 +907,22 @@ function LeaderCard({ leader }: { readonly leader: LeaderSummary }) {
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
           <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-[#3b82f6]" />
+            <span className="h-2 w-2 rounded-full bg-[var(--accent-blue)]" />
             <span className="tabular-nums text-[var(--text-primary)]">{leader.total}</span>
             <span className="text-[var(--text-muted)]">总计</span>
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
+            <span className="h-2 w-2 rounded-full bg-[var(--accent-green)]" />
             <span className="tabular-nums text-[var(--text-primary)]">{leader.done}</span>
             <span className="text-[var(--text-muted)]">完成</span>
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-[#ef4444]" />
+            <span className="h-2 w-2 rounded-full bg-[var(--accent-red)]" />
             <span className="tabular-nums text-[var(--text-primary)]">{leader.overdue}</span>
             <span className="text-[var(--text-muted)]">延期</span>
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-[#f59e0b]" />
+            <span className="h-2 w-2 rounded-full bg-[var(--accent-orange)]" />
             <span className="tabular-nums text-[var(--text-primary)]">{leader.carryOver}</span>
             <span className="text-[var(--text-muted)]">继承</span>
           </span>
@@ -884,10 +944,10 @@ function LeaderCard({ leader }: { readonly leader: LeaderSummary }) {
           </div>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--bg-surface)]">
             <div
-              className="h-full rounded-full bg-[#22c55e] transition-all duration-500 ease-out"
+              className="h-full rounded-full bg-[var(--accent-green)] transition-all duration-500 ease-out"
               style={{
                 width: `${Math.min(leader.doneRate, 100)}%`,
-                boxShadow: '0 0 8px rgba(34,197,94,0.4)',
+                boxShadow: '0 0 8px color-mix(in srgb, var(--accent-green) 40%, transparent)',
               }}
             />
           </div>
@@ -907,14 +967,14 @@ function LeaderCard({ leader }: { readonly leader: LeaderSummary }) {
                 <span className="text-sm font-medium text-[var(--text-primary)]">{m.name}</span>
                 <div className="flex items-center gap-4 text-xs tabular-nums">
                   <span className="text-[var(--text-secondary)]">总 {m.total}</span>
-                  <span className="text-[#22c55e]">完 {m.done}</span>
-                  <span className={m.overdue > 0 ? 'font-semibold text-[#ef4444]' : 'text-[var(--text-secondary)]'}>
+                  <span className="text-[var(--accent-green)]">完 {m.done}</span>
+                  <span className={m.overdue > 0 ? 'font-semibold text-[var(--accent-red)]' : 'text-[var(--text-secondary)]'}>
                     延 {m.overdue}
                   </span>
                   <a
                     href={`/tasks?assignee=${m.userId}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="text-[#3b82f6] hover:text-[#60a5fa] hover:underline transition-colors duration-150"
+                    className="text-[var(--accent-blue)] hover:text-[#60a5fa] hover:underline transition-colors duration-150"
                   >
                     查看任务
                   </a>
@@ -960,22 +1020,22 @@ function ProjectCard({ project }: { readonly project: ProjectSummary }) {
       <p className="text-xl font-semibold text-[var(--text-primary)]">{project.projectName}</p>
       <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-[#3b82f6]" />
+          <span className="h-2 w-2 rounded-full bg-[var(--accent-blue)]" />
           <span className="tabular-nums text-[var(--text-primary)]">{project.total}</span>
           <span className="text-[var(--text-muted)]">总</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
+          <span className="h-2 w-2 rounded-full bg-[var(--accent-green)]" />
           <span className="tabular-nums text-[var(--text-primary)]">{project.done}</span>
           <span className="text-[var(--text-muted)]">完成</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-[#ef4444]" />
+          <span className="h-2 w-2 rounded-full bg-[var(--accent-red)]" />
           <span className="tabular-nums text-[var(--text-primary)]">{project.overdue}</span>
           <span className="text-[var(--text-muted)]">延期</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-[#f59e0b]" />
+          <span className="h-2 w-2 rounded-full bg-[var(--accent-orange)]" />
           <span className="tabular-nums text-[var(--text-primary)]">{project.riskCount}</span>
           <span className="text-[var(--text-muted)]">风险</span>
         </span>
@@ -987,7 +1047,7 @@ function ProjectCard({ project }: { readonly project: ProjectSummary }) {
         </div>
         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--bg-surface)]">
           <div
-            className="h-full rounded-full bg-[#22c55e] transition-all duration-500 ease-out"
+            className="h-full rounded-full bg-[var(--accent-green)] transition-all duration-500 ease-out"
             style={{
               width: `${Math.min(project.doneRate, 100)}%`,
               boxShadow: '0 0 8px rgba(34,197,94,0.4)',
@@ -1037,7 +1097,7 @@ function ViewSwitcher({
           onClick={() => onChange(tab.view)}
           className={`rounded-md px-4 py-1.5 text-xs font-medium transition-all duration-200 ${
             activeView === tab.view
-              ? 'bg-[#3b82f6] text-white shadow-sm'
+              ? 'bg-[var(--accent-blue)] text-white shadow-sm'
               : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border)]'
           }`}
         >
@@ -1161,7 +1221,7 @@ function DashboardContent() {
         </div>
       ) : error ? (
         <div className="flex min-h-[40vh] items-center justify-center">
-          <p className="text-[#ef4444]">加载失败: {error.message}</p>
+          <p className="text-[var(--accent-red)]">加载失败: {error.message}</p>
         </div>
       ) : data ? (
         <>
@@ -1184,7 +1244,7 @@ function DashboardContent() {
               <GroupToggle groupMode={groupMode} onChange={setGroupMode} />
             </div>
             {groupMode === 'person' ? (
-              <PersonCards persons={data.personSummary ?? []} />
+              <PersonTable persons={data.personSummary ?? []} />
             ) : groupMode === 'leader' ? (
               <LeaderCards leaders={data.leaderSummary ?? []} />
             ) : (

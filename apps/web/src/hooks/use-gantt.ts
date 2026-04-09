@@ -5,8 +5,7 @@ import type { DashboardPeriod } from './use-dashboard';
 
 export function useGantt(period: DashboardPeriod) {
   let params = '';
-  if (period.mode === 'year') params = `?year=${period.value}`;
-  else if (period.mode === 'quarter') params = `?quarter=${period.value}`;
+  if (period.mode === 'quarter') params = `?quarter=${period.value}`;
   else params = `?month=${period.value}`;
 
   return useSWR(
