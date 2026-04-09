@@ -7,6 +7,7 @@ import { ensureAuth } from '@/lib/auth';
 import { apiFetch, ApiError } from '@/lib/api-client';
 import { TaskStatusLabel, PriorityLabel } from '@leader-sync/shared-types';
 import { GanttChart } from '@/components/gantt-chart';
+import { StatusBadge } from '@/components/status-badge';
 import TinyPinyin from 'tiny-pinyin';
 
 /* ---------- helpers ---------- */
@@ -153,64 +154,61 @@ interface MonthlyStats {
   readonly carryOver: number;
   readonly riskCount?: number;
   readonly weeklyNewCount?: number;
+  readonly weeklyDoneCount?: number;
 }
-
-function pct(part: number, total: number): string {
-  if (total === 0) return '0%';
-  return `${Math.round((part / total) * 100)}%`;
-}
-
-const STAT_ACCENT_COLORS = [
-  'var(--accent-blue)',   // blue - total
-  'var(--accent-green)',  // green - done
-  'var(--accent-red)',    // red - overdue
-  'var(--accent-orange)', // orange - risk
-  '#8b5cf6',              // purple - carry over
-  'var(--accent-blue)',   // blue - weekly new
-  'var(--accent-green)',  // green - done rate
-  'var(--accent-red)',    // red - overdue rate
-] as const;
 
 function HeroStats({ stats, periodLabel }: { readonly stats: MonthlyStats; readonly periodLabel: string }) {
-  const riskCount = stats.riskCount ?? 0;
   const weeklyNew = stats.weeklyNewCount ?? 0;
-  const doneRate = pct(stats.done, stats.total);
-  const overdueRate = pct(stats.overdue, stats.total);
-
-  const cards = [
-    { label: '总任务', value: stats.total, accent: STAT_ACCENT_COLORS[0] },
-    { label: '已完成', value: stats.done, accent: STAT_ACCENT_COLORS[1] },
-    { label: '已延期', value: stats.overdue, accent: STAT_ACCENT_COLORS[2] },
-    { label: '风险任务', value: riskCount, accent: STAT_ACCENT_COLORS[3] },
-    { label: '继承任务', value: stats.carryOver, accent: STAT_ACCENT_COLORS[4] },
-    { label: '本周新增', value: weeklyNew, accent: STAT_ACCENT_COLORS[5] },
-    { label: '完成率', value: doneRate, accent: STAT_ACCENT_COLORS[6] },
-    { label: '延期率', value: overdueRate, accent: STAT_ACCENT_COLORS[7] },
-  ] as const;
+  const weeklyDone = stats.weeklyDoneCount ?? 0;
+  const doneRate = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+  const overdueRate = stats.total > 0 ? Math.round((stats.overdue / stats.total) * 100) : 0;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] px-8 py-10 sm:px-10" style={{ background: 'linear-gradient(to bottom right, var(--hero-gradient-from), var(--hero-gradient-to))' }}>
-      <div className="relative z-10">
-        <p className="mb-1 text-sm font-medium tracking-wide text-[var(--text-muted)]">督办概览</p>
-        <h2 className="mb-8 text-3xl font-bold tracking-tight text-[var(--hero-text)]">
-          {periodLabel} 督办概览
-        </h2>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {cards.map((c) => (
-            <div
-              key={c.label}
-              className="rounded-xl border border-[var(--border)] p-4"
-              style={{ backgroundColor: 'var(--hero-card-bg)' }}
-            >
-              <div className="h-1 w-8 rounded-full mb-3" style={{ backgroundColor: c.accent }} />
-              <p className="tabular-nums text-3xl font-bold text-[var(--hero-text)]">{c.value}</p>
-              <p className="mt-1 text-xs text-[var(--text-muted)]">{c.label}</p>
-            </div>
-          ))}
+    <div
+      className="rounded-2xl border border-[var(--border)] px-6 py-4"
+      style={{ background: 'linear-gradient(to right, var(--hero-gradient-from), var(--hero-gradient-to))' }}
+    >
+      <div className="flex items-center justify-between gap-6 flex-wrap">
+        <div className="flex items-center gap-6 flex-wrap">
+          <span className="text-sm font-semibold text-[var(--hero-text)]">{periodLabel} 督办概览</span>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--accent-blue)' }} />
+              <span className="tabular-nums font-semibold text-[var(--hero-text)]">{stats.total}</span>
+              <span className="text-[var(--text-muted)]">总任务</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--accent-green)' }} />
+              <span className="tabular-nums font-semibold text-[var(--hero-text)]">{stats.done}</span>
+              <span className="text-[var(--text-muted)]">已完成</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--accent-red)' }} />
+              <span className="tabular-nums font-semibold text-[var(--hero-text)]">{stats.overdue}</span>
+              <span className="text-[var(--text-muted)]">延期</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="tabular-nums font-medium text-[var(--accent-green)]">{doneRate}%</span>
+              <span className="text-[var(--text-muted)]">完成率</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="tabular-nums font-medium text-[var(--accent-red)]">{overdueRate}%</span>
+              <span className="text-[var(--text-muted)]">延期率</span>
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 text-sm">
+          <span className="text-[var(--text-muted)]">本周</span>
+          <span className="flex items-center gap-1.5">
+            <span className="tabular-nums font-semibold text-[var(--hero-text)]">{weeklyNew}</span>
+            <span className="text-[var(--text-muted)]">新增</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="tabular-nums font-semibold text-[var(--hero-text)]">{weeklyDone}</span>
+            <span className="text-[var(--text-muted)]">完成</span>
+          </span>
         </div>
       </div>
-      {/* Decorative gradient orb */}
-      <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[var(--accent-blue)]/5 blur-3xl" />
     </div>
   );
 }
@@ -752,80 +750,254 @@ interface PersonSummary {
   readonly doneRate: number;
 }
 
+const PRIORITY_QUADRANTS = [
+  { key: 'urgent_important', label: '重要紧急' },
+  { key: 'important_not_urgent', label: '重要不紧急' },
+  { key: 'urgent_not_important', label: '紧急不重要' },
+  { key: 'not_urgent_not_important', label: '不紧急不重要' },
+  { key: '', label: '未分类' },
+] as const;
+
+interface PersonTaskItem {
+  readonly taskUid: string;
+  readonly title: string;
+  readonly status: string;
+  readonly priority: string;
+  readonly dueAt: string | null;
+  readonly daysToDue: number | null;
+  readonly isOverdue: boolean;
+  readonly bossAttentionFlag: boolean;
+  readonly progressPercent: number;
+  readonly version: number;
+}
+
 function rateColor(rate: number): string {
   if (rate >= 80) return 'var(--accent-green)';
   if (rate >= 50) return 'var(--accent-blue)';
   return 'var(--accent-red)';
 }
 
-function PersonTable({ persons }: { readonly persons: readonly PersonSummary[] }) {
+function TaskInlineRow({
+  task,
+  onMutate,
+}: {
+  readonly task: PersonTaskItem;
+  readonly onMutate: () => void;
+}) {
+  const [feedback, setFeedback] = useState<{ message: string; isError: boolean } | null>(null);
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const statusRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (statusRef.current && !statusRef.current.contains(e.target as Node)) {
+        setStatusOpen(false);
+      }
+    }
+    if (statusOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [statusOpen]);
+
+  const showFeedback = useCallback((message: string, isError: boolean) => {
+    setFeedback({ message, isError });
+    if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
+    feedbackTimer.current = setTimeout(() => setFeedback(null), 2000);
+  }, []);
+
+  const handleComplete = async () => {
+    try {
+      await apiFetch(`/api/v1/tasks/${task.taskUid}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'done', version: task.version }),
+      });
+      showFeedback('已完成', false);
+      onMutate();
+    } catch (err) {
+      const msg = err instanceof ApiError && err.code === 409 ? '版本冲突' : '操作失败';
+      showFeedback(msg, true);
+      if (err instanceof ApiError && err.code === 409) onMutate();
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    try {
+      await apiFetch(`/api/v1/tasks/${task.taskUid}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus, version: task.version }),
+      });
+      showFeedback('已更新', false);
+      setStatusOpen(false);
+      onMutate();
+    } catch (err) {
+      const msg = err instanceof ApiError && err.code === 409 ? '版本冲突' : '更新失败';
+      showFeedback(msg, true);
+      if (err instanceof ApiError && err.code === 409) onMutate();
+    }
+  };
+
+  const dueStr = task.dueAt ? new Date(task.dueAt).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }) : '';
+  const overdueText = task.isOverdue && task.daysToDue != null && task.daysToDue < 0
+    ? `延期${Math.abs(task.daysToDue)}天`
+    : '';
+
+  return (
+    <div className="flex items-center gap-3 px-5 py-2 hover:bg-[var(--bg-hover)] transition-colors duration-150">
+      <div className="flex-1 min-w-0 flex items-center gap-2">
+        {task.bossAttentionFlag && (
+          <span className="shrink-0 text-[10px] text-[var(--accent-orange)]">★</span>
+        )}
+        <a
+          href={`/tasks/${task.taskUid}`}
+          className="truncate text-sm text-[var(--text-primary)] hover:text-[var(--accent-blue)] hover:underline"
+        >
+          {task.title}
+        </a>
+        <StatusBadge status={task.status} />
+        {overdueText && (
+          <span className="shrink-0 text-xs font-medium text-[var(--accent-red)]">{overdueText}</span>
+        )}
+      </div>
+      {dueStr && (
+        <span className="shrink-0 text-xs tabular-nums text-[var(--text-muted)]">{dueStr}</span>
+      )}
+      <div ref={statusRef} className="relative flex items-center gap-1 shrink-0">
+        <button
+          onClick={handleComplete}
+          className="rounded border border-[var(--accent-green)]/30 bg-[var(--accent-green)]/10 px-2 py-0.5 text-xs font-medium text-[var(--accent-green)] hover:bg-[var(--accent-green)]/20 transition-colors"
+        >
+          完成
+        </button>
+        <button
+          onClick={() => setStatusOpen(!statusOpen)}
+          className="rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1 py-0.5 text-xs text-[var(--text-muted)] hover:bg-[var(--bg-hover)] transition-colors"
+        >
+          ▼
+        </button>
+        {statusOpen && (
+          <div className="absolute right-0 top-full z-50 mt-1 min-w-[120px] rounded-lg bg-[var(--bg-card)] border border-[var(--border)] shadow-lg py-1">
+            {STATUS_OPTIONS.filter((o) => o.value !== task.status).map((o) => (
+              <button
+                key={o.value}
+                onClick={() => handleStatusChange(o.value)}
+                className="block w-full text-left px-3 py-1.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {feedback && (
+          <span className={`ml-1 text-xs font-medium animate-pulse ${feedback.isError ? 'text-[var(--accent-red)]' : 'text-[var(--accent-green)]'}`}>
+            {feedback.message}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PersonAccordion({
+  persons,
+  onMutate,
+}: {
+  readonly persons: readonly PersonSummary[];
+  readonly onMutate: () => void;
+}) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+
   if (persons.length === 0) {
     return <p className="py-12 text-center text-[var(--text-muted)]">暂无人员数据</p>;
   }
 
   const sorted = [...persons].sort((a, b) => b.doneRate - a.doneRate);
 
+  const togglePerson = (userId: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
   return (
     <div className="overflow-hidden rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="bg-[var(--bg-surface)]">
-              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)]">姓名</th>
-              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)]">Leader</th>
-              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)] text-right">总任务</th>
-              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)] text-right">完成</th>
-              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)] text-right">延期</th>
-              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)] text-right">风险</th>
-              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)] text-right">新增</th>
-              <th className="whitespace-nowrap px-5 py-3.5 text-xs font-medium text-[var(--text-muted)] w-36">完成率</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border)]">
-            {sorted.map((p) => (
-              <tr key={p.userId} className="transition-colors duration-150 hover:bg-[var(--bg-hover)]">
-                <td className="whitespace-nowrap px-5 py-3 font-medium text-[var(--text-primary)]">{p.name}</td>
-                <td className="whitespace-nowrap px-5 py-3 text-[var(--text-muted)]">{p.leaderName || '—'}</td>
-                <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums text-[var(--text-primary)]">{p.total}</td>
-                <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums text-[var(--text-primary)]">{p.done}</td>
-                <td className="whitespace-nowrap px-5 py-3 text-right">
-                  {p.overdue > 0 ? (
-                    <span className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-[var(--accent-red)] px-2 py-0.5 text-xs font-medium text-white">
-                      {p.overdue}
-                    </span>
-                  ) : (
-                    <span className="tabular-nums text-[var(--text-muted)]">0</span>
-                  )}
-                </td>
-                <td className="whitespace-nowrap px-5 py-3 text-right">
-                  {p.riskCount > 0 ? (
-                    <span className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-[var(--accent-orange)] px-2 py-0.5 text-xs font-medium text-white">
-                      {p.riskCount}
-                    </span>
-                  ) : (
-                    <span className="tabular-nums text-[var(--text-muted)]">0</span>
-                  )}
-                </td>
-                <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums text-[var(--text-primary)]">{p.weeklyNewCount}</td>
-                <td className="whitespace-nowrap px-5 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--bg-surface)]">
-                      <div
-                        className="h-full rounded-full transition-all duration-500 ease-out"
-                        style={{
-                          width: `${Math.min(p.doneRate, 100)}%`,
-                          backgroundColor: rateColor(p.doneRate),
-                        }}
-                      />
+      {sorted.map((person) => {
+        const expanded = expandedIds.has(person.userId);
+        // person.tasks comes from the API now — cast since PersonSummary may not have it typed yet
+        const tasks: PersonTaskItem[] = (person as any).tasks ?? [];
+
+        // Group tasks by priority quadrant
+        const grouped = new Map<string, PersonTaskItem[]>();
+        for (const t of tasks) {
+          const key = t.priority || '';
+          const existing = grouped.get(key) ?? [];
+          grouped.set(key, [...existing, t]);
+        }
+
+        return (
+          <div key={person.userId} className="border-b border-[var(--border)] last:border-b-0">
+            {/* Person header row */}
+            <div
+              onClick={() => togglePerson(person.userId)}
+              className="flex items-center gap-4 px-5 py-3 cursor-pointer hover:bg-[var(--bg-hover)] transition-colors duration-150"
+            >
+              <span className="text-xs text-[var(--text-muted)]">{expanded ? '▼' : '▶'}</span>
+              <span className="font-medium text-[var(--text-primary)] w-20 shrink-0 truncate">{person.name}</span>
+              <div className="flex items-center gap-3 text-xs tabular-nums flex-wrap">
+                <span className="text-[var(--text-secondary)]">总 {person.total}</span>
+                <span className="text-[var(--accent-green)]">完成 {person.done}</span>
+                <span className={person.overdue > 0 ? 'font-semibold text-[var(--accent-red)]' : 'text-[var(--text-secondary)]'}>
+                  延期 {person.overdue}
+                </span>
+                <span className={person.riskCount > 0 ? 'text-[var(--accent-orange)]' : 'text-[var(--text-secondary)]'}>
+                  风险 {person.riskCount}
+                </span>
+                <span className="text-[var(--text-secondary)]">新增 {person.weeklyNewCount}</span>
+              </div>
+              <div className="ml-auto flex items-center gap-2 w-36 shrink-0">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--bg-surface)]">
+                  <div
+                    className="h-full rounded-full transition-all duration-500 ease-out"
+                    style={{
+                      width: `${Math.min(person.doneRate, 100)}%`,
+                      backgroundColor: rateColor(person.doneRate),
+                    }}
+                  />
+                </div>
+                <span className="tabular-nums text-xs font-medium text-[var(--text-primary)] w-10 text-right">{person.doneRate}%</span>
+              </div>
+            </div>
+
+            {/* Expanded: tasks grouped by priority quadrant */}
+            {expanded && tasks.length > 0 && (
+              <div className="border-t border-[var(--border)] bg-[var(--bg-page)]">
+                {PRIORITY_QUADRANTS.map(({ key, label }) => {
+                  const quadrantTasks = grouped.get(key);
+                  if (!quadrantTasks || quadrantTasks.length === 0) return null;
+                  return (
+                    <div key={key || 'none'}>
+                      <div className="px-5 py-2 text-xs font-medium text-[var(--text-muted)] bg-[var(--bg-surface)]">
+                        {label} ({quadrantTasks.length})
+                      </div>
+                      {quadrantTasks.map((t) => (
+                        <TaskInlineRow key={t.taskUid} task={t} onMutate={onMutate} />
+                      ))}
                     </div>
-                    <span className="tabular-nums text-xs font-medium text-[var(--text-primary)]">{p.doneRate}%</span>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {expanded && tasks.length === 0 && (
+              <div className="border-t border-[var(--border)] px-5 py-3">
+                <span className="text-xs text-[var(--text-muted)]">暂无任务</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1233,6 +1405,7 @@ function DashboardContent() {
               carryOver: data.stats?.carryOver ?? 0,
               riskCount: data.stats?.riskCount ?? 0,
               weeklyNewCount: data.stats?.weeklyNewCount ?? 0,
+              weeklyDoneCount: data.stats?.weeklyDoneCount ?? 0,
             }}
             periodLabel={periodLabel}
           />
@@ -1244,7 +1417,7 @@ function DashboardContent() {
               <GroupToggle groupMode={groupMode} onChange={setGroupMode} />
             </div>
             {groupMode === 'person' ? (
-              <PersonTable persons={data.personSummary ?? []} />
+              <PersonAccordion persons={data.personSummary ?? []} onMutate={handleMutate} />
             ) : groupMode === 'leader' ? (
               <LeaderCards leaders={data.leaderSummary ?? []} />
             ) : (

@@ -109,6 +109,19 @@ export interface LeaderEntry {
   readonly members: MemberEntry[];
 }
 
+export interface PersonTask {
+  readonly taskUid: string;
+  readonly title: string;
+  readonly status: string;
+  readonly priority: string;
+  readonly dueAt: Date | null;
+  readonly daysToDue: number | null;
+  readonly isOverdue: boolean;
+  readonly bossAttentionFlag: boolean;
+  readonly progressPercent: number;
+  readonly version: number | null;
+}
+
 export interface GanttTask {
   readonly taskUid: string;
   readonly title: string;
@@ -281,7 +294,7 @@ export class DashboardService {
     // Per-person flat summary (all individuals regardless of leader grouping)
     const personMap = new Map<
       string,
-      { name: string; leaderName: string; total: number; done: number; overdue: number; riskCount: number; weeklyNewCount: number }
+      { name: string; leaderName: string; total: number; done: number; overdue: number; riskCount: number; weeklyNewCount: number; tasks: PersonTask[] }
     >();
 
     for (const t of tasks) {
@@ -294,6 +307,7 @@ export class DashboardService {
         overdue: 0,
         riskCount: 0,
         weeklyNewCount: 0,
+        tasks: [],
       };
 
       const isDone = t.status === 'done';
@@ -301,6 +315,19 @@ export class DashboardService {
       const riskReasons = computeRiskReasons(t);
       const isRisk = riskReasons.length > 0;
       const isWeeklyNew = t.createdAt >= thisMonday;
+
+      const personTask: PersonTask = {
+        taskUid: t.taskUid,
+        title: t.title,
+        status: t.status,
+        priority: t.priority,
+        dueAt: t.dueAt,
+        daysToDue: t.daysToDue,
+        isOverdue: !!(t.isOverdue && !DONE_STATUSES.includes(t.status)),
+        bossAttentionFlag: t.bossAttentionFlag ?? false,
+        progressPercent: t.progressPercent ?? 0,
+        version: t.version ?? null,
+      };
 
       personMap.set(userId, {
         name: prev.name || t.assigneeName || '',
@@ -310,6 +337,7 @@ export class DashboardService {
         overdue: prev.overdue + (isOverdue ? 1 : 0),
         riskCount: prev.riskCount + (isRisk ? 1 : 0),
         weeklyNewCount: prev.weeklyNewCount + (isWeeklyNew ? 1 : 0),
+        tasks: [...prev.tasks, personTask],
       });
     }
 
@@ -324,6 +352,7 @@ export class DashboardService {
         riskCount: data.riskCount,
         weeklyNewCount: data.weeklyNewCount,
         doneRate: data.total > 0 ? Math.round((data.done / data.total) * 100) : 0,
+        tasks: data.tasks,
       }))
       .sort((a, b) => b.total - a.total);
 
@@ -401,6 +430,11 @@ export class DashboardService {
     const carryOverTasks = tasks.filter(
       (t) => (t.carryOverCount ?? 0) >= 1,
     ).length;
+    const riskTaskCount = riskTasks.length;
+    const weeklyNewTasks = tasks.filter((t) => t.createdAt >= thisMonday).length;
+    const weeklyDoneTasks = tasks.filter(
+      (t) => t.status === 'done' && t.completedAt && t.completedAt >= thisMonday,
+    ).length;
 
     // Snapshot — fetch for all month buckets in the period
     const snapshots = await this.db
@@ -429,6 +463,9 @@ export class DashboardService {
         done: doneTasks,
         overdue: overdueTasks,
         carryOver: carryOverTasks,
+        riskCount: riskTaskCount,
+        weeklyNewCount: weeklyNewTasks,
+        weeklyDoneCount: weeklyDoneTasks,
         doneRate: totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0,
         overdueRate: totalTasks > 0 ? Math.round((overdueTasks / totalTasks) * 100) : 0,
       },
