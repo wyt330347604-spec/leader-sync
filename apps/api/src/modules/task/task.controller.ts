@@ -25,6 +25,11 @@ export class TaskController {
     return this.taskService.getTask(taskUid);
   }
 
+  @Delete('tasks/:task_uid')
+  remove(@Param('task_uid') taskUid: string) {
+    return this.taskService.deleteTask(taskUid);
+  }
+
   @Patch('tasks/:task_uid')
   update(
     @CurrentUser() user: CurrentUserPayload,

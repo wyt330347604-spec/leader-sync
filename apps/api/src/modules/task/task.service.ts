@@ -89,6 +89,15 @@ export class TaskService {
     return found;
   }
 
+  async deleteTask(taskUid: string) {
+    const found = await this.taskRepository.findByUid(taskUid);
+    if (!found) {
+      throw new BusinessException(ErrorCode.TASK_NOT_FOUND, 'Task not found', HttpStatus.NOT_FOUND);
+    }
+    await this.taskRepository.softDelete(taskUid);
+    return { success: true };
+  }
+
   async updateTask(userId: string, taskUid: string, dto: UpdateTaskDto) {
     const current = await this.getTask(taskUid);
 

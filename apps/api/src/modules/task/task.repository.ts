@@ -34,6 +34,15 @@ export class TaskRepository {
     return result[0] || null;
   }
 
+  async softDelete(taskUid: string) {
+    const result = await this.db
+      .update(task)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(task.taskUid, taskUid), sql`${task.deletedAt} IS NULL`))
+      .returning();
+    return result[0] || null;
+  }
+
   async listByUser(
     userId: string,
     openId: string | undefined,

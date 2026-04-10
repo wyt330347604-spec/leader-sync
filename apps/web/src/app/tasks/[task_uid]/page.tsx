@@ -448,6 +448,20 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
     }
   }
 
+  async function handleDelete() {
+    if (!confirm('确认删除此任务？删除后不可恢复。')) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      await apiFetch(`/api/v1/tasks/${taskUid}`, { method: 'DELETE' });
+      router.push('/tasks');
+    } catch (err: any) {
+      setSaveError(err.message || '删除失败');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleMarkDone() {
     setSaving(true);
     setSaveError('');
@@ -727,6 +741,13 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
           className="rounded-full bg-[var(--bg-surface)] border border-[var(--border)] px-6 py-2.5 text-sm font-medium text-[#f59e0b] transition-all duration-300 ease-out hover:bg-[var(--bg-hover)]"
         >
           延期
+        </button>
+        <button
+          onClick={handleDelete}
+          disabled={saving}
+          className="rounded-full bg-[var(--bg-surface)] border border-[var(--accent-red)]/30 px-6 py-2.5 text-sm font-medium text-[var(--accent-red)] transition-all duration-300 ease-out hover:bg-[var(--accent-red)]/10 disabled:opacity-50"
+        >
+          删除
         </button>
       </div>
 

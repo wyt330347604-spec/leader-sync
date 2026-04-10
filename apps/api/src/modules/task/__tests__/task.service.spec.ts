@@ -18,6 +18,7 @@ function createMockRepository(): Record<keyof TaskRepository, ReturnType<typeof 
     getTaskLeaders: vi.fn(),
     getTaskLeadersByTaskUids: vi.fn(),
     getDefaultProject: vi.fn(),
+    softDelete: vi.fn(),
   };
 }
 
