@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'rea
 import { useDashboard } from '@/hooks/use-dashboard';
 import { useGantt } from '@/hooks/use-gantt';
 import type { DashboardPeriod } from '@/hooks/use-dashboard';
+import { LoadingScreen } from "@/components/loading-screen";
 import { ensureAuth } from '@/lib/auth';
 import { apiFetch, ApiError } from '@/lib/api-client';
 import { TaskStatusLabel, PriorityLabel } from '@leader-sync/shared-types';
@@ -1355,11 +1356,7 @@ function DashboardContent() {
   }, [data?.riskTasks, filterPersons, filterTaskTitle]);
 
   if (!authed) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[var(--text-muted)]">正在验证登录状态...</p>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   const periodLabel = getPeriodDisplayLabel(period);

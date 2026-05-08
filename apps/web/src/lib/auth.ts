@@ -18,7 +18,10 @@ export async function ensureAuth(): Promise<boolean> {
         return false;
       }
     }
-    window.location.href = `/api/v1/auth/feishu/callback?redirect=${encodeURIComponent(window.location.pathname)}`;
+    // Defer redirect briefly so the LoadingScreen has a chance to render
+    // (avoids users seeing a fully white blank page during navigation).
+    const target = `/api/v1/auth/feishu/callback?redirect=${encodeURIComponent(window.location.pathname)}`;
+    setTimeout(() => { window.location.href = target; }, 800);
     return false;
   }
 }

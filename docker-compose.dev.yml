@@ -1,0 +1,38 @@
+# Dev-only stack — runs alongside the production postgres/redis on the same
+# server. Bound to 127.0.0.1 only; access via SSH tunnel from local machine.
+#
+# Deploy:
+#   ssh root@... "mkdir -p /opt/leader-sync-dev && cd /opt/leader-sync-dev && docker compose up -d"
+#   (compose project name is set via `name:` below to keep volumes/containers
+#    isolated from the production stack)
+name: leader-sync-dev
+
+services:
+  postgres-dev:
+    image: postgres:15-alpine
+    ports:
+      - "127.0.0.1:5433:5432"     # 5433 host → 5432 container (5432 already taken by prod)
+    environment:
+      POSTGRES_DB: leader_sync_dev
+      POSTGRES_USER: leader_sync
+      POSTGRES_PASSWORD: leader_sync
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leader_sync -d leader_sync_dev"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  redis-dev:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6380:6379"     # 6380 host (6379 prod)
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  pgdata-dev:

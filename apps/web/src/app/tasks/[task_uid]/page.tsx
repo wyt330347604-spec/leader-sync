@@ -1,13 +1,26 @@
 'use client';
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useRef, useImperativeHandle, forwardRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
+import { toast } from 'sonner';
 import { useTask } from '@/hooks/use-task';
 import { StatusBadge } from '@/components/status-badge';
 import { PriorityBadge } from '@/components/priority-badge';
 import { apiFetch, ApiError } from '@/lib/api-client';
+import { LoadingScreen } from "@/components/loading-screen";
 import { ensureAuth } from '@/lib/auth';
+import { DelayTaskDialog } from '@/components/delay-task-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const STATUS_OPTIONS = [
   { value: 'pending', label: '待办' },
@@ -26,17 +39,6 @@ const PRIORITY_OPTIONS = [
   { value: 'not_urgent_not_important', label: '不紧急不重要' },
 ];
 
-const TASK_TYPE_LABELS: Record<string, string> = {
-  strategy: '战略事项',
-  operation: '运营事项',
-  project: '项目事项',
-  report: '汇报事项',
-  meeting: '会议事项',
-  collaboration: '协同事项',
-  follow_up: '督办事项',
-  other: '其他',
-};
-
 const inputClass =
   'block w-full rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[var(--accent-blue)]/40 focus:border-[var(--accent-blue)]/50';
 
@@ -52,52 +54,93 @@ interface TaskLeader {
   readonly leader_name: string;
 }
 
-function LeaderSection({ taskUid }: { readonly taskUid: string }) {
+export interface LeaderSectionHandle {
+  hasPending: () => boolean;
+  flushPending: () => Promise<void>;
+}
+
+interface LeaderSectionProps {
+  readonly taskUid: string;
+  readonly onPendingCountChange?: (count: number) => void;
+}
+
+interface PendingPerson {
+  readonly userId: string;
+  readonly userName: string;
+}
+
+const LeaderSection = forwardRef<LeaderSectionHandle, LeaderSectionProps>(function LeaderSection(
+  { taskUid, onPendingCountChange },
+  ref,
+) {
   const { data: leaders, mutate: mutateLeaders } = useSWR<readonly TaskLeader[]>(
     taskUid ? `/api/v1/tasks/${taskUid}/leaders` : null,
     (url: string) => apiFetch<TaskLeader[]>(url),
   );
 
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newLeaderId, setNewLeaderId] = useState('');
-  const [newLeaderName, setNewLeaderName] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<readonly { userId: string; userName: string; deptName: string | null }[]>([]);
+  const [pendingNew, setPendingNew] = useState<readonly PendingPerson[]>([]);
   const [leaderError, setLeaderError] = useState('');
 
-  async function handleAddLeader() {
-    if (!newLeaderId.trim() || !newLeaderName.trim()) return;
-    setSubmitting(true);
-    setLeaderError('');
-    try {
-      await apiFetch(`/api/v1/tasks/${taskUid}/leaders`, {
-        method: 'POST',
-        body: JSON.stringify({
-          leader_user_id: newLeaderId.trim(),
-          leader_name: newLeaderName.trim(),
-        }),
-      });
-      await mutateLeaders();
-      setNewLeaderId('');
-      setNewLeaderName('');
-      setShowAddForm(false);
-    } catch (err: any) {
-      setLeaderError(err.message || '添加失败');
-    } finally {
-      setSubmitting(false);
+  // Notify parent when staged count changes
+  useEffect(() => {
+    onPendingCountChange?.(pendingNew.length);
+  }, [pendingNew, onPendingCountChange]);
+
+  // Debounced user search
+  useEffect(() => {
+    if (searchQuery.length < 1) {
+      setSearchResults([]);
+      return;
     }
+    const timer = setTimeout(() => {
+      apiFetch<{ userId: string; userName: string; deptName: string | null }[]>(
+        `/api/v1/users/search?q=${encodeURIComponent(searchQuery)}`,
+      )
+        .then(setSearchResults)
+        .catch(() => setSearchResults([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  function stageAddLeader(userId: string, userName: string) {
+    if (leaders?.some((l) => l.leader_user_id === userId)) return;
+    if (pendingNew.some((p) => p.userId === userId)) return;
+    setPendingNew((prev) => [...prev, { userId, userName }]);
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowAddForm(false);
+  }
+
+  function unstagePendingLeader(userId: string) {
+    setPendingNew((prev) => prev.filter((p) => p.userId !== userId));
   }
 
   async function handleRemoveLeader(leaderUserId: string) {
     setLeaderError('');
     try {
-      await apiFetch(`/api/v1/tasks/${taskUid}/leaders/${leaderUserId}`, {
-        method: 'DELETE',
-      });
+      await apiFetch(`/api/v1/tasks/${taskUid}/leaders/${leaderUserId}`, { method: 'DELETE' });
       await mutateLeaders();
     } catch (err: any) {
       setLeaderError(err.message || '移除失败');
     }
   }
+
+  useImperativeHandle(ref, () => ({
+    hasPending: () => pendingNew.length > 0,
+    flushPending: async () => {
+      for (const p of pendingNew) {
+        await apiFetch(`/api/v1/tasks/${taskUid}/leaders`, {
+          method: 'POST',
+          body: JSON.stringify({ leader_user_id: p.userId, leader_name: p.userName }),
+        });
+      }
+      setPendingNew([]);
+      await mutateLeaders();
+    },
+  }), [pendingNew, taskUid, mutateLeaders]);
 
   return (
     <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6">
@@ -115,7 +158,7 @@ function LeaderSection({ taskUid }: { readonly taskUid: string }) {
         <p className="mb-3 text-xs text-[#ef4444]">{leaderError}</p>
       )}
 
-      {/* Leader chips */}
+      {/* Existing leader chips */}
       <div className="flex flex-wrap gap-2">
         {leaders && leaders.length > 0 ? (
           leaders.map((l) => (
@@ -133,46 +176,60 @@ function LeaderSection({ taskUid }: { readonly taskUid: string }) {
               </button>
             </span>
           ))
-        ) : (
+        ) : pendingNew.length === 0 ? (
           <span className="text-xs text-[var(--text-muted)]">暂无关联 Leader</span>
-        )}
+        ) : null}
+
+        {/* Pending (待保存) chips */}
+        {pendingNew.map((p) => (
+          <span
+            key={`pending-${p.userId}`}
+            className="inline-flex items-center gap-1.5 bg-[var(--accent-orange)]/10 border border-dashed border-[var(--accent-orange)]/50 rounded-full px-3 py-1 text-sm text-[var(--accent-orange)]"
+            title="待保存"
+          >
+            ⏳ {p.userName}
+            <button
+              onClick={() => unstagePendingLeader(p.userId)}
+              className="ml-0.5 text-[var(--accent-orange)] hover:text-[var(--accent-red)] transition-colors duration-150 text-xs font-bold leading-none"
+              title="取消"
+            >
+              &times;
+            </button>
+          </span>
+        ))}
       </div>
 
-      {/* Add form */}
+      {/* Search add form (stages locally, save flushes) */}
       {showAddForm && (
-        <div className="mt-4 flex items-end gap-3 flex-wrap">
-          <div>
-            <label className="mb-1 block text-[10px] font-medium text-[var(--text-secondary)]">用户 ID</label>
-            <input
-              type="text"
-              value={newLeaderId}
-              onChange={(e) => setNewLeaderId(e.target.value)}
-              placeholder="leader_user_id"
-              className="block w-40 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-blue)]/40"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-[10px] font-medium text-[var(--text-secondary)]">姓名</label>
-            <input
-              type="text"
-              value={newLeaderName}
-              onChange={(e) => setNewLeaderName(e.target.value)}
-              placeholder="Leader 姓名"
-              className="block w-40 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-blue)]/40"
-            />
-          </div>
-          <button
-            onClick={handleAddLeader}
-            disabled={submitting || !newLeaderId.trim() || !newLeaderName.trim()}
-            className="rounded-lg bg-[#3b82f6] px-4 py-1.5 text-xs font-medium text-white transition-all duration-200 hover:bg-[#2563eb] disabled:opacity-50"
-          >
-            {submitting ? '添加中...' : '确认添加'}
-          </button>
+        <div className="mt-4">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜索姓名（支持中文 / 拼音首字母）"
+            className="block w-full rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-blue)]/40"
+            autoFocus
+          />
+          {searchResults.length > 0 && (
+            <div className="mt-2 max-h-60 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]">
+              {searchResults.map((u) => (
+                <button
+                  key={u.userId}
+                  type="button"
+                  onClick={() => stageAddLeader(u.userId, u.userName ?? '')}
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-[var(--bg-hover)]"
+                >
+                  <span className="font-medium text-[var(--text-primary)]">{u.userName}</span>
+                  <span className="text-xs text-[var(--text-muted)]">{u.deptName ?? ''}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
-}
+});
 
 /* ---------- Collaborator Section ---------- */
 
@@ -187,132 +244,169 @@ interface UserSearchResult {
   readonly deptName: string | null;
 }
 
-function CollaboratorSection({ taskUid }: { readonly taskUid: string }) {
-  const { data: collaborators, mutate: mutateCollaborators } = useSWR<readonly Collaborator[]>(
-    taskUid ? `/api/v1/tasks/${taskUid}/collaborators` : null,
-    (url: string) => apiFetch<Collaborator[]>(url),
-  );
+export interface CollaboratorSectionHandle {
+  hasPending: () => boolean;
+  flushPending: () => Promise<void>;
+}
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<readonly UserSearchResult[]>([]);
-  const [showSearch, setShowSearch] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [collabError, setCollabError] = useState('');
+interface CollaboratorSectionProps {
+  readonly taskUid: string;
+  readonly onPendingCountChange?: (count: number) => void;
+}
 
-  // Search users with debounce
-  useEffect(() => {
-    if (searchQuery.length < 1) {
-      setSearchResults([]);
-      return;
-    }
-    const timer = setTimeout(() => {
-      apiFetch<UserSearchResult[]>(`/api/v1/users/search?q=${encodeURIComponent(searchQuery)}`)
-        .then(setSearchResults)
-        .catch(() => setSearchResults([]));
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+const CollaboratorSection = forwardRef<CollaboratorSectionHandle, CollaboratorSectionProps>(
+  function CollaboratorSection({ taskUid, onPendingCountChange }, ref) {
+    const { data: collaborators, mutate: mutateCollaborators } = useSWR<readonly Collaborator[]>(
+      taskUid ? `/api/v1/tasks/${taskUid}/collaborators` : null,
+      (url: string) => apiFetch<Collaborator[]>(url),
+    );
 
-  async function handleAddCollaborator(userId: string, userName: string) {
-    setSubmitting(true);
-    setCollabError('');
-    try {
-      await apiFetch(`/api/v1/tasks/${taskUid}/collaborators`, {
-        method: 'POST',
-        body: JSON.stringify({ user_id: userId, user_name: userName }),
-      });
-      await mutateCollaborators();
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<readonly UserSearchResult[]>([]);
+    const [showSearch, setShowSearch] = useState(false);
+    const [pendingNew, setPendingNew] = useState<readonly PendingPerson[]>([]);
+    const [collabError, setCollabError] = useState('');
+
+    useEffect(() => {
+      onPendingCountChange?.(pendingNew.length);
+    }, [pendingNew, onPendingCountChange]);
+
+    useEffect(() => {
+      if (searchQuery.length < 1) {
+        setSearchResults([]);
+        return;
+      }
+      const timer = setTimeout(() => {
+        apiFetch<UserSearchResult[]>(`/api/v1/users/search?q=${encodeURIComponent(searchQuery)}`)
+          .then(setSearchResults)
+          .catch(() => setSearchResults([]));
+      }, 300);
+      return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    function stageAddCollaborator(userId: string, userName: string) {
+      if (collaborators?.some((c) => c.user_id === userId)) return;
+      if (pendingNew.some((p) => p.userId === userId)) return;
+      setPendingNew((prev) => [...prev, { userId, userName }]);
       setSearchQuery('');
-      setShowSearch(false);
       setSearchResults([]);
-    } catch (err: any) {
-      setCollabError(err.message || '添加失败');
-    } finally {
-      setSubmitting(false);
+      setShowSearch(false);
     }
-  }
 
-  async function handleRemoveCollaborator(userId: string) {
-    setCollabError('');
-    try {
-      await apiFetch(`/api/v1/tasks/${taskUid}/collaborators/${userId}`, {
-        method: 'DELETE',
-      });
-      await mutateCollaborators();
-    } catch (err: any) {
-      setCollabError(err.message || '移除失败');
+    function unstagePendingCollab(userId: string) {
+      setPendingNew((prev) => prev.filter((p) => p.userId !== userId));
     }
-  }
 
-  return (
-    <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-xs font-medium text-[var(--text-muted)]">协作人</p>
-        <button
-          onClick={() => setShowSearch((v) => !v)}
-          className="rounded-full bg-[#3b82f6] px-3 py-1 text-xs font-medium text-white transition-all duration-200 hover:bg-[#2563eb]"
-        >
-          {showSearch ? '取消' : '添加协作人'}
-        </button>
-      </div>
+    async function handleRemoveCollaborator(userId: string) {
+      setCollabError('');
+      try {
+        await apiFetch(`/api/v1/tasks/${taskUid}/collaborators/${userId}`, { method: 'DELETE' });
+        await mutateCollaborators();
+      } catch (err: any) {
+        setCollabError(err.message || '移除失败');
+      }
+    }
 
-      {collabError && (
-        <p className="mb-3 text-xs text-[#ef4444]">{collabError}</p>
-      )}
+    useImperativeHandle(ref, () => ({
+      hasPending: () => pendingNew.length > 0,
+      flushPending: async () => {
+        for (const p of pendingNew) {
+          await apiFetch(`/api/v1/tasks/${taskUid}/collaborators`, {
+            method: 'POST',
+            body: JSON.stringify({ user_id: p.userId, user_name: p.userName }),
+          });
+        }
+        setPendingNew([]);
+        await mutateCollaborators();
+      },
+    }), [pendingNew, taskUid, mutateCollaborators]);
 
-      {/* Collaborator chips */}
-      <div className="flex flex-wrap gap-2">
-        {collaborators && collaborators.length > 0 ? (
-          collaborators.map((c) => (
+    return (
+      <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-xs font-medium text-[var(--text-muted)]">协作人</p>
+          <button
+            onClick={() => setShowSearch((v) => !v)}
+            className="rounded-full bg-[#3b82f6] px-3 py-1 text-xs font-medium text-white transition-all duration-200 hover:bg-[#2563eb]"
+          >
+            {showSearch ? '取消' : '添加协作人'}
+          </button>
+        </div>
+
+        {collabError && (
+          <p className="mb-3 text-xs text-[#ef4444]">{collabError}</p>
+        )}
+
+        {/* Existing + pending chips */}
+        <div className="flex flex-wrap gap-2">
+          {collaborators && collaborators.length > 0 ? (
+            collaborators.map((c) => (
+              <span
+                key={c.user_id}
+                className="inline-flex items-center gap-1.5 bg-[var(--bg-surface)] border border-[var(--border)] rounded-full px-3 py-1 text-sm text-[var(--text-primary)]"
+              >
+                {c.user_name}
+                <button
+                  onClick={() => handleRemoveCollaborator(c.user_id)}
+                  className="ml-0.5 text-[#ef4444] hover:text-[#f87171] transition-colors duration-150 text-xs font-bold leading-none"
+                  title="移除"
+                >
+                  &times;
+                </button>
+              </span>
+            ))
+          ) : pendingNew.length === 0 ? (
+            <span className="text-xs text-[var(--text-muted)]">暂无协作人</span>
+          ) : null}
+
+          {pendingNew.map((p) => (
             <span
-              key={c.user_id}
-              className="inline-flex items-center gap-1.5 bg-[var(--bg-surface)] border border-[var(--border)] rounded-full px-3 py-1 text-sm text-[var(--text-primary)]"
+              key={`pending-${p.userId}`}
+              className="inline-flex items-center gap-1.5 bg-[var(--accent-orange)]/10 border border-dashed border-[var(--accent-orange)]/50 rounded-full px-3 py-1 text-sm text-[var(--accent-orange)]"
+              title="待保存"
             >
-              {c.user_name}
+              ⏳ {p.userName}
               <button
-                onClick={() => handleRemoveCollaborator(c.user_id)}
-                className="ml-0.5 text-[#ef4444] hover:text-[#f87171] transition-colors duration-150 text-xs font-bold leading-none"
-                title="移除"
+                onClick={() => unstagePendingCollab(p.userId)}
+                className="ml-0.5 text-[var(--accent-orange)] hover:text-[var(--accent-red)] transition-colors duration-150 text-xs font-bold leading-none"
+                title="取消"
               >
                 &times;
               </button>
             </span>
-          ))
-        ) : (
-          <span className="text-xs text-[var(--text-muted)]">暂无协作人</span>
+          ))}
+        </div>
+
+        {showSearch && (
+          <div className="mt-4">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="搜索姓名（支持中文 / 拼音首字母）"
+              className="block w-full rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-blue)]/40"
+              autoFocus
+            />
+            {searchResults.length > 0 && (
+              <div className="mt-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden">
+                {searchResults.map((u) => (
+                  <button
+                    key={u.userId}
+                    onClick={() => stageAddCollaborator(u.userId, u.userName ?? '')}
+                    className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors duration-150"
+                  >
+                    <span>{u.userName}</span>
+                    <span className="text-xs text-[var(--text-muted)]">{u.deptName || ''}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
-
-      {/* Search input and results */}
-      {showSearch && (
-        <div className="mt-4">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜索用户名..."
-            className="block w-full rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-blue)]/40"
-          />
-          {searchResults.length > 0 && (
-            <div className="mt-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden">
-              {searchResults.map((u) => (
-                <button
-                  key={u.userId}
-                  onClick={() => handleAddCollaborator(u.userId, u.userName ?? '')}
-                  disabled={submitting}
-                  className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors duration-150 disabled:opacity-50"
-                >
-                  <span>{u.userName}</span>
-                  <span className="text-xs text-[var(--text-muted)]">{u.deptName || ''}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+    );
+  },
+);
 
 export default function TaskDetailPage({ params }: { params: Promise<{ task_uid: string }> }) {
   const { task_uid: taskUid } = use(params);
@@ -320,23 +414,34 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
   const { data: task, error, isLoading, mutate } = useTask(taskUid);
   const [authed, setAuthed] = useState(false);
 
-  // Edit state
-  const [editingProgress, setEditingProgress] = useState(false);
-  const [newStatus, setNewStatus] = useState('');
-  const [progressPercent, setProgressPercent] = useState(0);
-  const [latestProgress, setLatestProgress] = useState('');
+  // Unified edit form state — covers all editable fields, saved together via [保存] button
+  const [editStatus, setEditStatus] = useState('');
+  const [editPriority, setEditPriority] = useState('');
+  const [editProjectUid, setEditProjectUid] = useState('');
+  const [editProgress, setEditProgress] = useState(0);
+  const [editLatestProgress, setEditLatestProgress] = useState('');
+  const [editDetail, setEditDetail] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
-  // Inline edit state for status and priority
-  const [editingStatus, setEditingStatus] = useState(false);
-  const [editingPriority, setEditingPriority] = useState(false);
-  const [inlineStatus, setInlineStatus] = useState('');
-  const [inlinePriority, setInlinePriority] = useState('');
+  // Project list (for select + display)
+  const { data: projects } = useSWR<readonly { projectUid: string; name: string; isDefault: boolean }[]>(
+    '/api/v1/projects',
+    (url: string) => apiFetch<{ projectUid: string; name: string; isDefault: boolean }[]>(url),
+  );
+
+  // Refs to child sections so the unified [保存] button can flush their pending stages
+  const leaderSectionRef = useRef<LeaderSectionHandle | null>(null);
+  const collaboratorSectionRef = useRef<CollaboratorSectionHandle | null>(null);
+  const [pendingLeaderCount, setPendingLeaderCount] = useState(0);
+  const [pendingCollabCount, setPendingCollabCount] = useState(0);
 
   // Delay state
-  const [showDelayPicker, setShowDelayPicker] = useState(false);
+  const [showDelayDialog, setShowDelayDialog] = useState(false);
   const [delaySubmitting, setDelaySubmitting] = useState(false);
+
+  // Delete confirm dialog state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // Boss attention toggle state
   const [togglingAttention, setTogglingAttention] = useState(false);
@@ -347,76 +452,62 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
 
   useEffect(() => {
     if (task) {
-      setNewStatus(task.status);
-      setProgressPercent(task.progress_percent ?? task.progressPercent ?? 0);
-      setLatestProgress(task.latest_progress ?? task.latestProgress ?? '');
-      setInlineStatus(task.status);
-      setInlinePriority(task.priority);
+      setEditStatus(task.status);
+      setEditPriority(task.priority);
+      setEditProjectUid(task.project_uid ?? task.projectUid ?? '');
+      setEditProgress(task.progress_percent ?? task.progressPercent ?? 0);
+      setEditLatestProgress(task.latest_progress ?? task.latestProgress ?? '');
+      setEditDetail(task.detail ?? '');
     }
   }, [task]);
 
-  async function handleUpdateProgress() {
+  // Has anything changed? (form fields OR staged leader/collab additions)
+  const fieldsDirty = Boolean(task) && (
+    editStatus !== task.status ||
+    editPriority !== task.priority ||
+    editProjectUid !== (task.project_uid ?? task.projectUid ?? '') ||
+    editProgress !== (task.progress_percent ?? task.progressPercent ?? 0) ||
+    editLatestProgress !== (task.latest_progress ?? task.latestProgress ?? '') ||
+    editDetail !== (task.detail ?? '')
+  );
+  const isDirty = fieldsDirty || pendingLeaderCount > 0 || pendingCollabCount > 0;
+
+  async function handleSave() {
+    if (!isDirty) return;
     setSaving(true);
     setSaveError('');
     try {
-      const version = task.version;
-      await apiFetch(`/api/v1/tasks/${taskUid}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          status: newStatus,
-          progress_percent: progressPercent,
-          latest_progress: latestProgress,
-          version,
-        }),
-      });
+      // 1. Flush staged leaders / collaborators first (they don't need version)
+      if (leaderSectionRef.current?.hasPending()) {
+        await leaderSectionRef.current.flushPending();
+      }
+      if (collaboratorSectionRef.current?.hasPending()) {
+        await collaboratorSectionRef.current.flushPending();
+      }
+      // 2. Patch main task fields — only diff (avoid same-value writes that trigger
+      // backend validation like "same status → same status").
+      if (fieldsDirty) {
+        const patch: Record<string, unknown> = { version: task.version };
+        if (editStatus !== task.status) patch.status = editStatus;
+        if (editPriority !== task.priority) patch.priority = editPriority;
+        const curProj = task.project_uid ?? task.projectUid ?? '';
+        if (editProjectUid !== curProj) patch.project_uid = editProjectUid || null;
+        const curProg = task.progress_percent ?? task.progressPercent ?? 0;
+        if (editProgress !== curProg) patch.progress_percent = editProgress;
+        const curLatest = task.latest_progress ?? task.latestProgress ?? '';
+        if (editLatestProgress !== curLatest) patch.latest_progress = editLatestProgress;
+        if (editDetail !== (task.detail ?? '')) patch.detail = editDetail;
+
+        await apiFetch(`/api/v1/tasks/${taskUid}`, {
+          method: 'PATCH',
+          body: JSON.stringify(patch),
+        });
+      }
+      toast.success('已保存');
       router.push('/tasks');
     } catch (err: any) {
       if (err instanceof ApiError && err.code === 409) {
-        alert('数据已被修改，请刷新');
-        await mutate();
-      } else {
-        setSaveError(err.message || '保存失败');
-      }
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleInlineStatusSave() {
-    setSaving(true);
-    setSaveError('');
-    try {
-      await apiFetch(`/api/v1/tasks/${taskUid}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: inlineStatus, version: task.version }),
-      });
-      await mutate();
-      setEditingStatus(false);
-    } catch (err: any) {
-      if (err instanceof ApiError && err.code === 409) {
-        alert('数据已被修改，请刷新');
-        await mutate();
-      } else {
-        setSaveError(err.message || '保存失败');
-      }
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleInlinePrioritySave() {
-    setSaving(true);
-    setSaveError('');
-    try {
-      await apiFetch(`/api/v1/tasks/${taskUid}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ priority: inlinePriority, version: task.version }),
-      });
-      await mutate();
-      setEditingPriority(false);
-    } catch (err: any) {
-      if (err instanceof ApiError && err.code === 409) {
-        alert('数据已被修改，请刷新');
+        toast.error('数据已被修改，请刷新');
         await mutate();
       } else {
         setSaveError(err.message || '保存失败');
@@ -438,7 +529,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
       await mutate();
     } catch (err: any) {
       if (err instanceof ApiError && err.code === 409) {
-        alert('数据已被修改，请刷新');
+        toast.error('数据已被修改，请刷新');
         await mutate();
       } else {
         setSaveError(err.message || '操作失败');
@@ -448,8 +539,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
     }
   }
 
-  async function handleDelete() {
-    if (!confirm('确认删除此任务？删除后不可恢复。')) return;
+  async function handleDeleteConfirmed() {
     setSaving(true);
     setSaveError('');
     try {
@@ -459,6 +549,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
       setSaveError(err.message || '删除失败');
     } finally {
       setSaving(false);
+      setShowDeleteDialog(false);
     }
   }
 
@@ -477,7 +568,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
       router.push('/tasks');
     } catch (err: any) {
       if (err instanceof ApiError && err.code === 409) {
-        alert('数据已被修改，请刷新');
+        toast.error('数据已被修改，请刷新');
         await mutate();
       } else {
         setSaveError(err.message || '操作失败');
@@ -498,13 +589,16 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
           new_due_at: `${newDate}T23:59:59+08:00`,
         }),
       });
+      toast.success('延期成功');
+      setShowDelayDialog(false);
       router.push('/tasks');
     } catch (err: any) {
       if (err instanceof ApiError && err.code === 409) {
-        alert('数据已被修改，请刷新');
+        toast.error('数据已被修改，请刷新');
         await mutate();
+        setShowDelayDialog(false);
       } else {
-        setSaveError(err.message || '延期失败');
+        toast.error(err.message || '延期失败');
       }
     } finally {
       setDelaySubmitting(false);
@@ -514,7 +608,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
   if (!authed) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[var(--text-muted)]">正在验证登录状态...</p>
+        <p className="text-[var(--text-secondary)]">正在跳转登录...</p>
       </div>
     );
   }
@@ -543,7 +637,6 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
     );
   }
 
-  const currentProgress = task.progress_percent ?? task.progressPercent ?? 0;
   const isBossAttention = task.boss_attention_flag ?? task.bossAttentionFlag ?? false;
 
   return (
@@ -560,76 +653,24 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
       <div className="mt-4 mb-8">
         <h2 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">{task.title}</h2>
         <div className="mt-3 flex items-center gap-2 flex-wrap">
-          {/* Inline status edit */}
-          {editingStatus ? (
-            <div className="flex items-center gap-2">
-              <select
-                value={inlineStatus}
-                onChange={(e) => setInlineStatus(e.target.value)}
-                className="rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-primary)]"
-              >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-              <button
-                onClick={handleInlineStatusSave}
-                disabled={saving}
-                className="rounded-lg bg-[#3b82f6] px-2 py-1 text-xs text-white hover:bg-[#2563eb] disabled:opacity-50"
-              >
-                保存
-              </button>
-              <button
-                onClick={() => { setEditingStatus(false); setInlineStatus(task.status); }}
-                className="rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              >
-                取消
-              </button>
-            </div>
-          ) : (
-            <button onClick={() => setEditingStatus(true)} className="cursor-pointer" title="点击修改状态">
-              <StatusBadge status={task.status} />
-            </button>
-          )}
+          {/* Status / Priority chips — display only; editing is in the form below */}
+          <StatusBadge status={task.status} />
+          <PriorityBadge priority={task.priority} />
 
-          {/* Inline priority edit */}
-          {editingPriority ? (
-            <div className="flex items-center gap-2">
-              <select
-                value={inlinePriority}
-                onChange={(e) => setInlinePriority(e.target.value)}
-                className="rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-primary)]"
-              >
-                {PRIORITY_OPTIONS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
-              </select>
-              <button
-                onClick={handleInlinePrioritySave}
-                disabled={saving}
-                className="rounded-lg bg-[#3b82f6] px-2 py-1 text-xs text-white hover:bg-[#2563eb] disabled:opacity-50"
-              >
-                保存
-              </button>
-              <button
-                onClick={() => { setEditingPriority(false); setInlinePriority(task.priority); }}
-                className="rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              >
-                取消
-              </button>
-            </div>
-          ) : (
-            <button onClick={() => setEditingPriority(true)} className="cursor-pointer" title="点击修改优先级">
-              <PriorityBadge priority={task.priority} />
-            </button>
-          )}
-
-          {/* Carried-over tag */}
-          {(task.is_carried_over || task.isCarriedOver) && (
-            <span className="inline-flex items-center rounded-full bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/20 px-2 py-0.5 text-xs">
-              顺延
-            </span>
-          )}
+          {/* Delay-count tag (replaces former carry-over tag) */}
+          {(() => {
+            const n = task.delay_count ?? task.delayCount ?? 0;
+            if (n < 1) return null;
+            const danger = n >= 3;
+            const cls = danger
+              ? 'bg-[var(--accent-red)]/10 text-[var(--accent-red)] border-[var(--accent-red)]/30'
+              : 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/20';
+            return (
+              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${cls}`}>
+                已延期 {n} 次
+              </span>
+            );
+          })()}
 
           {/* Boss attention toggle */}
           <button
@@ -655,34 +696,101 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
         </div>
       )}
 
-      {/* Progress section */}
-      <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-[var(--text-secondary)]">完成进度</p>
-          <p className="tabular-nums text-2xl font-bold text-[var(--text-primary)]">{currentProgress}%</p>
+      {/* Unified edit form (always visible; saved via [保存] at the bottom) */}
+      <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6 space-y-5">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+          <div>
+            <label htmlFor="edit_project" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">归属项目</label>
+            <select
+              id="edit_project"
+              value={editProjectUid}
+              onChange={(e) => setEditProjectUid(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">无</option>
+              {projects?.map((p) => (
+                <option key={p.projectUid} value={p.projectUid}>
+                  {p.name}{p.isDefault ? ' (默认)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="edit_status" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">状态</label>
+            <select
+              id="edit_status"
+              value={editStatus}
+              onChange={(e) => setEditStatus(e.target.value)}
+              className={inputClass}
+            >
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="edit_priority" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">优先级</label>
+            <select
+              id="edit_priority"
+              value={editPriority}
+              onChange={(e) => setEditPriority(e.target.value)}
+              className={inputClass}
+            >
+              {PRIORITY_OPTIONS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--bg-surface)]">
-          <div
-            className="h-full rounded-full bg-[#22c55e] transition-all duration-500 ease-out"
-            style={{
-              width: `${Math.min(currentProgress, 100)}%`,
-              boxShadow: '0 0 8px rgba(34,197,94,0.4)',
-            }}
+
+        <div>
+          <label htmlFor="edit_percent" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">完成进度</label>
+          <div className="flex items-center gap-4">
+            <input
+              id="edit_percent"
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={editProgress}
+              onChange={(e) => setEditProgress(Number(e.target.value))}
+              className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[var(--bg-surface)] accent-[#3b82f6]"
+            />
+            <span className="tabular-nums text-sm font-semibold text-[var(--text-primary)] w-12 text-right">{editProgress}%</span>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="edit_progress_text" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">最新进展</label>
+          <textarea
+            id="edit_progress_text"
+            rows={3}
+            value={editLatestProgress}
+            onChange={(e) => setEditLatestProgress(e.target.value)}
+            className={inputClass}
+            placeholder="本次的进展描述..."
           />
         </div>
-        {(task.latest_progress || task.latestProgress) && (
-          <p className="mt-3 text-sm text-[var(--text-secondary)]">
-            {task.latest_progress || task.latestProgress}
-          </p>
-        )}
+
+        <div>
+          <label htmlFor="edit_detail" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">详细描述</label>
+          <textarea
+            id="edit_detail"
+            rows={4}
+            value={editDetail}
+            onChange={(e) => setEditDetail(e.target.value)}
+            className={inputClass}
+            placeholder="任务详细描述..."
+          />
+        </div>
       </div>
 
       {/* Info cards grid */}
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
         <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-5">
-          <p className="text-xs font-medium text-[var(--text-muted)]">任务类型</p>
+          <p className="text-xs font-medium text-[var(--text-muted)]">归属项目</p>
           <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">
-            {TASK_TYPE_LABELS[task.task_type || task.taskType] || task.task_type || task.taskType || '-'}
+            {projects?.find((p) => p.projectUid === (task.project_uid ?? task.projectUid))?.name ?? '-'}
           </p>
         </div>
         <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-5">
@@ -707,27 +815,28 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
         </div>
       </div>
 
-      {/* Multi-Leader section */}
-      <LeaderSection taskUid={taskUid} />
+      {/* Multi-Leader section (staged adds, immediate removes) */}
+      <LeaderSection
+        ref={leaderSectionRef}
+        taskUid={taskUid}
+        onPendingCountChange={setPendingLeaderCount}
+      />
 
-      {/* Collaborator section */}
-      <CollaboratorSection taskUid={taskUid} />
+      {/* Collaborator section (staged adds, immediate removes) */}
+      <CollaboratorSection
+        ref={collaboratorSectionRef}
+        taskUid={taskUid}
+        onPendingCountChange={setPendingCollabCount}
+      />
 
-      {/* Detail section */}
-      {task.detail && (
-        <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6">
-          <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">详细描述</p>
-          <div className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--text-primary)]">{task.detail}</div>
-        </div>
-      )}
-
-      {/* Action buttons */}
+      {/* Action buttons (all aligned bottom) */}
       <div className="mb-6 flex gap-3 flex-wrap">
         <button
-          onClick={() => setEditingProgress((v) => !v)}
-          className="rounded-full bg-[#3b82f6] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#2563eb]"
+          onClick={handleSave}
+          disabled={saving || !isDirty}
+          className="rounded-full bg-[#3b82f6] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#2563eb] disabled:opacity-50"
         >
-          {editingProgress ? '取消编辑' : '更新进展'}
+          {saving ? '保存中...' : '保存'}
         </button>
         <button
           onClick={handleMarkDone}
@@ -737,13 +846,13 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
           提交完成
         </button>
         <button
-          onClick={() => setShowDelayPicker((v) => !v)}
+          onClick={() => setShowDelayDialog(true)}
           className="rounded-full bg-[var(--bg-surface)] border border-[var(--border)] px-6 py-2.5 text-sm font-medium text-[#f59e0b] transition-all duration-300 ease-out hover:bg-[var(--bg-hover)]"
         >
           延期
         </button>
         <button
-          onClick={handleDelete}
+          onClick={() => setShowDeleteDialog(true)}
           disabled={saving}
           className="rounded-full bg-[var(--bg-surface)] border border-[var(--accent-red)]/30 px-6 py-2.5 text-sm font-medium text-[var(--accent-red)] transition-all duration-300 ease-out hover:bg-[var(--accent-red)]/10 disabled:opacity-50"
         >
@@ -751,81 +860,38 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
         </button>
       </div>
 
-      {/* Edit progress form */}
-      {editingProgress && (
-        <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6">
-          <h3 className="mb-5 text-lg font-semibold text-[var(--text-primary)]">更新进展</h3>
-          <div className="space-y-5">
-            <div>
-              <label htmlFor="edit_status" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">状态</label>
-              <select
-                id="edit_status"
-                value={newStatus}
-                onChange={(e) => setNewStatus(e.target.value)}
-                className={inputClass}
-              >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="edit_percent" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
-                进度百分比
-              </label>
-              <div className="flex items-center gap-4">
-                <input
-                  id="edit_percent"
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={progressPercent}
-                  onChange={(e) => setProgressPercent(Number(e.target.value))}
-                  className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[var(--bg-surface)] accent-[#3b82f6]"
-                />
-                <span className="tabular-nums text-sm font-semibold text-[var(--text-primary)]">{progressPercent}%</span>
-              </div>
-            </div>
-            <div>
-              <label htmlFor="edit_progress" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">最新进展</label>
-              <textarea
-                id="edit_progress"
-                rows={3}
-                value={latestProgress}
-                onChange={(e) => setLatestProgress(e.target.value)}
-                className={inputClass}
-                placeholder="描述最新进展..."
-              />
-            </div>
-            <div className="flex justify-end">
-              <button
-                onClick={handleUpdateProgress}
-                disabled={saving}
-                className="rounded-full bg-[#3b82f6] px-6 py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#2563eb] disabled:opacity-50"
-              >
-                {saving ? '保存中...' : '保存'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DelayTaskDialog
+        open={showDelayDialog}
+        onOpenChange={setShowDelayDialog}
+        currentDueAt={task.due_at ?? task.dueAt}
+        delayCount={task.delay_count ?? task.delayCount ?? 0}
+        submitting={delaySubmitting}
+        onConfirm={handleDelay}
+      />
 
-      {/* Delay date picker */}
-      {showDelayPicker && (
-        <div className="mb-6 rounded-2xl bg-[#f59e0b]/5 border border-[#f59e0b]/20 p-5">
-          <p className="mb-3 text-sm font-medium text-[#f59e0b]">选择新的截止日期</p>
-          <input
-            type="date"
-            onChange={(e) => {
-              if (e.target.value) handleDelay(e.target.value);
-            }}
-            disabled={delaySubmitting}
-            className="w-full rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-primary)] [color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-[#f59e0b]/40"
-          />
-          {delaySubmitting && <p className="mt-2 text-xs text-[var(--text-muted)]">提交中...</p>}
-        </div>
-      )}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent className="bg-[var(--bg-card)] border-[var(--border)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[var(--text-primary)]">确认删除此任务？</AlertDialogTitle>
+            <AlertDialogDescription className="text-[var(--text-secondary)]">
+              删除后不可恢复，所有协作人将失去对该任务的访问。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={saving}
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteConfirmed();
+              }}
+              className="bg-[var(--accent-red)] text-white hover:bg-[var(--accent-red)]/90"
+            >
+              {saving ? '删除中...' : '确认删除'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TaskService } from '../task.service';
 import { TaskRepository } from '../task.repository';
 import { BusinessException } from '../../../common/exceptions/business.exception';
@@ -60,6 +60,7 @@ function makeFakeTask(overrides: Record<string, unknown> = {}) {
     carriedFromTaskUid: null,
     carryOverCount: 0,
     monthlyCommitmentFlag: false,
+    overdueNotifiedLeaderAt: null,
     bossAttentionFlag: false,
     monthlyCloseLocked: false,
     projectUid: null,
@@ -84,6 +85,84 @@ describe('TaskService', () => {
   });
 
   describe('createTask', () => {
+    it('sets leader = issuer.manager (NOT assignee.manager)', async () => {
+      // Distinct issuer and assignee with different managers — verifies the new semantic
+      repo.findOrgUser.mockImplementation(async (uid: string) => {
+        if (uid === 'user_issuer') {
+          return {
+            userId: 'user_issuer',
+            userName: 'Issuer Name',
+            deptId: 'dept_a',
+            deptName: 'Dept A',
+            managerUserId: 'user_issuer_manager',
+            managerName: 'Issuer Manager',
+          };
+        }
+        if (uid === 'user_assignee') {
+          return {
+            userId: 'user_assignee',
+            userName: 'Assignee Name',
+            deptId: 'dept_b',
+            deptName: 'Dept B',
+            managerUserId: 'user_assignee_manager',
+            managerName: 'Assignee Manager',
+          };
+        }
+        return null;
+      });
+      repo.getDefaultProject.mockResolvedValue(null);
+      repo.insert.mockResolvedValue(makeFakeTask({ status: TaskStatus.NOT_STARTED }));
+      repo.insertProgressLog.mockResolvedValue(undefined);
+
+      await service.createTask('user_issuer', {
+        title: 'X',
+        priority: 'urgent_important',
+        assignee_user_id: 'user_assignee',
+        due_at: '2026-04-15',
+      });
+
+      const insertArg = repo.insert.mock.calls[0][0];
+      expect(insertArg.leaderUserId).toBe('user_issuer_manager');
+      expect(insertArg.leaderName).toBe('Issuer Manager');
+    });
+
+    it('falls back leader to issuer themself when issuer has no manager', async () => {
+      repo.findOrgUser.mockImplementation(async (uid: string) => {
+        if (uid === 'user_top_boss') {
+          return {
+            userId: 'user_top_boss',
+            userName: 'Top Boss',
+            deptId: null,
+            deptName: null,
+            managerUserId: null, // 顶层，无 manager
+            managerName: null,
+          };
+        }
+        return {
+          userId: 'user_assignee',
+          userName: 'Assignee Name',
+          deptId: 'dept_b',
+          deptName: 'Dept B',
+          managerUserId: 'someone_else',
+          managerName: 'Someone Else',
+        };
+      });
+      repo.getDefaultProject.mockResolvedValue(null);
+      repo.insert.mockResolvedValue(makeFakeTask({ status: TaskStatus.NOT_STARTED }));
+      repo.insertProgressLog.mockResolvedValue(undefined);
+
+      await service.createTask('user_top_boss', {
+        title: 'X',
+        priority: 'urgent_important',
+        assignee_user_id: 'user_assignee',
+        due_at: '2026-04-15',
+      });
+
+      const insertArg = repo.insert.mock.calls[0][0];
+      expect(insertArg.leaderUserId).toBe('user_top_boss');
+      expect(insertArg.leaderName).toBe('Top Boss');
+    });
+
     it('generates UID, auto-fills system fields, calls insert and insertProgressLog', async () => {
       const orgUser = {
         userId: 'user_assignee',
@@ -240,17 +319,136 @@ describe('TaskService', () => {
       const logArg = repo.insertProgressLog.mock.calls[0][0];
       expect(logArg.newStatus).toBe(TaskStatus.DONE);
     });
+
+    it('resets isOverdue=false and daysToDue=null when completing an overdue task', async () => {
+      const current = makeFakeTask({
+        status: TaskStatus.IN_PROGRESS,
+        version: 1,
+        isOverdue: true,
+        daysToDue: -5,
+      });
+      repo.findByUid.mockResolvedValue(current);
+      repo.updateWithVersion.mockResolvedValue(makeFakeTask({ status: TaskStatus.DONE, version: 2 }));
+      repo.insertProgressLog.mockResolvedValue(undefined);
+
+      await service.completeTask('user_1', 'task_abc123', {});
+
+      const updateArgs = repo.updateWithVersion.mock.calls[0];
+      expect(updateArgs[2].isOverdue).toBe(false);
+      expect(updateArgs[2].daysToDue).toBeNull();
+    });
+
+    it('clears overdueNotifiedLeaderAt so leader gets notified again on next overdue cycle', async () => {
+      const current = makeFakeTask({
+        status: TaskStatus.IN_PROGRESS,
+        version: 1,
+        overdueNotifiedLeaderAt: new Date('2026-04-20'),
+      });
+      repo.findByUid.mockResolvedValue(current);
+      repo.updateWithVersion.mockResolvedValue(makeFakeTask({ status: TaskStatus.DONE, version: 2 }));
+      repo.insertProgressLog.mockResolvedValue(undefined);
+
+      await service.completeTask('user_1', 'task_abc123', {});
+
+      const updateArgs = repo.updateWithVersion.mock.calls[0];
+      expect(updateArgs[2].overdueNotifiedLeaderAt).toBeNull();
+    });
+  });
+
+  describe('updateTask isOverdue/daysToDue side-effects', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-04-01T00:00:00+08:00'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('resets isOverdue=false when transitioning status to done', async () => {
+      const current = makeFakeTask({
+        status: TaskStatus.IN_PROGRESS,
+        version: 1,
+        isOverdue: true,
+        daysToDue: -3,
+      });
+      repo.findByUid.mockResolvedValue(current);
+      repo.updateWithVersion.mockResolvedValue(makeFakeTask({ status: TaskStatus.DONE, version: 2 }));
+      repo.insertProgressLog.mockResolvedValue(undefined);
+
+      await service.updateTask('user_1', 'task_abc123', {
+        status: TaskStatus.DONE,
+        version: 1,
+      });
+
+      const updateArgs = repo.updateWithVersion.mock.calls[0];
+      expect(updateArgs[2].isOverdue).toBe(false);
+      expect(updateArgs[2].daysToDue).toBeNull();
+    });
+
+    it('recomputes isOverdue=false when due_at is moved to a future date', async () => {
+      const current = makeFakeTask({
+        status: TaskStatus.IN_PROGRESS,
+        version: 1,
+        dueAt: new Date('2026-03-15'),
+        isOverdue: true,
+        daysToDue: -17,
+      });
+      repo.findByUid.mockResolvedValue(current);
+      repo.updateWithVersion.mockResolvedValue(makeFakeTask({ version: 2 }));
+      repo.insertProgressLog.mockResolvedValue(undefined);
+
+      await service.updateTask('user_1', 'task_abc123', {
+        due_at: '2026-05-15',
+        version: 1,
+      });
+
+      const updateArgs = repo.updateWithVersion.mock.calls[0];
+      expect(updateArgs[2].isOverdue).toBe(false);
+      expect(updateArgs[2].daysToDue).toBeGreaterThan(0);
+    });
+
+    it('clears overdueNotifiedLeaderAt when due_at is moved to a future date', async () => {
+      const current = makeFakeTask({
+        status: TaskStatus.IN_PROGRESS,
+        version: 1,
+        dueAt: new Date('2026-03-15'),
+        isOverdue: true,
+        overdueNotifiedLeaderAt: new Date('2026-03-20'),
+      });
+      repo.findByUid.mockResolvedValue(current);
+      repo.updateWithVersion.mockResolvedValue(makeFakeTask({ version: 2 }));
+      repo.insertProgressLog.mockResolvedValue(undefined);
+
+      await service.updateTask('user_1', 'task_abc123', {
+        due_at: '2026-05-15',
+        version: 1,
+      });
+
+      const updateArgs = repo.updateWithVersion.mock.calls[0];
+      expect(updateArgs[2].overdueNotifiedLeaderAt).toBeNull();
+    });
   });
 
   describe('delayTask', () => {
-    it('updates due_at and delay_reason', async () => {
-      const current = makeFakeTask({ version: 1 });
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-04-01T00:00:00+08:00'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('updates due_at and delay_reason without changing month_bucket', async () => {
+      const current = makeFakeTask({ version: 1, dueAt: new Date('2026-04-15'), delayCount: 0 });
       repo.findByUid.mockResolvedValue(current);
 
       const delayed = makeFakeTask({
         version: 2,
         dueAt: new Date('2026-05-01'),
         delayReason: 'Waiting for vendor',
+        delayCount: 1,
       });
       repo.updateWithVersion.mockResolvedValue(delayed);
       repo.insertProgressLog.mockResolvedValue(undefined);
@@ -264,9 +462,100 @@ describe('TaskService', () => {
       const updateArgs = repo.updateWithVersion.mock.calls[0];
       expect(updateArgs[2].dueAt).toEqual(new Date('2026-05-01'));
       expect(updateArgs[2].delayReason).toBe('Waiting for vendor');
-      expect(updateArgs[2].monthBucket).toBe('2026-05');
+      expect(updateArgs[2].monthBucket).toBeUndefined();
 
       expect(repo.insertProgressLog).toHaveBeenCalledOnce();
+    });
+
+    it('rejects new_due_at earlier than today', async () => {
+      const current = makeFakeTask({ version: 1, dueAt: new Date('2026-03-10') });
+      repo.findByUid.mockResolvedValue(current);
+
+      await expect(
+        service.delayTask('user_1', 'task_abc123', { new_due_at: '2026-03-15' }),
+      ).rejects.toMatchObject({
+        businessCode: ErrorCode.INVALID_PARAMS,
+        status: HttpStatus.BAD_REQUEST,
+      });
+
+      expect(repo.updateWithVersion).not.toHaveBeenCalled();
+    });
+
+    it('rejects new_due_at earlier than current due_at', async () => {
+      const current = makeFakeTask({ version: 1, dueAt: new Date('2026-04-20') });
+      repo.findByUid.mockResolvedValue(current);
+
+      await expect(
+        service.delayTask('user_1', 'task_abc123', { new_due_at: '2026-04-15' }),
+      ).rejects.toMatchObject({
+        businessCode: ErrorCode.INVALID_PARAMS,
+        status: HttpStatus.BAD_REQUEST,
+      });
+
+      expect(repo.updateWithVersion).not.toHaveBeenCalled();
+    });
+
+    it('increments delay_count by 1 on success', async () => {
+      const current = makeFakeTask({ version: 1, dueAt: new Date('2026-04-15'), delayCount: 2 });
+      repo.findByUid.mockResolvedValue(current);
+
+      const delayed = makeFakeTask({ version: 2, dueAt: new Date('2026-05-01'), delayCount: 3 });
+      repo.updateWithVersion.mockResolvedValue(delayed);
+      repo.insertProgressLog.mockResolvedValue(undefined);
+
+      await service.delayTask('user_1', 'task_abc123', { new_due_at: '2026-05-01' });
+
+      const updateArgs = repo.updateWithVersion.mock.calls[0];
+      expect(updateArgs[2].delayCount).toBe(3);
+    });
+
+    it('starts delay_count from 0 when null', async () => {
+      const current = makeFakeTask({ version: 1, dueAt: new Date('2026-04-15'), delayCount: null });
+      repo.findByUid.mockResolvedValue(current);
+
+      const delayed = makeFakeTask({ version: 2, dueAt: new Date('2026-05-01'), delayCount: 1 });
+      repo.updateWithVersion.mockResolvedValue(delayed);
+      repo.insertProgressLog.mockResolvedValue(undefined);
+
+      await service.delayTask('user_1', 'task_abc123', { new_due_at: '2026-05-01' });
+
+      const updateArgs = repo.updateWithVersion.mock.calls[0];
+      expect(updateArgs[2].delayCount).toBe(1);
+    });
+
+    it('recomputes isOverdue=false and daysToDue>0 after delay to future date', async () => {
+      const current = makeFakeTask({
+        version: 1,
+        dueAt: new Date('2026-03-20'),
+        isOverdue: true,
+        daysToDue: -12,
+      });
+      repo.findByUid.mockResolvedValue(current);
+      repo.updateWithVersion.mockResolvedValue(makeFakeTask({ version: 2, dueAt: new Date('2026-05-01') }));
+      repo.insertProgressLog.mockResolvedValue(undefined);
+
+      await service.delayTask('user_1', 'task_abc123', { new_due_at: '2026-05-01' });
+
+      const updateArgs = repo.updateWithVersion.mock.calls[0];
+      expect(updateArgs[2].isOverdue).toBe(false);
+      expect(updateArgs[2].daysToDue).toBeGreaterThan(0);
+    });
+
+    it('clears overdueNotifiedLeaderAt after delay so leader can be notified again', async () => {
+      const current = makeFakeTask({
+        version: 1,
+        dueAt: new Date('2026-03-20'),
+        isOverdue: true,
+        overdueNotifiedLeaderAt: new Date('2026-03-25'),
+      });
+      repo.findByUid.mockResolvedValue(current);
+      repo.updateWithVersion.mockResolvedValue(makeFakeTask({ version: 2, dueAt: new Date('2026-05-01') }));
+      repo.insertProgressLog.mockResolvedValue(undefined);
+
+      await service.delayTask('user_1', 'task_abc123', { new_due_at: '2026-05-01' });
+
+      const updateArgs = repo.updateWithVersion.mock.calls[0];
+      expect(updateArgs[2].overdueNotifiedLeaderAt).toBeNull();
     });
   });
 });

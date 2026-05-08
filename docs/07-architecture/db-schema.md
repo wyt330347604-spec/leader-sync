@@ -51,7 +51,8 @@ month_bucket                varchar(7)      NOT NULL  -- YYYY-MM
 source_month                varchar(7)
 is_carried_over             bool            DEFAULT false
 carried_from_task_uid       varchar(64)     REFERENCES task(task_uid)
-carry_over_count            int             DEFAULT 0
+carry_over_count            int             DEFAULT 0       -- 月结递增（与延期解耦）
+delay_count                 int             NOT NULL DEFAULT 0  -- 延期次数（每次 POST /delay +1）
 
 monthly_commitment_flag     bool            DEFAULT false
 boss_attention_flag         bool            DEFAULT false
@@ -211,6 +212,21 @@ manager_user_id     varchar(128)
 manager_name        varchar(128)
 synced_at           timestamptz     NOT NULL DEFAULT now()
 ```
+
+### 2.10 user_notification_preference
+
+每用户的飞书消息推送偏好。无记录视为默认（全部开启）。
+
+```
+id                       bigserial      PRIMARY KEY
+user_id                  varchar(128)   NOT NULL UNIQUE
+daily_overdue_enabled    boolean        NOT NULL DEFAULT false  -- 每日 10:00 延期任务提醒（默认关闭，需用户主动开启）
+weekly_summary_enabled   boolean        NOT NULL DEFAULT true   -- 每周一 9:00 周报（默认开启）
+created_at               timestamptz    NOT NULL DEFAULT now()
+updated_at               timestamptz    NOT NULL DEFAULT now()
+```
+
+> Leader 周报（下属延期数量统计）属于履职信息，不在用户开关范围内，每周一 9:00 强制推送。
 
 ## 3. 建议索引
 

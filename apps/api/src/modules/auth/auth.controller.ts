@@ -88,4 +88,30 @@ export class AuthController {
     }
     return profile;
   }
+
+  // DEV-ONLY: sign a JWT for any user_id and set the cookie. Used by e2e
+  // screenshot scripts. Returns 404 unless NODE_ENV=development.
+  @Post('dev-login')
+  @HttpCode(200)
+  async devLogin(
+    @Body('user_id') userId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (process.env.NODE_ENV !== 'development') {
+      res.status(404);
+      return { code: 404, message: 'Not Found' };
+    }
+    if (!userId) {
+      res.status(400);
+      return { code: 400, message: 'user_id required' };
+    }
+    const { token, user } = await this.authService.devSignToken(userId);
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+    return { token, user };
+  }
 }

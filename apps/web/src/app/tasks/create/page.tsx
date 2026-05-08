@@ -3,7 +3,10 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
+import { LoadingScreen } from "@/components/loading-screen";
 import { ensureAuth } from '@/lib/auth';
+import { useMe } from '@/hooks/use-me';
+import { DatePicker } from '@/components/date-picker';
 
 interface CollaboratorEntry {
   readonly user_id: string;
@@ -15,11 +18,6 @@ interface UserSearchResult {
   readonly userName: string;
   readonly deptName: string | null;
 }
-
-const TASK_TYPES = [
-  { value: 'carry_over', label: '上月遗留' },
-  { value: 'new', label: '本月新增' },
-];
 
 const PRIORITIES = [
   { value: 'urgent_important', label: '重要紧急' },
@@ -40,7 +38,6 @@ export default function TaskCreatePage() {
   const [error, setError] = useState('');
 
   const [title, setTitle] = useState('');
-  const [taskType, setTaskType] = useState('new');
   const [priority, setPriority] = useState('urgent_important');
   const [assigneeSearch, setAssigneeSearch] = useState('');
   const [assigneeResults, setAssigneeResults] = useState<readonly UserSearchResult[]>([]);
@@ -58,9 +55,18 @@ export default function TaskCreatePage() {
   const [collabSearch, setCollabSearch] = useState('');
   const [collabResults, setCollabResults] = useState<readonly UserSearchResult[]>([]);
 
+  const { data: me } = useMe();
+
   useEffect(() => {
     ensureAuth().then(setAuthed);
   }, []);
+
+  // Default assignee = current user
+  useEffect(() => {
+    if (me && !selectedAssignee) {
+      setSelectedAssignee({ userId: me.user_id, userName: me.user_name ?? '我' });
+    }
+  }, [me, selectedAssignee]);
 
   // Fetch projects
   useEffect(() => {
@@ -111,7 +117,6 @@ export default function TaskCreatePage() {
     try {
       const body: Record<string, unknown> = {
         title,
-        task_type: taskType,
         priority,
         assignee_user_id: selectedAssignee?.userId ?? '',
         due_at: dueAt ? `${dueAt}T23:59:59+08:00` : undefined,
@@ -122,13 +127,11 @@ export default function TaskCreatePage() {
       if (projectUid) body.project_uid = projectUid;
       if (collaborators.length > 0) body.collaborators = collaborators;
 
-      const result: any = await apiFetch('/api/v1/tasks', {
+      await apiFetch('/api/v1/tasks', {
         method: 'POST',
         body: JSON.stringify(body),
       });
-
-      const uid = result.task_uid || result.taskUid;
-      router.push(`/tasks/${uid}`);
+      router.push('/tasks');
     } catch (err: any) {
       setError(err.message || '创建失败');
     } finally {
@@ -137,11 +140,7 @@ export default function TaskCreatePage() {
   }
 
   if (!authed) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[var(--text-muted)]">正在验证登录状态...</p>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return (
@@ -176,34 +175,19 @@ export default function TaskCreatePage() {
           />
         </div>
 
-        {/* Task type & Priority */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="task_type" className={labelClass}>任务类型</label>
-            <select
-              id="task_type"
-              value={taskType}
-              onChange={(e) => setTaskType(e.target.value)}
-              className={inputClass}
-            >
-              {TASK_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="priority" className={labelClass}>优先级</label>
-            <select
-              id="priority"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              className={inputClass}
-            >
-              {PRIORITIES.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-          </div>
+        {/* Priority */}
+        <div>
+          <label htmlFor="priority" className={labelClass}>优先级</label>
+          <select
+            id="priority"
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+            className={inputClass}
+          >
+            {PRIORITIES.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
         </div>
 
         {/* Assignee search */}
@@ -263,24 +247,11 @@ export default function TaskCreatePage() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label htmlFor="due_at" className={labelClass}>截止日期 *</label>
-            <input
-              id="due_at"
-              type="date"
-              required
-              value={dueAt}
-              onChange={(e) => setDueAt(e.target.value)}
-              className="w-full rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-primary)] [color-scheme:dark] transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[var(--accent-blue)]/40 focus:border-[var(--accent-blue)]/50"
-            />
+            <DatePicker id="due_at" value={dueAt} onChange={setDueAt} placeholder="选择截止日期" />
           </div>
           <div>
             <label htmlFor="start_at" className={labelClass}>开始日期</label>
-            <input
-              id="start_at"
-              type="date"
-              value={startAt}
-              onChange={(e) => setStartAt(e.target.value)}
-              className="w-full rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-primary)] [color-scheme:dark] transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[var(--accent-blue)]/40 focus:border-[var(--accent-blue)]/50"
-            />
+            <DatePicker id="start_at" value={startAt} onChange={setStartAt} placeholder="选择开始日期" />
           </div>
         </div>
 

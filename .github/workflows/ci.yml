@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '10.32.1'
+
+jobs:
+  ci:
+    name: Lint + Test + Visual Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: leader_sync_dev
+          POSTGRES_USER: leader_sync
+          POSTGRES_PASSWORD: leader_sync
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U leader_sync -d leader_sync_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages (db, shared-types, domain-core)
+        run: |
+          cd packages/shared-types && npx tsc --module commonjs --moduleResolution node --outDir dist
+          cd ../domain-core && npx tsc --module commonjs --moduleResolution node --outDir dist
+          cd ../../db && npx tsc --project tsconfig.build.json --module commonjs --moduleResolution node
+
+      - name: Lint
+        run: pnpm --filter @leader-sync/api lint
+
+      - name: Backend tests (vitest)
+        run: pnpm --filter @leader-sync/api test
+
+      - name: Frontend tests (vitest + RTL)
+        run: pnpm --filter @leader-sync/web test
+
+      - name: Build api + web
+        run: |
+          pnpm --filter @leader-sync/api build
+          pnpm --filter @leader-sync/web build
+
+      - name: Push schema + seed fixtures
+        env:
+          DATABASE_URL: postgresql://leader_sync:leader_sync@localhost:5432/leader_sync_dev
+        run: |
+          cd db
+          pnpm exec drizzle-kit push --force
+          pnpm exec tsx seed/fixtures.ts
+
+      - name: Start API + Web (background)
+        env:
+          NODE_ENV: development
+          DATABASE_URL: postgresql://leader_sync:leader_sync@localhost:5432/leader_sync_dev
+          REDIS_URL: redis://localhost:6379
+          APP_BASE_URL: http://localhost:3000
+        run: |
+          mkdir -p logs
+          nohup node apps/api/dist/main.js > logs/ci-api.log 2>&1 &
+          echo "API_PID=$!" >> $GITHUB_ENV
+          nohup pnpm --filter @leader-sync/web start -- --port 3000 > logs/ci-web.log 2>&1 &
+          echo "WEB_PID=$!" >> $GITHUB_ENV
+          # Wait for both to be reachable
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3001/api/v1/auth/me -o /dev/null -w "%{http_code}" | grep -q "401"; then
+              echo "✓ API up"; break
+            fi
+            sleep 1
+          done
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000 -o /dev/null; then
+              echo "✓ Web up"; break
+            fi
+            sleep 1
+          done
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @leader-sync/web exec playwright install --with-deps chromium
+
+      - name: Run visual audit
+        run: pnpm --filter @leader-sync/web exec playwright test
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          E2E_API_URL: http://localhost:3001
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ github.run_id }}
+          path: |
+            screenshots/
+            test-results/
+            playwright-report/
+            logs/
+          retention-days: 14
+
+      - name: Stop services
+        if: always()
+        run: |
+          [ -n "$API_PID" ] && kill $API_PID 2>/dev/null || true
+          [ -n "$WEB_PID" ] && kill $WEB_PID 2>/dev/null || true

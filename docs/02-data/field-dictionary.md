@@ -51,13 +51,17 @@
 | completed_at | 实际完成时间 | 实际完成日期 | timestamptz | 否 | dual | bitable/web/task | 完成时间 |
 | blocked_reason | 阻塞原因 | 新增 | text | 否 | dual | web/card | 阻塞时填写 |
 | delay_reason | 延期原因 | 新增 | text | 否 | dual | web/card | 延期时填写 |
-| days_to_due | 剩余天数 | 剩余天数 | int | 否 | system | system | 服务端计算回写 |
-| is_overdue | 是否延期 | 是否延期 | bool | 否 | system | system | 服务端计算回写 |
+| days_to_due | 剩余天数 | 剩余天数 | int | 否 | system | system | 服务端计算回写；任务完成/搁置/归档时清空（NULL）；改 due_at / 延期时实时重算；overdue-reminder 作业每日 10:00 兜底 |
+| is_overdue | 是否延期 | 是否延期 | bool | 否 | system | system | 服务端计算回写；任务完成/搁置/归档时立即重置为 false；改 due_at / 延期时按新 due_at 实时重算；overdue-reminder 作业每日 10:00 兜底 |
+| overdue_notified_leader_at | leader 已通知时间 | 新增 | timestamptz | 否 | system | system | 历史字段（曾用于"首次延期通知 leader"逻辑）。当前 leader 提醒已改为每周一 9:00 聚合周报，此字段不再被新逻辑写入，但保留以备回滚 |
+| user_notification_preference.daily_overdue_enabled | 每日延期提醒开关 | 新增 | bool | 否 | user | web | 用户在 /settings/notifications 自助管理；缺失记录视为 false（默认关闭，需用户主动开启） |
+| user_notification_preference.weekly_summary_enabled | 周报开关 | 新增 | bool | 否 | user | web | 同上；缺失记录视为 true（默认开启） |
 | month_bucket | 当前归属月份 | 新增 | string | B | system | system/web | 格式 YYYY-MM |
 | source_month | 来源月份 | 新增 | string | 否 | system | system | 最早来源月份 |
 | is_carried_over | 是否继承 | 新增 | bool | 否 | system | system | 月结生成 |
 | carried_from_task_uid | 继承来源任务ID | 新增 | string | 否 | system | system | 关联上月任务（继承时新建记录，此字段指向原任务） |
-| carry_over_count | 继承次数 | 新增 | int | 否 | system | system | 统计用途 |
+| carry_over_count | 继承次数 | 新增 | int | 否 | system | system | 月结 worker 月初 +1，仅记录"自然月跨越"，与延期无关 |
+| delay_count | 延期次数 | 新增 | int | 否 | system | system | 每次调用 POST /tasks/:uid/delay 时 +1，与 carry_over_count 互不干扰；UI ≥3 次显示警示 |
 | monthly_commitment_flag | 本月承诺完成 | 新增 | bool | 否 | system | bitable/web | leader 承诺项 |
 | boss_attention_flag | 老板关注 | 新增 | bool | 否 | 管理标记 | boss/pmo | 管理标记字段，仅限老板/PMO 编辑，不属于普通业务字段 |
 | monthly_close_locked | 月结锁定 | 新增 | bool | 否 | system | system | 上月快照锁定标记 |

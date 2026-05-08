@@ -1,8 +1,20 @@
 'use client';
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import useSWR from 'swr';
+import { toast } from 'sonner';
 import { apiFetch } from '@/lib/api-client';
+import { LoadingScreen } from "@/components/loading-screen";
 import { ensureAuth } from '@/lib/auth';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Project {
   id: number;
@@ -76,7 +88,7 @@ function ProjectsContent() {
       await mutate();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      alert(`创建失败: ${message}`);
+      toast.error(`创建失败: ${message}`);
     } finally {
       setSubmitting(false);
     }
@@ -96,25 +108,28 @@ function ProjectsContent() {
       await mutate();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      alert(`更新失败: ${message}`);
+      toast.error(`更新失败: ${message}`);
     } finally {
       setSubmitting(false);
     }
   }, [editName, submitting, mutate]);
 
-  const handleDelete = useCallback(async (uid: string, name: string) => {
-    if (!confirm(`确定要删除项目「${name}」吗？此操作不可撤销。`)) return;
+  const [deleteTarget, setDeleteTarget] = useState<{ uid: string; name: string } | null>(null);
+
+  const handleDeleteConfirmed = useCallback(async () => {
+    if (!deleteTarget) return;
     setSubmitting(true);
     try {
-      await apiFetch(`/api/v1/projects/${uid}`, { method: 'DELETE' });
+      await apiFetch(`/api/v1/projects/${deleteTarget.uid}`, { method: 'DELETE' });
       await mutate();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      alert(`删除失败: ${message}`);
+      toast.error(`删除失败: ${message}`);
     } finally {
       setSubmitting(false);
+      setDeleteTarget(null);
     }
-  }, [mutate]);
+  }, [deleteTarget, mutate]);
 
   const handleSetDefault = useCallback(async (uid: string) => {
     setSubmitting(true);
@@ -123,7 +138,7 @@ function ProjectsContent() {
       await mutate();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      alert(`设为默认失败: ${message}`);
+      toast.error(`设为默认失败: ${message}`);
     } finally {
       setSubmitting(false);
     }
@@ -140,11 +155,7 @@ function ProjectsContent() {
   }, []);
 
   if (!authed) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-[var(--text-muted)]">正在验证登录状态...</p>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return (
@@ -274,7 +285,7 @@ function ProjectsContent() {
                       </button>
                       {!p.isDefault && (
                         <button
-                          onClick={() => handleDelete(p.projectUid, p.name)}
+                          onClick={() => setDeleteTarget({ uid: p.projectUid, name: p.name })}
                           disabled={submitting}
                           className="rounded-full p-2 text-[#ef4444] transition-all duration-300 ease-out hover:bg-[#ef4444]/10 disabled:opacity-50"
                           title="删除"
@@ -290,6 +301,32 @@ function ProjectsContent() {
           ))}
         </div>
       )}
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent className="bg-[var(--bg-card)] border-[var(--border)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[var(--text-primary)]">
+              确认删除项目「{deleteTarget?.name}」？
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[var(--text-secondary)]">
+              此操作不可撤销。该项目下的任务不会被删除，但将失去项目归属。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={submitting}
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteConfirmed();
+              }}
+              className="bg-[var(--accent-red)] text-white hover:bg-[var(--accent-red)]/90"
+            >
+              {submitting ? '删除中...' : '确认删除'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

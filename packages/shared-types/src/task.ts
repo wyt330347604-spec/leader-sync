@@ -3,7 +3,7 @@ import type { TaskType, Priority, AssignmentType, TaskStatus } from './enums';
 export interface CreateTaskDto {
   title: string;
   detail?: string;
-  task_type: TaskType;
+  task_type?: TaskType;
   priority: Priority;
   assignee_user_id: string;
   due_at: string;

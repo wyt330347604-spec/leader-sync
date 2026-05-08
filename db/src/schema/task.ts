@@ -52,6 +52,7 @@ export const task = pgTable(
     isCarriedOver: boolean('is_carried_over').default(false),
     carriedFromTaskUid: varchar('carried_from_task_uid', { length: 64 }),
     carryOverCount: integer('carry_over_count').default(0),
+    delayCount: integer('delay_count').notNull().default(0),
     monthlyCommitmentFlag: boolean('monthly_commitment_flag').default(false),
     bossAttentionFlag: boolean('boss_attention_flag').default(false),
     overdueNotifiedLeaderAt: timestamp('overdue_notified_leader_at', { withTimezone: true }),

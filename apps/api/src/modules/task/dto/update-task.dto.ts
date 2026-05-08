@@ -1,5 +1,5 @@
 import { IsString, IsOptional, IsDateString, IsIn, IsInt, IsNumber, Min, Max } from 'class-validator';
-import { TaskStatus, type UpdateTaskDto } from '@leader-sync/shared-types';
+import { TaskStatus, Priority, type UpdateTaskDto } from '@leader-sync/shared-types';
 
 export class UpdateTaskRequestDto implements UpdateTaskDto {
   @IsInt()
@@ -16,6 +16,10 @@ export class UpdateTaskRequestDto implements UpdateTaskDto {
   @IsIn(Object.values(TaskStatus))
   @IsOptional()
   status?: TaskStatus;
+
+  @IsIn(Object.values(Priority))
+  @IsOptional()
+  priority?: Priority;
 
   @IsNumber()
   @Min(0)

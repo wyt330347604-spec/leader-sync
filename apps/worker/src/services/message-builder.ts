@@ -70,15 +70,31 @@ export function buildOverdueCard(userName: string, tasks: TaskSummary[]): object
   };
 }
 
-export function buildLeaderOverdueNotice(leaderName: string, employeeName: string, taskTitle: string, daysOverdue: number): object {
+export interface MemberOverdueRow {
+  readonly memberName: string;
+  readonly overdueCount: number;
+}
+
+export function buildLeaderWeeklyOverdueDigest(leaderName: string, members: MemberOverdueRow[]): object {
+  const totalCount = members.reduce((s, m) => s + m.overdueCount, 0);
+  const elements: any[] = [
+    { tag: 'div', text: { tag: 'lark_md', content: `**${leaderName}**，本周下属共 **${totalCount}** 项任务延期：` } },
+  ];
+  for (const m of members) {
+    elements.push({
+      tag: 'div',
+      text: { tag: 'lark_md', content: `- ${m.memberName}：${m.overdueCount} 项` },
+    });
+  }
+  elements.push({ tag: 'hr' });
+  elements.push({
+    tag: 'action',
+    actions: [{ tag: 'button', text: { tag: 'plain_text', content: '查看驾驶舱' }, type: 'primary', url: `${config.appBaseUrl}/dashboard` }],
+  });
   return {
     config: { wide_screen_mode: true },
-    header: { title: { tag: 'plain_text', content: '团队成员任务延期通知' }, template: 'orange' },
-    elements: [
-      { tag: 'div', text: { tag: 'lark_md', content: `**${employeeName}** 的任务 **${taskTitle}** 已延期 **${Math.abs(daysOverdue)}** 天。` } },
-      { tag: 'hr' },
-      { tag: 'action', actions: [{ tag: 'button', text: { tag: 'plain_text', content: '查看详情' }, type: 'default', url: `${config.appBaseUrl}/tasks` }] },
-    ],
+    header: { title: { tag: 'plain_text', content: '下属任务延期周报' }, template: 'orange' },
+    elements,
   };
 }
 

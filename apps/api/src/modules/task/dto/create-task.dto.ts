@@ -11,7 +11,8 @@ export class CreateTaskRequestDto implements CreateTaskDto {
   detail?: string;
 
   @IsIn(Object.values(TaskType))
-  task_type!: TaskType;
+  @IsOptional()
+  task_type?: TaskType;
 
   @IsIn(Object.values(Priority))
   priority!: Priority;

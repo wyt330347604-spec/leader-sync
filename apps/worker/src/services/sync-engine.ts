@@ -15,7 +15,7 @@ export function taskToBitableFields(task: any): Record<string, any> {
     '剩余天数': task.daysToDue || 0,
     '是否延期': task.isOverdue ? '已延期' : '正常',
     '归属月份': task.monthBucket || '',
-    '老板关注': task.bossAttentionFlag || false,
+    '重点任务': task.bossAttentionFlag || false,
   };
   if (task.assigneeUserId?.startsWith('ou_')) {
     fields['任务负责人'] = [{ id: task.assigneeUserId }];

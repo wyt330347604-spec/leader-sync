@@ -6,3 +6,8 @@ dist/
 *.log
 .turbo/
 .DS_Store
+logs/
+!logs/.gitkeep
+screenshots/
+test-results/
+playwright-report/

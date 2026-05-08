@@ -2,7 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { DATABASE_TOKEN } from '../../database.module';
 import type { Database } from '@leader-sync/db';
 import { task, taskLeader, taskProgressLog, orgCache, project } from '@leader-sync/db';
-import { eq, and, or, sql, desc, inArray } from 'drizzle-orm';
+import { eq, and, or, sql, asc, desc, inArray, getTableColumns } from 'drizzle-orm';
 
 @Injectable()
 export class TaskRepository {
@@ -100,10 +100,28 @@ export class TaskRepository {
 
     const [items, countResult] = await Promise.all([
       this.db
-        .select()
+        .select(getTableColumns(task))
         .from(task)
+        .leftJoin(project, eq(task.projectUid, project.projectUid))
         .where(where)
-        .orderBy(desc(task.createdAt))
+        .orderBy(
+          // 1. 已完成（done）放最后
+          sql`CASE WHEN ${task.status} = 'done' THEN 1 ELSE 0 END`,
+          // 2. 优先级（标准 Eisenhower 四档：重要紧急 → 重要不紧急 → 紧急不重要 → 不紧急不重要）
+          sql`CASE ${task.priority}
+                WHEN 'urgent_important' THEN 1
+                WHEN 'important_not_urgent' THEN 2
+                WHEN 'urgent_not_important' THEN 3
+                WHEN 'not_urgent_not_important' THEN 4
+                ELSE 5 END`,
+          // 3. 项目分组：默认项目（is_default=true）排前；其他按名字升序；NULL 项目排最后
+          sql`COALESCE(${project.isDefault}, false) DESC`,
+          sql`${project.name} ASC NULLS LAST`,
+          // 4. 同档内按截止时间正序
+          asc(task.dueAt),
+          // 5. 已完成段内按完成时间倒序
+          desc(task.completedAt),
+        )
         .limit(pageSize)
         .offset((page - 1) * pageSize),
       this.db

@@ -118,6 +118,124 @@
 - 跳过确认直接执行 → 回退变更，重新确认
 - 未自测就交付 → 视为未完成
 
+## Local Dev（本地开发环境，QC Protocol 的物质基础）
+
+### 架构
+
+```
+┌─ 本地 Mac ─────────────┐         ┌─ 服务器 47.84.35.154 ──────┐
+│ pnpm api dev :3001     │         │ leader-sync (生产)         │
+│ pnpm web dev :3000     │         │   postgres :5432           │
+│                        │         │   redis    :6379           │
+│ DB connection:         │  SSH    │                            │
+│ localhost:5432 ────────┼─tunnel→ │ leader-sync-dev (新加)     │
+│ localhost:6379 ────────┼─tunnel→ │   postgres-dev :5433       │
+│                        │         │   redis-dev    :6380       │
+│ playwright + screenshot│         │                            │
+└────────────────────────┘         └────────────────────────────┘
+```
+
+**所有 docker 容器都在服务器上运行**。本地通过 SSH 端口转发把服务器上的 dev DB 当成本地 DB 用。生产 DB（5432）和 dev DB（5433）端口不同，互不干扰。
+
+### 一次性：服务器上起 dev 容器
+
+```bash
+pnpm server:dev:up       # rsync docker-compose.dev.yml + docker compose up -d
+```
+
+会在服务器创建 `/opt/leader-sync-dev/` 目录，启动 `leader-sync-dev-postgres-dev-1` 和 `redis-dev` 容器，绑定 127.0.0.1:5433/6380（不对外）。
+
+### 日常：本地开发流程
+
+```bash
+# 1. 起 SSH 隧道（后台）
+pnpm dev:tunnel           # localhost:5432→server:5433, localhost:6379→server:6380
+
+# 2. 应用 schema + 灌 seed 数据（也包括确认隧道在）
+pnpm dev:up
+
+# 3. 两个终端起 API/Web
+NODE_ENV=development DATABASE_URL='postgresql://leader_sync:leader_sync@localhost:5432/leader_sync_dev' \
+  pnpm --filter @leader-sync/api dev      # T1
+pnpm --filter @leader-sync/web dev         # T2
+
+# 4. 跑截图
+cd apps/web && pnpm e2e:screenshot         # → screenshots/{timestamp}/*.png
+```
+
+### 进入应用（dev-login 绕过飞书 OAuth）
+
+打开 `http://localhost:3000`，浏览器控制台执行：
+```js
+fetch('/api/v1/auth/dev-login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ user_id: 'ou_dev_harvey' }),
+}).then(() => location.reload());
+```
+
+dev-login 端点仅在 `NODE_ENV=development` 下注册路由，生产返回 404。
+
+### 关闭/重置
+
+```bash
+pnpm dev:tunnel:down       # 关 SSH 隧道
+pnpm dev:tunnel:status     # 查隧道状态
+pnpm dev:reset             # 服务器上清空 volume + 重启容器 + 重新 seed
+pnpm dev:seed              # 仅重新 seed（保留 schema/容器）
+```
+
+### Fixtures 内容
+
+- 5 个用户：`ou_dev_harvey`(Harvey/admin)、`ou_dev_boss`(Tobi/boss)、`ou_dev_alice/bob/carol`
+- 3 个项目：公司建设(默认) / 印尼电商 / 印度金融
+- 20 个任务：覆盖所有 status × priority × delay_count × is_carried_over × boss_attention_flag 的视觉态
+
+### 同步生产日志
+
+```bash
+pnpm logs:pull              # 全同步到 logs/prod/
+pnpm logs:pull --tail 200   # tail 最近 200 行
+```
+
+## QC Protocol（质量控制协议 — 铁律，与交付流程同级）
+
+**这三条是铁律。每条都必须严格执行；做不到要明确告知用户而不是装作做了。**
+
+### 1. 先证伪，后修复（Red-Light-First）
+
+遇到任何 bug、回归、行为偏差，**必须先写一个能稳定复现错误的测试用例**：
+- **后端**：vitest 单测（`apps/api`），mock service / repository 复现错误路径。
+- **前端**：vitest + React Testing Library（`apps/web`，已配置）；UI 行为级 bug 用 playwright e2e。
+- **流程**：`pnpm test`（或 `pnpm vitest <path>`）看到 RED → 改代码 → 再看 GREEN。**严禁在没有看到 RED 之前修改任何业务逻辑代码**（lint/格式不算）。
+- 修复 commit 必须连同测试一起提交，作为回归保护。
+
+### 2. UI 改动必须运行时审计（Screenshot Audit）
+
+涉及 UI 的任何改动（布局、组件、样式、交互），交付前**必须**：
+
+1. 启动本地 dev（`pnpm --filter @leader-sync/web dev:tee`，写入 `logs/web-dev.log`）。
+2. 运行截图脚本：`cd apps/web && pnpm e2e:screenshot`（依赖 `NODE_ENV=development` 启动的本地 API + 本地数据库连接）。
+3. 截图输出到 `screenshots/{timestamp}/<page>.png`。
+4. **主动 Read 截图**确认每个改动页面的实际渲染。
+5. 在交付报告中写明：**"我已通过 `screenshots/<timestamp>/` 下的截图确认 UI 表现符合预期"**。
+
+> 截图脚本通过后端 `POST /api/v1/auth/dev-login`（仅 `NODE_ENV=development` 启用）注入 JWT cookie 绕过飞书 OAuth。生产环境此端点不存在。
+
+### 3. 排查问题必须先读日志（Log-First Diagnosis）
+
+排查任何故障、500 错误、性能异常前：
+
+1. **先同步生产日志**：`scripts/pull-logs.sh`（rsync 生产 `/var/log/leader-{api,web,worker}.log` 到本地 `logs/prod/`）。
+2. **必读** `logs/prod/leader-api.log` 和相关日志的最近 200-500 行（`tail -n 500 logs/prod/leader-api.log`）。
+3. 找到具体错误堆栈、trace_id、SQL 错误后再开始改代码。
+4. **严禁基于猜测修改代码**——必须能在日志里指认根因。
+
+### 违反后果
+- 没看到 RED 就改逻辑 → 回退改动，先补测试。
+- UI 改动没截图就交付 → 视为未完成，必须补截图。
+- 没读日志就改代码 → 报告无效，重新走流程。
+
 ## Forbidden
 
 - 禁止把“剩余天数”“是否延期”只做成多维表格公式而不落库

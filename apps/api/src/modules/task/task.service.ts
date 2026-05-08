@@ -21,6 +21,28 @@ import {
   type TaskListQuery,
 } from '@leader-sync/shared-types';
 
+const DONE_STATUSES: ReadonlySet<string> = new Set([
+  TaskStatus.DONE,
+  TaskStatus.SHELVED,
+  TaskStatus.CLOSED,
+]);
+
+// Recompute is_overdue / days_to_due eagerly on writes that change status or due_at.
+// Done/shelved/closed tasks have no overdue concept.
+function computeOverdueFields(
+  dueAt: Date,
+  status: string,
+): { isOverdue: boolean; daysToDue: number | null } {
+  if (DONE_STATUSES.has(status)) {
+    return { isOverdue: false, daysToDue: null };
+  }
+  const diffMs = dueAt.getTime() - Date.now();
+  return {
+    isOverdue: diffMs < 0,
+    daysToDue: Math.ceil(diffMs / 86_400_000),
+  };
+}
+
 @Injectable()
 export class TaskService {
   constructor(private readonly taskRepository: TaskRepository) {}
@@ -29,6 +51,7 @@ export class TaskService {
     const taskUid = generateTaskUid();
 
     const assignee = await this.taskRepository.findOrgUser(dto.assignee_user_id);
+    const issuer = await this.taskRepository.findOrgUser(userId);
 
     const monthBucket = dto.due_at.slice(0, 7);
     const status = dto.assignee_user_id ? TaskStatus.NOT_STARTED : TaskStatus.PENDING;
@@ -40,11 +63,17 @@ export class TaskService {
       projectUid = defaultProject?.projectUid ?? null;
     }
 
+    // Leader = 创建者(issuer)的部门负责人；如创建者本身就是顶层（无 manager），fallback 到自己
+    const leaderUserId = issuer?.managerUserId || userId;
+    const leaderName = issuer?.managerUserId
+      ? issuer?.managerName ?? null
+      : issuer?.userName ?? null;
+
     const created = await this.taskRepository.insert({
       taskUid,
       title: dto.title,
       detail: dto.detail ?? null,
-      taskType: dto.task_type,
+      taskType: dto.task_type ?? 'new',
       priority: dto.priority,
       status,
       progressPercent: 0,
@@ -54,8 +83,8 @@ export class TaskService {
       assigneeManagerName: assignee?.managerName ?? null,
       assigneeDeptId: assignee?.deptId ?? null,
       assigneeDeptName: assignee?.deptName ?? null,
-      leaderUserId: assignee?.managerUserId ?? userId,
-      leaderName: assignee?.managerName ?? null,
+      leaderUserId,
+      leaderName,
       issuerUserId: userId,
       assignerUserId: userId,
       assignmentType: dto.assignment_type ?? 'boss_assign',
@@ -101,7 +130,8 @@ export class TaskService {
   async updateTask(userId: string, taskUid: string, dto: UpdateTaskDto) {
     const current = await this.getTask(taskUid);
 
-    if (dto.status) {
+    // Only validate when status actually changes; same-status patch is a no-op transition.
+    if (dto.status && dto.status !== current.status) {
       try {
         validateTransition(current.status, dto.status, {
           stall_reason: dto.stall_reason,
@@ -139,6 +169,20 @@ export class TaskService {
     if (dto.status === TaskStatus.DONE) {
       updateValues.progressPercent = 100;
       updateValues.completedAt = dto.completed_at ? new Date(dto.completed_at) : new Date();
+    }
+
+    // Recompute is_overdue / days_to_due when status or due_at changes.
+    // When the task transitions out of overdue, also clear overdue_notified_leader_at
+    // so the leader can be notified again on the next overdue cycle.
+    if (dto.status !== undefined || dto.due_at !== undefined) {
+      const effectiveStatus = (dto.status ?? current.status) as string;
+      const effectiveDueAt = (updateValues.dueAt as Date | undefined) ?? current.dueAt;
+      const { isOverdue, daysToDue } = computeOverdueFields(effectiveDueAt, effectiveStatus);
+      updateValues.isOverdue = isOverdue;
+      updateValues.daysToDue = daysToDue;
+      if (!isOverdue) {
+        updateValues.overdueNotifiedLeaderAt = null;
+      }
     }
 
     const updated = await this.taskRepository.updateWithVersion(
@@ -191,6 +235,9 @@ export class TaskService {
         progressPercent: 100,
         completedAt: dto.completed_at ? new Date(dto.completed_at) : new Date(),
         latestProgress: dto.latest_progress ?? current.latestProgress,
+        isOverdue: false,
+        daysToDue: null,
+        overdueNotifiedLeaderAt: null,
         updatedBy: userId,
       },
     );
@@ -259,14 +306,54 @@ export class TaskService {
   async delayTask(userId: string, taskUid: string, dto: DelayTaskDto) {
     const current = await this.getTask(taskUid);
 
+    const newDueAt = new Date(dto.new_due_at);
+
+    // Asia/Shanghai 当日 00:00（零点）
+    const nowShanghai = new Date(
+      new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }),
+    );
+    const todayShanghaiStart = new Date(
+      nowShanghai.getFullYear(),
+      nowShanghai.getMonth(),
+      nowShanghai.getDate(),
+    );
+
+    if (newDueAt < todayShanghaiStart) {
+      throw new BusinessException(
+        ErrorCode.INVALID_PARAMS,
+        '新截止日期不能早于今天',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (newDueAt < current.dueAt) {
+      throw new BusinessException(
+        ErrorCode.INVALID_PARAMS,
+        '新截止日期不能早于原截止日期',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const nextDelayCount = (current.delayCount ?? 0) + 1;
+    const { isOverdue, daysToDue } = computeOverdueFields(newDueAt, current.status);
+
+    const updateValues: Record<string, unknown> = {
+      dueAt: newDueAt,
+      delayReason: dto.delay_reason || null,
+      delayCount: nextDelayCount,
+      isOverdue,
+      daysToDue,
+      updatedBy: userId,
+    };
+    // Clear leader notification stamp so next overdue cycle re-notifies the leader
+    if (!isOverdue) {
+      updateValues.overdueNotifiedLeaderAt = null;
+    }
+
     const updated = await this.taskRepository.updateWithVersion(
       taskUid,
       current.version,
-      {
-        dueAt: new Date(dto.new_due_at),
-        delayReason: dto.delay_reason || null,
-        updatedBy: userId,
-      },
+      updateValues,
     );
 
     if (!updated) {
@@ -282,7 +369,7 @@ export class TaskService {
       taskUid,
       sourceType: SourceType.API,
       operatorUserId: userId,
-      logText: `Task delayed to ${dto.new_due_at}`,
+      logText: `Task delayed to ${dto.new_due_at} (count=${nextDelayCount})`,
     });
 
     return updated;

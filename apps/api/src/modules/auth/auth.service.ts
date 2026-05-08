@@ -67,6 +67,20 @@ export class AuthService {
     return { token, user: payload };
   }
 
+  // DEV-ONLY: sign a JWT for any user_id without OAuth. Used by playwright e2e
+  // screenshot scripts. The endpoint that calls this is gated by NODE_ENV.
+  async devSignToken(userId: string): Promise<{ token: string; user: JwtPayload }> {
+    const profile = await this.getMe(userId);
+    const payload: JwtPayload = profile ?? {
+      user_id: userId,
+      user_name: 'dev',
+      role: 'employee',
+      dept_id: '',
+    };
+    const token = await this.jwtService.signAsync(payload);
+    return { token, user: payload };
+  }
+
   async getMe(userId: string): Promise<JwtPayload | null> {
     const users = await this.db
       .select()

@@ -1,23 +1,27 @@
 import { createDb } from '@leader-sync/db';
-import { task, orgCache } from '@leader-sync/db';
+import { task, orgCache, userNotificationPreference } from '@leader-sync/db';
 import { and, eq, isNull, notInArray, sql } from 'drizzle-orm';
 import { config } from '../config';
 import { feishuApi } from '../services/feishu-api';
-import { buildOverdueCard, buildLeaderOverdueNotice } from '../services/message-builder';
+import { buildOverdueCard } from '../services/message-builder';
 
 const db = createDb(config.databaseUrl);
 
 export async function runOverdueReminder(): Promise<void> {
-  const now = new Date();
   const DONE_STATUSES = ['done', 'shelved', 'closed'];
 
-  // 1. Refresh derived fields: is_overdue and days_to_due for all active tasks
+  // 1. Refresh derived fields for ALL non-deleted tasks (incl. done/shelved/closed),
+  // so that completed tasks have is_overdue=false and days_to_due=null even if the
+  // service-layer write paths didn't reset them (defense in depth + self-healing).
   await db.execute(sql`
     UPDATE task SET
-      days_to_due = CEIL(EXTRACT(EPOCH FROM (due_at - NOW())) / 86400)::int,
+      days_to_due = CASE WHEN status IN ('done', 'shelved', 'closed') THEN NULL
+                         ELSE CEIL(EXTRACT(EPOCH FROM (due_at - NOW())) / 86400)::int END,
       is_overdue = CASE WHEN due_at < NOW() AND status NOT IN ('done', 'shelved', 'closed') THEN true ELSE false END,
+      overdue_notified_leader_at = CASE WHEN status IN ('done', 'shelved', 'closed') THEN NULL
+                                        ELSE overdue_notified_leader_at END,
       updated_at = NOW()
-    WHERE deleted_at IS NULL AND status NOT IN ('done', 'shelved', 'closed')
+    WHERE deleted_at IS NULL
   `);
 
   // 2. Get all overdue tasks
@@ -33,22 +37,31 @@ export async function runOverdueReminder(): Promise<void> {
     return;
   }
 
-  // 3. Group by assignee -> send reminder to each person
+  // 3. Group by assignee -> send reminder (skip users who opted out)
   const byUser = new Map<string, typeof overdueTasks>();
   for (const t of overdueTasks) {
     if (!byUser.has(t.assigneeUserId)) byUser.set(t.assigneeUserId, []);
     byUser.get(t.assigneeUserId)!.push(t);
   }
 
-  let sentToAssignee = 0, sentToLeader = 0;
+  let sent = 0, skippedOptOut = 0;
 
   for (const [userId, tasks] of byUser) {
     if (!userId.startsWith('ou_')) continue;
 
+    // Check user's notification preference (absent row = default true)
+    const [pref] = await db
+      .select()
+      .from(userNotificationPreference)
+      .where(eq(userNotificationPreference.userId, userId));
+    if (pref && !pref.dailyOverdueEnabled) {
+      skippedOptOut++;
+      continue;
+    }
+
     const users = await db.select().from(orgCache).where(eq(orgCache.userId, userId));
     const userName = users[0]?.userName || userId;
 
-    // Send overdue card to assignee
     const card = buildOverdueCard(
       userName,
       tasks.map(t => ({
@@ -58,32 +71,8 @@ export async function runOverdueReminder(): Promise<void> {
       })),
     );
     await feishuApi.sendCardMessage(userId, card);
-    sentToAssignee++;
-
-    // 4. Notify leader for FIRST-TIME overdue only
-    for (const t of tasks) {
-      if (t.overdueNotifiedLeaderAt) continue; // already notified
-      if (!t.assigneeManagerUserId?.startsWith('ou_')) continue; // no leader
-
-      const leaderUsers = await db.select().from(orgCache).where(eq(orgCache.userId, t.assigneeManagerUserId));
-      const leaderName = leaderUsers[0]?.userName || t.assigneeManagerUserId;
-
-      const notice = buildLeaderOverdueNotice(
-        leaderName,
-        userName,
-        t.title,
-        t.daysToDue || 0,
-      );
-      await feishuApi.sendCardMessage(t.assigneeManagerUserId, notice);
-
-      // Mark as notified
-      await db.update(task)
-        .set({ overdueNotifiedLeaderAt: now })
-        .where(eq(task.taskUid, t.taskUid));
-
-      sentToLeader++;
-    }
+    sent++;
   }
 
-  console.log(`  Overdue: ${overdueTasks.length} tasks, sent to ${sentToAssignee} assignees, ${sentToLeader} leader notices`);
+  console.log(`  Overdue: ${overdueTasks.length} tasks, sent to ${sent} assignees, ${skippedOptOut} opted out`);
 }
