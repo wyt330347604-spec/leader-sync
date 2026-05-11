@@ -47,6 +47,17 @@
   --hero-card-bg: rgba(10, 10, 15, 0.6);
   --hero-text: #ffffff;
   color-scheme: dark;
+  /* ---- project category (2026-05) ---- */
+  --cat-jt: #475569;
+  --cat-jt-soft: #F1F5F9;
+  --cat-zy: #DC2626;
+  --cat-zy-soft: #FEF2F2;
+  --cat-fw: #EA580C;
+  --cat-fw-soft: #FFF7ED;
+  --cat-tz: #059669;
+  --cat-tz-soft: #ECFDF5;
+  --cat-hz: #2563EB;
+  --cat-hz-soft: #EFF6FF;
 }
 
 [data-theme="light"] {
@@ -68,6 +79,17 @@
   --hero-card-bg: rgba(255, 255, 255, 0.8);
   --hero-text: #111827;
   color-scheme: light;
+  /* ---- project category (2026-05) ---- */
+  --cat-jt: #475569;
+  --cat-jt-soft: #F1F5F9;
+  --cat-zy: #DC2626;
+  --cat-zy-soft: #FEF2F2;
+  --cat-fw: #EA580C;
+  --cat-fw-soft: #FFF7ED;
+  --cat-tz: #059669;
+  --cat-tz-soft: #ECFDF5;
+  --cat-hz: #2563EB;
+  --cat-hz-soft: #EFF6FF;
 }
 
 body {
