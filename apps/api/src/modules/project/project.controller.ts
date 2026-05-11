@@ -2,7 +2,7 @@ import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, HttpStatu
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { BusinessException } from '../../common/exceptions/business.exception';
-import { ProjectService } from './project.service';
+import { ProjectService, ProjectInput, ProjectPatch } from './project.service';
 
 const PROJECT_ADMIN_IDS = new Set([
   'ou_243a9225acc248c148c25f8fe0699407', // Tobi
@@ -36,19 +36,22 @@ export class ProjectController {
   }
 
   @Post()
-  create(@CurrentUser() user: CurrentUserPayload, @Body() body: { name: string }) {
+  create(@CurrentUser() user: CurrentUserPayload, @Body() body: ProjectInput) {
     requireProjectAdmin(user);
-    return this.projectService.create(body.name);
+    if (!body?.name?.trim()) {
+      throw new BusinessException(1001, 'name is required');
+    }
+    return this.projectService.create(body);
   }
 
   @Patch(':project_uid')
   update(
     @CurrentUser() user: CurrentUserPayload,
     @Param('project_uid') projectUid: string,
-    @Body() body: { name: string },
+    @Body() body: ProjectPatch,
   ) {
     requireProjectAdmin(user);
-    return this.projectService.update(projectUid, body.name);
+    return this.projectService.update(projectUid, body);
   }
 
   @Delete(':project_uid')
