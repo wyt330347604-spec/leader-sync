@@ -7,6 +7,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import {
   ProjectCategory,
   ProjectCategoryLabel,
@@ -41,6 +42,11 @@ const EMPTY: ProjectFormValue = {
   subtitle: '',
   isDefault: false,
 };
+
+const REGION_OPTIONS: ComboboxOption[] = [
+  { value: '', label: '无' },
+  ...ProjectRegionList.map((r) => ({ value: r, label: r })),
+];
 
 export function ProjectModal({ open, mode, initial, submitting, onClose, onSubmit }: Props) {
   const [v, setV] = useState<ProjectFormValue>(EMPTY);
@@ -112,16 +118,13 @@ export function ProjectModal({ open, mode, initial, submitting, onClose, onSubmi
           </Field>
 
           <Field label="国家/地区">
-            <select
+            <Combobox
               value={v.region ?? ''}
-              onChange={(e) => setV((s) => ({ ...s, region: (e.target.value || null) as ProjectRegion | null }))}
-              className="w-full rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent-blue)]"
-            >
-              <option value="">无</option>
-              {ProjectRegionList.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
+              onChange={(val) => setV((s) => ({ ...s, region: (val || null) as ProjectRegion | null }))}
+              options={REGION_OPTIONS}
+              placeholder="无"
+              searchPlaceholder="搜索国家"
+            />
           </Field>
 
           <Field label="副标签">
