@@ -156,3 +156,12 @@
 ### 6.4 管理标记字段
 以下字段仅限老板/PMO 编辑，不属于普通业务结构字段：
 - boss_attention_flag
+
+## project 表 — 2026-05 新增字段
+
+| 字段名 (TS) | 数据库列 | 类型 | 必填 | 含义 | 来源 |
+|---|---|---|---|---|---|
+| `category` | `project.category` | `varchar(8)` enum | 否 | 业务板块（`jt`/`zy`/`fw`/`tz`/`hz`） | 手填 |
+| `ownerName` | `project.owner_name` | `varchar(64)` | 否 | 项目负责人显示名（自由文本，未来再升级飞书 user_id 关系） | 手填 |
+| `region` | `project.region` | `varchar(32)` enum | 否 | 项目所在国家/地区 | 手填 |
+| `subtitle` | `project.subtitle` | `varchar(64)` | 否 | 项目副标签（"NBFC × 2"、"联合负责" 等） | 手填 |

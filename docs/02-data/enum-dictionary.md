@@ -89,3 +89,25 @@
 | resolved_merge | 合并 | 字段级合并 |
 | resolved_manual_override | 人工强制覆盖 | 人工指定最终值 |
 | unresolved_pending_review | 待处理 | 尚未裁决 |
+
+## project_category（业务板块）
+
+| 值 | 中文 | 显示顺序 | 颜色 token |
+|---|---|---|---|
+| `jt` | 集团 | 1 | `--cat-jt` (#475569) |
+| `zy` | 自营 | 2 | `--cat-zy` (#DC2626) |
+| `fw` | 服务 | 3 | `--cat-fw` (#EA580C) |
+| `tz` | 投资 | 4 | `--cat-tz` (#059669) |
+| `hz` | 合作 | 5 | `--cat-hz` (#2563EB) |
+
+## project_region（国家/地区）
+
+固定枚举（页面 select 用此清单）：
+
+- `印度`
+- `印尼`
+- `巴基斯坦`
+- `孟加拉`
+- `深圳`
+
+集团板块的项目（如"公司建设"）可以不填 region。
