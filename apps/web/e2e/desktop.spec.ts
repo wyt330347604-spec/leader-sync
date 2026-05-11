@@ -18,6 +18,14 @@ test.describe('Desktop visual audit', () => {
     await snap(page, '02-tasks-create');
   });
 
+  test('02b-tasks-create-project-combobox-open', async ({ page }) => {
+    await visit(page, '/tasks/create');
+    // The project Combobox trigger is the button immediately following the "所属项目" label.
+    await page.locator('label:has-text("所属项目") + button').first().click();
+    await page.waitForTimeout(400);
+    await snap(page, '02b-tasks-create-project-combobox-open');
+  });
+
   test('03-projects', async ({ page }) => {
     await visit(page, '/projects');
     await snap(page, '03-projects');
@@ -39,6 +47,19 @@ test.describe('Desktop visual audit', () => {
     await page.getByRole('button', { name: '编辑项目' }).first().click({ force: true });
     await page.waitForTimeout(400);
     await snap(page, '03c-projects-edit-modal');
+  });
+
+  test('03d-projects-edit-modal-region-combobox', async ({ page }) => {
+    await visit(page, '/projects');
+    const firstCard = page.locator('.group').first();
+    await firstCard.hover();
+    await page.waitForTimeout(150);
+    await page.getByRole('button', { name: '编辑项目' }).first().click({ force: true });
+    await page.waitForTimeout(400);
+    // The region Combobox trigger is the button after the "国家/地区" label inside the modal.
+    await page.locator('label:has-text("国家/地区") + button').first().click();
+    await page.waitForTimeout(400);
+    await snap(page, '03d-projects-edit-modal-region-combobox');
   });
 
   test('04-dashboard', async ({ page }) => {
