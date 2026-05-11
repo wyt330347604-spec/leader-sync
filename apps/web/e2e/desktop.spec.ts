@@ -23,6 +23,24 @@ test.describe('Desktop visual audit', () => {
     await snap(page, '03-projects');
   });
 
+  test('03b-projects-create-modal', async ({ page }) => {
+    await visit(page, '/projects');
+    await page.getByRole('button', { name: '新建项目' }).click();
+    await page.waitForTimeout(400);
+    await snap(page, '03b-projects-create-modal');
+  });
+
+  test('03c-projects-edit-modal', async ({ page }) => {
+    await visit(page, '/projects');
+    // Hover the first project card to reveal the edit button (group-hover), then click it.
+    const firstCard = page.locator('.group').first();
+    await firstCard.hover();
+    await page.waitForTimeout(150);
+    await page.getByRole('button', { name: '编辑项目' }).first().click({ force: true });
+    await page.waitForTimeout(400);
+    await snap(page, '03c-projects-edit-modal');
+  });
+
   test('04-dashboard', async ({ page }) => {
     await visit(page, '/dashboard');
     await snap(page, '04-dashboard');
