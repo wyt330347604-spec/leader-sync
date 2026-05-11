@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, use, useRef, useImperativeHandle, forwardRef } from 'react';
+import { useState, useEffect, use, useRef, useImperativeHandle, forwardRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
@@ -11,6 +11,8 @@ import { apiFetch, ApiError } from '@/lib/api-client';
 import { LoadingScreen } from "@/components/loading-screen";
 import { ensureAuth } from '@/lib/auth';
 import { DelayTaskDialog } from '@/components/delay-task-dialog';
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { ProjectCategoryLabel } from '@leader-sync/shared-types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -425,9 +427,24 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
   const [saveError, setSaveError] = useState('');
 
   // Project list (for select + display)
-  const { data: projects } = useSWR<readonly { projectUid: string; name: string; isDefault: boolean }[]>(
+  const { data: projects } = useSWR<readonly { projectUid: string; name: string; isDefault: boolean; category?: 'jt' | 'zy' | 'fw' | 'tz' | 'hz' | null; ownerName?: string | null; region?: string | null; subtitle?: string | null }[]>(
     '/api/v1/projects',
-    (url: string) => apiFetch<{ projectUid: string; name: string; isDefault: boolean }[]>(url),
+    (url: string) => apiFetch<{ projectUid: string; name: string; isDefault: boolean; category?: 'jt' | 'zy' | 'fw' | 'tz' | 'hz' | null; ownerName?: string | null; region?: string | null; subtitle?: string | null }[]>(url),
+  );
+
+  const projectOptions: ComboboxOption[] = useMemo(
+    () => [
+      { value: '', label: '无' },
+      ...(projects ?? []).map((p) => ({
+        value: p.projectUid,
+        label: p.name,
+        leadingDot: p.category ? `var(--cat-${p.category})` : 'var(--text-muted)',
+        badge: p.subtitle ?? (p.isDefault ? '默认' : undefined),
+        badgeVariant: (p.subtitle ? 'subtitle' : 'default') as 'subtitle' | 'default',
+        trailing: [p.category && ProjectCategoryLabel[p.category], p.region].filter(Boolean).join(' · ') || undefined,
+      })),
+    ],
+    [projects],
   );
 
   // Refs to child sections so the unified [保存] button can flush their pending stages
@@ -700,21 +717,15 @@ export default function TaskDetailPage({ params }: { params: Promise<{ task_uid:
       <div className="mb-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6 space-y-5">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div>
-            <label htmlFor="edit_project" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">归属项目</label>
-            <select
-              id="edit_project"
-              value={editProjectUid}
-              onChange={(e) => setEditProjectUid(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">无</option>
-              {projects?.map((p) => (
-                <option key={p.projectUid} value={p.projectUid}>
-                  {p.name}{p.isDefault ? ' (默认)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+          <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">归属项目</label>
+          <Combobox
+            value={editProjectUid || ''}
+            onChange={(v) => setEditProjectUid(v ?? '')}
+            options={projectOptions}
+            placeholder="选择项目"
+            searchPlaceholder="搜索项目"
+          />
+        </div>
           <div>
             <label htmlFor="edit_status" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">状态</label>
             <select
