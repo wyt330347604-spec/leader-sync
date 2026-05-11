@@ -126,3 +126,34 @@ export const UserRole = {
   ADMIN: 'admin',
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+
+export const ProjectCategory = {
+  GROUP: 'jt',      // 集团
+  SELF: 'zy',       // 自营
+  SERVICE: 'fw',    // 服务
+  INVEST: 'tz',     // 投资
+  COOP: 'hz',       // 合作
+} as const;
+export type ProjectCategory = (typeof ProjectCategory)[keyof typeof ProjectCategory];
+
+export const ProjectCategoryLabel: Record<string, string> = {
+  jt: '集团',
+  zy: '自营',
+  fw: '服务',
+  tz: '投资',
+  hz: '合作',
+};
+
+// 显示顺序（页面渲染用）
+export const ProjectCategoryOrder: ProjectCategory[] = ['jt', 'zy', 'fw', 'tz', 'hz'];
+
+export const ProjectRegion = {
+  INDIA: '印度',
+  INDONESIA: '印尼',
+  PAKISTAN: '巴基斯坦',
+  BANGLADESH: '孟加拉',
+  SHENZHEN: '深圳',
+} as const;
+export type ProjectRegion = (typeof ProjectRegion)[keyof typeof ProjectRegion];
+
+export const ProjectRegionList: ProjectRegion[] = ['印度', '印尼', '巴基斯坦', '孟加拉', '深圳'];
