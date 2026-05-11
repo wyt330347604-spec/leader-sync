@@ -51,9 +51,36 @@ const USERS = [
 ];
 
 const PROJECTS = [
-  { projectUid: 'proj_dev_main', name: '公司建设', isDefault: true },
-  { projectUid: 'proj_dev_indo', name: '印尼电商', isDefault: false },
-  { projectUid: 'proj_dev_india', name: '印度金融', isDefault: false },
+  // 集团（1）— 保留原 proj_dev_main，扩字段
+  { projectUid: 'proj_dev_main',   name: '公司建设',     isDefault: true,  category: 'jt', ownerName: null,           region: null,         subtitle: null },
+
+  // 自营（8）— 保留原 indo→XL 电商 / india→XT 印度
+  { projectUid: 'proj_dev_india',  name: 'XT 印度',       isDefault: false, category: 'zy', ownerName: 'Mia',          region: '印度',       subtitle: null },
+  { projectUid: 'proj_dev_dfw_in', name: 'DFW 印度',      isDefault: false, category: 'zy', ownerName: 'Qi',           region: '印度',       subtitle: null },
+  { projectUid: 'proj_dev_indo',   name: 'XL 电商',       isDefault: false, category: 'zy', ownerName: 'Shawn',        region: '印尼',       subtitle: null },
+  { projectUid: 'proj_dev_xl_cnt', name: 'XL 内容',       isDefault: false, category: 'zy', ownerName: 'Shawn',        region: '印尼',       subtitle: null },
+  { projectUid: 'proj_dev_xl_sup', name: 'XL 供应链',     isDefault: false, category: 'zy', ownerName: 'George',       region: '印尼',       subtitle: null },
+  { projectUid: 'proj_dev_xt_pk',  name: 'XT 巴基斯坦',   isDefault: false, category: 'zy', ownerName: null,           region: '巴基斯坦',   subtitle: null },
+  { projectUid: 'proj_dev_dfw_pk', name: 'DFW 巴基斯坦',  isDefault: false, category: 'zy', ownerName: 'Qi',           region: '巴基斯坦',   subtitle: null },
+  { projectUid: 'proj_dev_xt_bd',  name: 'XT 孟加拉',     isDefault: false, category: 'zy', ownerName: '建豪',         region: '孟加拉',     subtitle: null },
+
+  // 服务（3）
+  { projectUid: 'proj_dev_xw_in',  name: 'XW 印度',       isDefault: false, category: 'fw', ownerName: 'Mia',          region: '印度',       subtitle: null },
+  { projectUid: 'proj_dev_as_in',  name: 'AS 印度',       isDefault: false, category: 'fw', ownerName: 'Mia',          region: '印度',       subtitle: null },
+  { projectUid: 'proj_dev_cq_in',  name: 'CQ 风控',       isDefault: false, category: 'fw', ownerName: 'Yang',         region: '印度',       subtitle: null },
+
+  // 投资（7）
+  { projectUid: 'proj_dev_kd',     name: 'KD',            isDefault: false, category: 'tz', ownerName: '建豪',         region: '巴基斯坦',   subtitle: null },
+  { projectUid: 'proj_dev_lwt',    name: 'LWT',           isDefault: false, category: 'tz', ownerName: '建豪',         region: '巴基斯坦',   subtitle: null },
+  { projectUid: 'proj_dev_skyd',   name: 'SkyD',          isDefault: false, category: 'tz', ownerName: '建豪',         region: '巴基斯坦',   subtitle: null },
+  { projectUid: 'proj_dev_zero',   name: 'Zeropay',       isDefault: false, category: 'tz', ownerName: 'Yang',         region: '印度',       subtitle: null },
+  { projectUid: 'proj_dev_allen',  name: 'allenpay',      isDefault: false, category: 'tz', ownerName: 'Yang',         region: '印度',       subtitle: null },
+  { projectUid: 'proj_dev_dfw',    name: 'DFW',           isDefault: false, category: 'tz', ownerName: 'Tobi + Yang',  region: '印度',       subtitle: '联合负责' },
+  { projectUid: 'proj_dev_vn_sz',  name: 'VN 深圳',       isDefault: false, category: 'tz', ownerName: 'Harvey',       region: '深圳',       subtitle: null },
+
+  // 合作（2）
+  { projectUid: 'proj_dev_cash',   name: 'cash 印度',     isDefault: false, category: 'hz', ownerName: 'Harvey',       region: '印度',       subtitle: 'NBFC × 2' },
+  { projectUid: 'proj_dev_cq_bd',  name: 'CQ 孟加拉',     isDefault: false, category: 'hz', ownerName: 'Harvey',       region: '孟加拉',     subtitle: null },
 ];
 
 const ASSIGNMENT_TYPE = 'boss_assign';
