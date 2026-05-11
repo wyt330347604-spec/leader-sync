@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
@@ -7,6 +7,8 @@ import { LoadingScreen } from "@/components/loading-screen";
 import { ensureAuth } from '@/lib/auth';
 import { useMe } from '@/hooks/use-me';
 import { DatePicker } from '@/components/date-picker';
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { ProjectCategoryLabel } from '@leader-sync/shared-types';
 
 interface CollaboratorEntry {
   readonly user_id: string;
@@ -17,6 +19,16 @@ interface UserSearchResult {
   readonly userId: string;
   readonly userName: string;
   readonly deptName: string | null;
+}
+
+interface Project {
+  projectUid: string;
+  name: string;
+  isDefault: boolean;
+  category?: 'jt' | 'zy' | 'fw' | 'tz' | 'hz' | null;
+  ownerName?: string | null;
+  region?: string | null;
+  subtitle?: string | null;
 }
 
 const PRIORITIES = [
@@ -49,7 +61,7 @@ export default function TaskCreatePage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   });
   const [bossAttentionFlag, setBossAttentionFlag] = useState(false);
-  const [projects, setProjects] = useState<{projectUid: string; name: string; isDefault: boolean}[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [projectUid, setProjectUid] = useState('');
   const [collaborators, setCollaborators] = useState<CollaboratorEntry[]>([]);
   const [collabSearch, setCollabSearch] = useState('');
@@ -70,7 +82,7 @@ export default function TaskCreatePage() {
 
   // Fetch projects
   useEffect(() => {
-    apiFetch<{projectUid: string; name: string; isDefault: boolean}[]>('/api/v1/projects')
+    apiFetch<Project[]>('/api/v1/projects')
       .then(setProjects)
       .catch(() => {});
   }, []);
@@ -80,6 +92,19 @@ export default function TaskCreatePage() {
     const defaultProject = projects.find(p => p.isDefault);
     if (defaultProject && !projectUid) setProjectUid(defaultProject.projectUid);
   }, [projects, projectUid]);
+
+  const projectOptions: ComboboxOption[] = useMemo(
+    () =>
+      (projects ?? []).map((p) => ({
+        value: p.projectUid,
+        label: p.name,
+        leadingDot: p.category ? `var(--cat-${p.category})` : 'var(--text-muted)',
+        badge: p.subtitle ?? (p.isDefault ? '默认' : undefined),
+        badgeVariant: (p.subtitle ? 'subtitle' : 'default') as 'subtitle' | 'default',
+        trailing: [p.category && ProjectCategoryLabel[p.category], p.region].filter(Boolean).join(' · ') || undefined,
+      })),
+    [projects],
+  );
 
   // Assignee user search with debounce
   useEffect(() => {
@@ -271,16 +296,13 @@ export default function TaskCreatePage() {
         {/* Project */}
         <div>
           <label htmlFor="project_uid" className={labelClass}>所属项目</label>
-          <select
-            id="project_uid"
-            value={projectUid}
-            onChange={(e) => setProjectUid(e.target.value)}
-            className={inputClass}
-          >
-            {projects.map(p => (
-              <option key={p.projectUid} value={p.projectUid}>{p.name}{p.isDefault ? ' (默认)' : ''}</option>
-            ))}
-          </select>
+          <Combobox
+            value={projectUid || null}
+            onChange={(v) => setProjectUid(v ?? '')}
+            options={projectOptions}
+            placeholder="选择项目"
+            searchPlaceholder="搜索项目"
+          />
         </div>
 
         {/* Boss attention flag */}
