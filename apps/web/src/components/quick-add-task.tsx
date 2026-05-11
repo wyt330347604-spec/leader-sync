@@ -1,11 +1,13 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Plus, X } from 'lucide-react';
 import { apiFetch } from '@/lib/api-client';
 import { useMe } from '@/hooks/use-me';
 import { DatePicker } from '@/components/date-picker';
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { ProjectCategoryLabel } from '@leader-sync/shared-types';
 
 const PRIORITIES = [
   { value: 'urgent_important', label: '重要紧急' },
@@ -24,6 +26,10 @@ interface Project {
   readonly projectUid: string;
   readonly name: string;
   readonly isDefault: boolean;
+  readonly category?: 'jt' | 'zy' | 'fw' | 'tz' | 'hz' | null;
+  readonly ownerName?: string | null;
+  readonly region?: string | null;
+  readonly subtitle?: string | null;
 }
 
 interface QuickAddTaskProps {
@@ -50,6 +56,21 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
 
   const [submitting, setSubmitting] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+
+  const projectOptions: ComboboxOption[] = useMemo(
+    () => [
+      { value: '', label: '选择项目' },
+      ...projects.map((p) => ({
+        value: p.projectUid,
+        label: p.name,
+        leadingDot: p.category ? `var(--cat-${p.category})` : 'var(--text-muted)',
+        badge: p.subtitle ?? (p.isDefault ? '默认' : undefined),
+        badgeVariant: (p.subtitle ? 'subtitle' : 'default') as 'subtitle' | 'default',
+        trailing: [p.category && ProjectCategoryLabel[p.category], p.region].filter(Boolean).join(' · ') || undefined,
+      })),
+    ],
+    [projects],
+  );
 
   // Load projects + default
   useEffect(() => {
@@ -184,14 +205,13 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
         </select>
 
         {/* Project */}
-        <select value={projectUid} onChange={(e) => setProjectUid(e.target.value)} className={inputCls}>
-          <option value="">选择项目</option>
-          {projects.map((p) => (
-            <option key={p.projectUid} value={p.projectUid}>
-              {p.name}{p.isDefault ? ' (默认)' : ''}
-            </option>
-          ))}
-        </select>
+        <Combobox
+          value={projectUid || ''}
+          onChange={(v) => setProjectUid(v ?? '')}
+          options={projectOptions}
+          placeholder="选择项目"
+          searchPlaceholder="搜索项目"
+        />
 
         {/* Assignee combobox */}
         <div className="relative">
