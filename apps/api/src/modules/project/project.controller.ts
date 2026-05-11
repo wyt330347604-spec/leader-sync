@@ -8,6 +8,9 @@ const PROJECT_ADMIN_IDS = new Set([
   'ou_243a9225acc248c148c25f8fe0699407', // Tobi
   'ou_1c419560953e219d5876918a2b934dfb', // Harvey/王永涛
   'ou_5a06e17c2ec88a72a2ef4ce040b3d77d', // 杨平
+  // dev fixtures (only issuable via /api/v1/auth/dev-login when NODE_ENV=development)
+  'ou_dev_harvey',
+  'ou_dev_boss',
 ]);
 
 function isProjectAdmin(user: CurrentUserPayload): boolean {
