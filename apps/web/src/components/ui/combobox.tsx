@@ -188,8 +188,8 @@ export function Combobox({
                     <span
                       className={
                         opt.badgeVariant === 'subtitle'
-                          ? 'shrink-0 rounded-md bg-[#2563eb] px-1.5 py-0.5 text-[11px] font-semibold text-white'
-                          : 'shrink-0 rounded-full border border-[#3b82f6]/20 bg-[#3b82f6]/10 px-2 py-0.5 text-[10px] text-[#3b82f6]'
+                          ? 'shrink-0 rounded-md bg-[var(--accent-blue)] px-1.5 py-0.5 text-[11px] font-semibold text-white'
+                          : 'shrink-0 rounded-full border border-[var(--accent-blue)]/20 bg-[var(--accent-blue)]/10 px-2 py-0.5 text-[10px] text-[var(--accent-blue)]'
                       }
                     >
                       {opt.badge}

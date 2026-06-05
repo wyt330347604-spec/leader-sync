@@ -18,6 +18,12 @@ import {
   CurrentUserPayload,
 } from '../../common/decorators/current-user.decorator';
 
+/**
+ * 登录态 cookie 存活时长（30 天），与 JWT 的 JWT_EXPIRES_IN=30d 对齐，
+ * 避免「cookie 还在但 token 已过期」的不一致。
+ */
+const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(
@@ -37,7 +43,7 @@ export class AuthController {
       httpOnly: true,
       secure: this.config.get('APP_ENV') === 'production',
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: SESSION_MAX_AGE_MS,
     });
     return user;
   }
@@ -68,7 +74,7 @@ export class AuthController {
         httpOnly: true,
         secure: this.config.get('APP_ENV') === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: SESSION_MAX_AGE_MS,
       });
       // Validate redirect is internal path
       const safePath = redirectPath.startsWith('/') && !redirectPath.startsWith('//') ? redirectPath : '/tasks';
@@ -110,7 +116,7 @@ export class AuthController {
       httpOnly: true,
       secure: false,
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: SESSION_MAX_AGE_MS,
     });
     return { token, user };
   }

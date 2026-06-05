@@ -11,4 +11,8 @@ export const project = pgTable('project', {
   ownerName: varchar('owner_name', { length: 64 }),   // 自由文本姓名, null = 空缺
   region: varchar('region', { length: 32 }),          // ProjectRegion enum, nullable
   subtitle: varchar('subtitle', { length: 64 }),      // 副标签（NBFC × 2 等）
+  // ---- 2026-06 项目驱动 V0：自关联，null=顶级项目，非空=子项目（限两级） ----
+  parentProjectUid: varchar('parent_project_uid', { length: 64 }),
+  // ---- 2026-06 项目驱动 V1d：PIC 负责人（真实用户 id，可过滤/追责）；ownerName 仍为展示名 ----
+  picUserId: varchar('pic_user_id', { length: 128 }),
 });

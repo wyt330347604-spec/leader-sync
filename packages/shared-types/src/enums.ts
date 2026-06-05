@@ -71,6 +71,13 @@ export const TaskTypeLabel: Record<string, string> = {
   new: '本月新增',
 };
 
+// 任务可见性：public=公司共享（计入统计+同步多维表格）；private=个人仅自己可见（不计入统计、不同步）
+export const TaskVisibility = {
+  PUBLIC: 'public',
+  PRIVATE: 'private',
+} as const;
+export type TaskVisibility = (typeof TaskVisibility)[keyof typeof TaskVisibility];
+
 export const AssignmentType = {
   BOSS_ASSIGN: 'boss_assign',
   MANAGER_ASSIGN: 'manager_assign',
@@ -157,3 +164,37 @@ export const ProjectRegion = {
 export type ProjectRegion = (typeof ProjectRegion)[keyof typeof ProjectRegion];
 
 export const ProjectRegionList: ProjectRegion[] = ['印度', '印尼', '巴基斯坦', '孟加拉', '深圳'];
+
+// ─── Incident module enums ───────────────────────────────────────────────────
+
+export const IncidentSeverity = {
+  P0: 'P0',  // 生产崩溃 / 重大财务损失
+  P1: 'P1',  // 严重违规（显著影响团队协作或业务进展）
+  P2: 'P2',  // 一般违规（需整改但不紧急）
+  P3: 'P3',  // 轻微问题（记录备案，不影响正常运营）
+} as const;
+export type IncidentSeverity = (typeof IncidentSeverity)[keyof typeof IncidentSeverity];
+
+export const IncidentConfirmStatus = {
+  PENDING_CONFIRM: 'pending_confirm',  // 待 PMO/Boss 确认（P0/P1 创建时）
+  CONFIRMED: 'confirmed',              // 已确认生效
+  REJECTED: 'rejected',               // 已驳回（永不生效）
+} as const;
+export type IncidentConfirmStatus = (typeof IncidentConfirmStatus)[keyof typeof IncidentConfirmStatus];
+
+export const IncidentInvolvement = {
+  INVOLVED: 'involved',  // 普通涉及（默认）
+  PRIMARY: 'primary',    // 主要责任人
+} as const;
+export type IncidentInvolvement = (typeof IncidentInvolvement)[keyof typeof IncidentInvolvement];
+
+// ─── Grade module enums ──────────────────────────────────────────────────────
+
+// 职级变更触发类型（三种：初始录入 / 半年度晋升 / 手动调整）
+// T4.0–T8.3，共 20 级；格式校验正则：/^T[4-8]\.[0-3]$/
+export const GradeTriggerType = {
+  INITIAL_ENTRY: 'initial_entry',          // 初始录入（上线前 Harvey/PMO 手动填入存量员工职级）
+  BIANNUAL_PROMOTION: 'biannual_promotion', // 半年度晋升（常规晋升周期）
+  MANUAL_ADJUSTMENT: 'manual_adjustment',   // 手动调整（含降级 / 纠错 / 特殊情况，需填写 note）
+} as const;
+export type GradeTriggerType = (typeof GradeTriggerType)[keyof typeof GradeTriggerType];

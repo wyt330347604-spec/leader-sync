@@ -1,10 +1,14 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, HttpStatus } from '@nestjs/common';
 import { DATABASE_TOKEN } from '../../database.module';
 import type { Database } from '@leader-sync/db';
-import { task, taskLeader, monthlySnapshot, orgCache, project } from '@leader-sync/db';
-import { eq, and, sql, inArray } from 'drizzle-orm';
+import { task, taskLeader, monthlySnapshot, orgCache, project, incident } from '@leader-sync/db';
+import { eq, and, sql, inArray, desc } from 'drizzle-orm';
+import { BusinessException } from '../../common/exceptions/business.exception';
+import { TERMINAL_STATUSES, cumulativeCounts, isInDueSet, completionRate } from '@leader-sync/shared-types';
+import { rollupProject } from './project-health';
 
-const DONE_STATUSES = ['done', 'shelved', 'closed'];
+// 口径主权统一到 shared-types。保留本名以最小化改动；widen 成 string[] 便于 .includes(任意 status)。
+const DONE_STATUSES: readonly string[] = TERMINAL_STATUSES;
 
 export interface DashboardPeriod {
   readonly type: 'month' | 'quarter' | 'year';
@@ -29,6 +33,33 @@ function getMonthBuckets(period: DashboardPeriod): readonly string[] {
   return [m];
 }
 
+/** 该周期最后一刻（最后一个月份桶的月末 23:59:59.999），用于累计口径的到期判定。 */
+function getPeriodEnd(monthBuckets: readonly string[]): Date {
+  const last = monthBuckets[monthBuckets.length - 1];
+  const [y, mo] = last.split('-').map((n) => parseInt(n, 10));
+  return new Date(y, mo, 0, 23, 59, 59, 999); // 下月第 0 天 = 本月最后一天（本地时区，与月结一致）
+}
+
+/**
+ * 归属月份区间谓词：一条任务在某月份桶里出现过，当且仅当它的存活区间
+ * [source_month（最初归属月；未继承则=自身桶）.. month_bucket（当前桶）]
+ * 与周期 [periodStart..periodEnd] 相交。
+ *
+ * ⚠️ 不能用 source_month = M 等值：source_month 是「最初归属月」，多次继承的任务其值会早于
+ * 回看月（carry_over_count=4 → source=4 个月前），等值判断会漏掉长期积压任务。
+ * monthBuckets 由 getMonthBuckets 返回，按月份升序，故首尾即区间端点。
+ */
+function belongsToMonths(monthBuckets: readonly string[]) {
+  const periodStart = monthBuckets[0];
+  const periodEnd = monthBuckets[monthBuckets.length - 1];
+  return and(
+    sql`${task.monthBucket} >= ${periodStart}`,
+    sql`COALESCE(${task.sourceMonth}, ${task.monthBucket}) <= ${periodEnd}`,
+    // 私有任务不计入任何驾驶舱统计/分解。
+    sql`${task.visibility} <> 'private'`,
+  );
+}
+
 function getPeriodLabel(period: DashboardPeriod, monthBuckets: readonly string[]): string {
   if (period.type === 'year' && period.value) {
     return `${period.value}年`;
@@ -49,6 +80,32 @@ function getThisMonday(): Date {
   monday.setDate(now.getDate() - day + 1);
   monday.setHours(0, 0, 0, 0);
   return monday;
+}
+
+/**
+ * Returns Monday 00:00:00 Asia/Shanghai for the current week as a UTC Date.
+ * Asia/Shanghai = UTC+8, so Monday 00:00 Shanghai = Sunday 16:00 UTC of prior week.
+ */
+function getThisWeekMondayShanghai(): Date {
+  // Work in UTC offset +8 by shifting the current time
+  const now = new Date();
+  const shangHaiOffsetMs = 8 * 60 * 60 * 1000;
+  const localMs = now.getTime() + shangHaiOffsetMs;
+  const localDate = new Date(localMs);
+  const dayOfWeek = localDate.getUTCDay() || 7; // Monday=1 … Sunday=7
+  const mondayLocal = new Date(localMs);
+  mondayLocal.setUTCDate(localDate.getUTCDate() - dayOfWeek + 1);
+  mondayLocal.setUTCHours(0, 0, 0, 0);
+  // Convert back to UTC
+  return new Date(mondayLocal.getTime() - shangHaiOffsetMs);
+}
+
+/**
+ * Returns Sunday 23:59:59.999 Asia/Shanghai for the week starting at the given Monday (UTC).
+ */
+function getThisWeekSundayShanghai(monday: Date): Date {
+  const sunday = new Date(monday.getTime() + 6 * 24 * 60 * 60 * 1000 + 23 * 3600 * 1000 + 59 * 60 * 1000 + 59 * 1000 + 999);
+  return sunday;
 }
 
 function computeRiskReasons(t: {
@@ -189,22 +246,28 @@ export class DashboardService {
   async getBossDashboard(period: DashboardPeriod = { type: 'month' }) {
     const monthBuckets = getMonthBuckets(period);
 
+    // 归属月份区间口径（含被继承走的任务）。详见 belongsToMonths 注释。
     const tasks = await this.db
       .select()
       .from(task)
-      .where(and(inArray(task.monthBucket, [...monthBuckets]), sql`${task.deletedAt} IS NULL`));
+      .where(and(belongsToMonths(monthBuckets), sql`${task.deletedAt} IS NULL`));
 
     // Fetch extra leaders from task_leader table
     const taskUids = tasks.map((t) => t.taskUid);
     const extraLeadersMap = await this.fetchExtraLeaders(taskUids);
+
+    // 周期末（累计口径到期时点），子表与顶部统计统一使用。
+    const periodEnd = getPeriodEnd(monthBuckets);
 
     // Group by leader, then by member within each leader
     const leaderMap = new Map<string, LeaderEntry>();
     const thisMonday = getThisMonday();
 
     for (const t of tasks) {
-      const isDone = t.status === 'done';
-      const isOverdue = t.isOverdue && !DONE_STATUSES.includes(t.status);
+      // 累计口径：仅 due_at ≤ 周期末 且非 shelved 的任务计入分母，与顶部/月结一致（#4）。
+      const inDue = isInDueSet(t, periodEnd);
+      const isDone = inDue && t.status === 'done';
+      const isOverdue = inDue && !DONE_STATUSES.includes(t.status);
       const isCarry = (t.carryOverCount ?? 0) >= 1;
       const riskReasons = computeRiskReasons(t);
       const isRisk = riskReasons.length > 0;
@@ -232,7 +295,7 @@ export class DashboardService {
           const m = members[memberIdx];
           members[memberIdx] = {
             ...m,
-            total: m.total + 1,
+            total: m.total + (inDue ? 1 : 0),
             done: m.done + (isDone ? 1 : 0),
             overdue: m.overdue + (isOverdue ? 1 : 0),
           };
@@ -240,7 +303,7 @@ export class DashboardService {
           members.push({
             userId: t.assigneeUserId,
             name: t.assigneeName || t.assigneeUserId,
-            total: 1,
+            total: inDue ? 1 : 0,
             done: isDone ? 1 : 0,
             overdue: isOverdue ? 1 : 0,
           });
@@ -248,7 +311,7 @@ export class DashboardService {
 
         leaderMap.set(leaderId, {
           name: prev.name || lName || '',
-          total: prev.total + 1,
+          total: prev.total + (inDue ? 1 : 0),
           done: prev.done + (isDone ? 1 : 0),
           overdue: prev.overdue + (isOverdue ? 1 : 0),
           carryOver: prev.carryOver + (isCarry ? 1 : 0),
@@ -286,7 +349,7 @@ export class DashboardService {
         carryOver: data.carryOver,
         riskCount: data.riskCount,
         weeklyNewCount: data.weeklyNewCount,
-        doneRate: data.total > 0 ? Math.round((data.done / data.total) * 100) : 0,
+        doneRate: completionRate(data.done, data.total),
         members: data.members.sort((a, b) => b.overdue - a.overdue),
       }))
       .sort((a, b) => b.total - a.total);
@@ -310,8 +373,9 @@ export class DashboardService {
         tasks: [],
       };
 
-      const isDone = t.status === 'done';
-      const isOverdue = t.isOverdue && !DONE_STATUSES.includes(t.status);
+      const inDue = isInDueSet(t, periodEnd);
+      const isDone = inDue && t.status === 'done';
+      const isOverdue = inDue && !DONE_STATUSES.includes(t.status);
       const riskReasons = computeRiskReasons(t);
       const isRisk = riskReasons.length > 0;
       const isWeeklyNew = t.createdAt >= thisMonday;
@@ -332,7 +396,7 @@ export class DashboardService {
       personMap.set(userId, {
         name: prev.name || t.assigneeName || '',
         leaderName: prev.leaderName || t.leaderName || '',
-        total: prev.total + 1,
+        total: prev.total + (inDue ? 1 : 0),
         done: prev.done + (isDone ? 1 : 0),
         overdue: prev.overdue + (isOverdue ? 1 : 0),
         riskCount: prev.riskCount + (isRisk ? 1 : 0),
@@ -351,7 +415,7 @@ export class DashboardService {
         overdue: data.overdue,
         riskCount: data.riskCount,
         weeklyNewCount: data.weeklyNewCount,
-        doneRate: data.total > 0 ? Math.round((data.done / data.total) * 100) : 0,
+        doneRate: completionRate(data.done, data.total),
         tasks: data.tasks,
       }))
       .sort((a, b) => b.total - a.total);
@@ -361,13 +425,14 @@ export class DashboardService {
     for (const t of tasks) {
       const pUid = t.projectUid || 'default';
       const prev = projectMap.get(pUid) ?? { name: '', total: 0, done: 0, overdue: 0, riskCount: 0 };
-      const isDone = t.status === 'done';
-      const isOverdue = t.isOverdue && !DONE_STATUSES.includes(t.status);
+      const inDue = isInDueSet(t, periodEnd);
+      const isDone = inDue && t.status === 'done';
+      const isOverdue = inDue && !DONE_STATUSES.includes(t.status);
       const riskReasons = computeRiskReasons(t);
 
       projectMap.set(pUid, {
         name: prev.name,
-        total: prev.total + 1,
+        total: prev.total + (inDue ? 1 : 0),
         done: prev.done + (isDone ? 1 : 0),
         overdue: prev.overdue + (isOverdue ? 1 : 0),
         riskCount: prev.riskCount + (riskReasons.length > 0 ? 1 : 0),
@@ -394,7 +459,7 @@ export class DashboardService {
       done: data.done,
       overdue: data.overdue,
       riskCount: data.riskCount,
-      doneRate: data.total > 0 ? Math.round((data.done / data.total) * 100) : 0,
+      doneRate: completionRate(data.done, data.total),
     })).sort((a, b) => b.total - a.total);
 
     // Risk tasks: any task matching at least one of the 5 risk conditions
@@ -421,22 +486,18 @@ export class DashboardService {
       }))
       .sort((a, b) => (a.daysToDue ?? 0) - (b.daysToDue ?? 0));
 
-    // Stats
-    const totalTasks = tasks.length;
-    const doneTasks = tasks.filter((t) => t.status === 'done').length;
-    const overdueTasks = tasks.filter(
-      (t) => t.isOverdue && !DONE_STATUSES.includes(t.status),
-    ).length;
-    const carryOverTasks = tasks.filter(
-      (t) => (t.carryOverCount ?? 0) >= 1,
-    ).length;
+    // 实时累计口径（当前/未结月份用），与 shared-types.cumulativeCounts 单一来源一致。
+    const live = cumulativeCounts(tasks, periodEnd);
+    // 继承数 = 携带进本期的任务（carryOverCount>=1）。始终用此口径，不被快照覆盖，
+    // 避免与快照里「将顺延出去」(monthCarryOverCount) 的语义混淆（#3）。
+    const carryOver = tasks.filter((t) => (t.carryOverCount ?? 0) >= 1).length;
     const riskTaskCount = riskTasks.length;
     const weeklyNewTasks = tasks.filter((t) => t.createdAt >= thisMonday).length;
     const weeklyDoneTasks = tasks.filter(
       (t) => t.status === 'done' && t.completedAt && t.completedAt >= thisMonday,
     ).length;
 
-    // Snapshot — fetch for all month buckets in the period
+    // Snapshot — 已结月份的冻结口径。#1: 按 generatedAt 倒序取最新一条，避免重跑后多行 isLatest 的非确定性。
     const snapshots = await this.db
       .select()
       .from(monthlySnapshot)
@@ -446,8 +507,17 @@ export class DashboardService {
           eq(monthlySnapshot.roleScope, 'company'),
           eq(monthlySnapshot.isLatest, true),
         ),
-      );
+      )
+      .orderBy(desc(monthlySnapshot.generatedAt))
+      .limit(1);
     const snapshot = snapshots[0] ?? null;
+
+    // 冻结快照优先：已结单月的总/完成/延期取自快照（与月报口径一致，不随后续状态漂移）。
+    // 当前/未结月份或多月周期用实时累计口径。snapshot 计数列为 NOT NULL，故无需 ?? 兜底。
+    const useSnapshot = monthBuckets.length === 1 && snapshot != null;
+    const total = useSnapshot ? snapshot.monthDueCount : live.total;
+    const done = useSnapshot ? snapshot.monthDoneCount : live.done;
+    const overdue = useSnapshot ? snapshot.monthOverdueCount : live.overdue;
 
     const periodLabel = getPeriodLabel(period, monthBuckets);
 
@@ -459,20 +529,21 @@ export class DashboardService {
       projectSummary,
       riskTasks,
       stats: {
-        total: totalTasks,
-        done: doneTasks,
-        overdue: overdueTasks,
-        carryOver: carryOverTasks,
+        total,
+        done,
+        overdue,
+        carryOver,
         riskCount: riskTaskCount,
         weeklyNewCount: weeklyNewTasks,
         weeklyDoneCount: weeklyDoneTasks,
-        doneRate: totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0,
-        overdueRate: totalTasks > 0 ? Math.round((overdueTasks / totalTasks) * 100) : 0,
+        doneRate: completionRate(done, total),
+        overdueRate: completionRate(overdue, total),
       },
       snapshot: snapshot
         ? {
             doneRate: snapshot.doneRate,
             overdueRate: snapshot.overdueRate,
+            monthDueCount: snapshot.monthDueCount,
             monthDoneCount: snapshot.monthDoneCount,
             monthOverdueCount: snapshot.monthOverdueCount,
             monthCarryOverCount: snapshot.monthCarryOverCount,
@@ -484,10 +555,11 @@ export class DashboardService {
   async getGanttData(period: DashboardPeriod) {
     const monthBuckets = getMonthBuckets(period);
 
+    // 归属月份区间口径（含被继承走的任务），详见 belongsToMonths 注释。
     const tasks = await this.db
       .select()
       .from(task)
-      .where(and(inArray(task.monthBucket, [...monthBuckets]), sql`${task.deletedAt} IS NULL`));
+      .where(and(belongsToMonths(monthBuckets), sql`${task.deletedAt} IS NULL`));
 
     // Fetch extra leaders from task_leader table
     const taskUids = tasks.map((t) => t.taskUid);
@@ -569,6 +641,372 @@ export class DashboardService {
       timeRange: { min: minDate, max: maxDate },
       groups: ganttGroups,
       totalTasks: tasks.length,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 项目驱动 V1a：项目组合视图（项目→子项目 两级树 + 健康度/进度/区间滚动汇总）
+  // ---------------------------------------------------------------------------
+  async getProjectPortfolio(now: Date = new Date()) {
+    const projects = await this.db.select().from(project).orderBy(project.createdAt);
+    // PIC 显示名映射（user_id → user_name）
+    const orgUsers = await this.db.select({ userId: orgCache.userId, userName: orgCache.userName }).from(orgCache);
+    const nameOf = new Map(orgUsers.map((u) => [u.userId, u.userName]));
+    // 活跃、非私有任务（项目视图=公司/团队执行口径，私有任务不计入）
+    const tasks = await this.db
+      .select({
+        taskUid: task.taskUid,
+        title: task.title,
+        projectUid: task.projectUid,
+        status: task.status,
+        progressPercent: task.progressPercent,
+        dueAt: task.dueAt,
+        startAt: task.startAt,
+        createdAt: task.createdAt,
+      })
+      .from(task)
+      .where(and(sql`${task.deletedAt} IS NULL`, sql`${task.visibility} <> 'private'`));
+
+    const byProject = new Map<string, typeof tasks>();
+    for (const t of tasks) {
+      if (!t.projectUid) continue;
+      const arr = byProject.get(t.projectUid);
+      if (arr) arr.push(t);
+      else byProject.set(t.projectUid, [t]);
+    }
+    const childrenOf = new Map<string, typeof projects>();
+    for (const p of projects) {
+      if (!p.parentProjectUid) continue;
+      const arr = childrenOf.get(p.parentProjectUid);
+      if (arr) arr.push(p);
+      else childrenOf.set(p.parentProjectUid, [p]);
+    }
+    const directTasks = (uid: string) => byProject.get(uid) ?? [];
+
+    // 关联事故计数（V2）：未删除、未驳回的事故，按 related_project_uid 聚合
+    const incidents = await this.db
+      .select({ relatedProjectUid: incident.relatedProjectUid })
+      .from(incident)
+      .where(and(sql`${incident.deletedAt} IS NULL`, sql`${incident.confirmStatus} <> 'rejected'`));
+    const incByProject = new Map<string, number>();
+    for (const i of incidents) {
+      if (!i.relatedProjectUid) continue;
+      incByProject.set(i.relatedProjectUid, (incByProject.get(i.relatedProjectUid) ?? 0) + 1);
+    }
+    const directIncidents = (uid: string) => incByProject.get(uid) ?? 0;
+
+    const meta = (p: (typeof projects)[number]) => ({
+      projectUid: p.projectUid,
+      name: p.name,
+      category: p.category,
+      region: p.region,
+      ownerName: p.ownerName,
+      picUserId: p.picUserId,
+      picName: p.picUserId ? nameOf.get(p.picUserId) ?? null : null,
+      isDefault: p.isDefault,
+      parentProjectUid: p.parentProjectUid,
+    });
+    // 任务的轻量展示视图（供分层甘特画 task bar）。
+    const nowMs = now.getTime();
+    const taskView = (t: (typeof tasks)[number]) => ({
+      taskUid: t.taskUid,
+      title: t.title,
+      status: t.status,
+      progressPercent: t.progressPercent ?? 0,
+      startAt: t.startAt,
+      dueAt: t.dueAt,
+      overdue: !!t.dueAt && new Date(t.dueAt as any).getTime() < nowMs && !TERMINAL_STATUSES.includes(t.status as any),
+    });
+    // rollupTasks 用于汇总口径（顶级含子项目）；displayTasks 是本节点直接任务（画 bar/下钻）。
+    const buildNode = (
+      p: (typeof projects)[number],
+      rollupTasks: typeof tasks,
+      displayTasks: typeof tasks = rollupTasks,
+    ) => ({
+      ...meta(p),
+      ...rollupProject(rollupTasks as any, now),
+      tasks: displayTasks.map(taskView),
+    });
+
+    return projects
+      .filter((p) => !p.parentProjectUid)
+      .map((p) => {
+        const subs = childrenOf.get(p.projectUid) ?? [];
+        const subProjects = subs.map((s) => ({
+          ...buildNode(s, directTasks(s.projectUid)),
+          incidentCount: directIncidents(s.projectUid),
+        }));
+        // 顶级项目滚动汇总 = 直接任务 + 所有子项目任务（传递）；直接任务用于本行 bar/下钻。
+        const direct = directTasks(p.projectUid);
+        const allTasks = [...direct, ...subs.flatMap((s) => directTasks(s.projectUid))];
+        // 事故数 = 本项目 + 所有子项目（传递）
+        const incidentCount = directIncidents(p.projectUid) + subs.reduce((n, s) => n + directIncidents(s.projectUid), 0);
+        return { ...buildNode(p, allTasks, direct), incidentCount, subProjects };
+      });
+  }
+
+  // ---------------------------------------------------------------------------
+  // NEW: getLeaderMonthly — §2.1
+  // Returns aggregated monthly stats for all members under the given leader.
+  // ---------------------------------------------------------------------------
+  async getLeaderMonthly(leaderId: string, leaderName: string, month?: string) {
+    const bucket = month || getCurrentMonth();
+
+    // 归属月份区间口径：含被继承走的任务（回看上月时不丢）。详见 belongsToMonths 注释。
+    const allTasks = await this.db
+      .select()
+      .from(task)
+      .where(and(belongsToMonths([bucket]), sql`${task.deletedAt} IS NULL`));
+
+    const taskUids = allTasks.map((t) => t.taskUid);
+    const extraLeadersMap = await this.fetchExtraLeaders(taskUids);
+
+    // Filter to tasks that belong to the requesting leader (primary or extra)
+    const leaderTasks = allTasks.filter((t) => {
+      if (t.leaderUserId === leaderId) return true;
+      const extras = extraLeadersMap.get(t.taskUid) ?? [];
+      return extras.some((e) => e.leaderUserId === leaderId);
+    });
+
+    // 累计口径（与驾驶舱顶部/月结一致，#4）：仅 due_at ≤ 月末 且非 shelved 计入分母。
+    const periodEnd = getPeriodEnd([bucket]);
+
+    // Aggregate per member
+    const memberMap = new Map<
+      string,
+      { name: string; total: number; done: number; overdue: number }
+    >();
+
+    for (const t of leaderTasks) {
+      const inDue = isInDueSet(t, periodEnd);
+      const isDone = inDue && t.status === 'done';
+      const isOverdue = inDue && !DONE_STATUSES.includes(t.status);
+      const prev = memberMap.get(t.assigneeUserId) ?? {
+        name: t.assigneeName || t.assigneeUserId,
+        total: 0,
+        done: 0,
+        overdue: 0,
+      };
+      memberMap.set(t.assigneeUserId, {
+        name: prev.name,
+        total: prev.total + (inDue ? 1 : 0),
+        done: prev.done + (isDone ? 1 : 0),
+        overdue: prev.overdue + (isOverdue ? 1 : 0),
+      });
+    }
+
+    const members = [...memberMap.entries()].map(([userId, data]) => ({
+      userId,
+      name: data.name,
+      total: data.total,
+      done: data.done,
+      overdue: data.overdue,
+      completionRate: completionRate(data.done, data.total),
+    }));
+
+    const { total, done, overdue } = cumulativeCounts(leaderTasks, periodEnd);
+
+    return {
+      month: bucket,
+      leaderId,
+      leaderName,
+      total,
+      done,
+      overdue,
+      completionRate: completionRate(done, total),
+      members,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // NEW: getLeaderMemberTasks — §2.2
+  // Returns task detail list for a specific member under the requesting leader.
+  // Throws 1002 NO_PERMISSION if the leader has no task association with the member.
+  // ---------------------------------------------------------------------------
+  async getLeaderMemberTasks(
+    requestingLeaderId: string,
+    memberUserId: string,
+    month?: string,
+  ) {
+    const bucket = month || getCurrentMonth();
+
+    // 归属月份区间口径：含被继承走的任务（回看上月时不丢）。详见 belongsToMonths 注释。
+    const memberTasks = await this.db
+      .select()
+      .from(task)
+      .where(
+        and(
+          eq(task.assigneeUserId, memberUserId),
+          belongsToMonths([bucket]),
+          sql`${task.deletedAt} IS NULL`,
+        ),
+      );
+
+    const taskUids = memberTasks.map((t) => t.taskUid);
+    const extraLeadersMap = await this.fetchExtraLeaders(taskUids);
+
+    // Permission check: at least one task must be under the requesting leader
+    const hasAccess = memberTasks.some((t) => {
+      if (t.leaderUserId === requestingLeaderId) return true;
+      const extras = extraLeadersMap.get(t.taskUid) ?? [];
+      return extras.some((e) => e.leaderUserId === requestingLeaderId);
+    });
+
+    if (!hasAccess) {
+      throw new BusinessException(1002, 'NO_PERMISSION', HttpStatus.FORBIDDEN);
+    }
+
+    const userName = memberTasks[0]?.assigneeName || memberUserId;
+    // 汇总用累计口径（#4）；任务明细列表仍展示全部归属任务。
+    const { total, done, overdue } = cumulativeCounts(memberTasks, getPeriodEnd([bucket]));
+
+    const taskDetails = memberTasks.map((t) => ({
+      taskUid: t.taskUid,
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+      dueAt: t.dueAt ? t.dueAt.toISOString() : null,
+      completedAt: t.completedAt ? t.completedAt.toISOString() : null,
+      isOverdue: !!(t.isOverdue && !DONE_STATUSES.includes(t.status)),
+      progressPercent: t.progressPercent ?? 0,
+      bossAttentionFlag: t.bossAttentionFlag ?? false,
+      delayCount: t.delayCount ?? 0,
+      carryOverCount: t.carryOverCount ?? 0,
+    }));
+
+    return {
+      month: bucket,
+      userId: memberUserId,
+      userName,
+      summary: {
+        total,
+        done,
+        overdue,
+        completionRate: completionRate(done, total),
+      },
+      tasks: taskDetails,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // NEW: getLeaderWeekly — §2.3
+  // Returns weekly progress for all members under the requesting leader.
+  // "This week" is Mon 00:00 to Sun 23:59:59 Asia/Shanghai.
+  // ---------------------------------------------------------------------------
+  async getLeaderWeekly(leaderId: string, leaderName: string) {
+    const thisMonday = getThisWeekMondayShanghai();
+    const thisSunday = getThisWeekSundayShanghai(thisMonday);
+
+    // Fetch all non-deleted tasks (weekly view can span month boundaries)
+    const allTasks = await this.db
+      .select()
+      .from(task)
+      .where(sql`${task.deletedAt} IS NULL`);
+
+    const taskUids = allTasks.map((t) => t.taskUid);
+    const extraLeadersMap = await this.fetchExtraLeaders(taskUids);
+
+    // Filter to tasks that belong to the requesting leader
+    const leaderTasks = allTasks.filter((t) => {
+      if (t.leaderUserId === leaderId) return true;
+      const extras = extraLeadersMap.get(t.taskUid) ?? [];
+      return extras.some((e) => e.leaderUserId === leaderId);
+    });
+
+    // Aggregate per member
+    const memberMap = new Map<
+      string,
+      { name: string; newCount: number; doneCount: number; overdueCount: number }
+    >();
+
+    for (const t of leaderTasks) {
+      const isNewThisWeek = t.createdAt >= thisMonday && t.createdAt <= thisSunday;
+      const isDoneThisWeek =
+        t.status === 'done' && t.completedAt != null && t.completedAt >= thisMonday;
+      const isOverdueActive = !!(t.isOverdue && !DONE_STATUSES.includes(t.status));
+
+      const prev = memberMap.get(t.assigneeUserId) ?? {
+        name: t.assigneeName || t.assigneeUserId,
+        newCount: 0,
+        doneCount: 0,
+        overdueCount: 0,
+      };
+      memberMap.set(t.assigneeUserId, {
+        name: prev.name,
+        newCount: prev.newCount + (isNewThisWeek ? 1 : 0),
+        doneCount: prev.doneCount + (isDoneThisWeek ? 1 : 0),
+        overdueCount: prev.overdueCount + (isOverdueActive ? 1 : 0),
+      });
+    }
+
+    const members = [...memberMap.entries()].map(([userId, data]) => {
+      const total = data.doneCount + data.overdueCount;
+      return {
+        userId,
+        name: data.name,
+        newCount: data.newCount,
+        doneCount: data.doneCount,
+        overdueCount: data.overdueCount,
+        completionRate: total > 0 ? Math.round((data.doneCount / total) * 100) : 0,
+      };
+    });
+
+    const teamNewCount = members.reduce((s, m) => s + m.newCount, 0);
+    const teamDoneCount = members.reduce((s, m) => s + m.doneCount, 0);
+    const teamOverdueCount = members.reduce((s, m) => s + m.overdueCount, 0);
+    const teamTotal = teamDoneCount + teamOverdueCount;
+
+    return {
+      weekStart: thisMonday.toISOString(),
+      weekEnd: thisSunday.toISOString(),
+      leaderId,
+      leaderName,
+      members,
+      teamSummary: {
+        newCount: teamNewCount,
+        doneCount: teamDoneCount,
+        overdueCount: teamOverdueCount,
+        completionRate: teamTotal > 0 ? Math.round((teamDoneCount / teamTotal) * 100) : 0,
+      },
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // NEW: getMyMonthly — §2.4
+  // Returns current user's own monthly task summary.
+  // ---------------------------------------------------------------------------
+  async getMyMonthly(userId: string, userName: string, month?: string) {
+    const bucket = month || getCurrentMonth();
+
+    // 归属月份区间口径：含被继承走的任务（回看上月时不丢）。详见 belongsToMonths 注释。
+    const userTasks = await this.db
+      .select()
+      .from(task)
+      .where(
+        and(
+          eq(task.assigneeUserId, userId),
+          belongsToMonths([bucket]),
+          sql`${task.deletedAt} IS NULL`,
+        ),
+      );
+
+    // 累计口径（#4）：分母 = due_at ≤ 月末 且非 shelved。
+    const { total, done, overdue } = cumulativeCounts(userTasks, getPeriodEnd([bucket]));
+    const inProgress = userTasks.filter((t) => t.status === 'in_progress').length;
+    const carriedOver = userTasks.filter((t) => (t.carryOverCount ?? 0) >= 1).length;
+    const delayTotal = userTasks.reduce((s, t) => s + (t.delayCount ?? 0), 0);
+
+    return {
+      month: bucket,
+      userId,
+      userName,
+      total,
+      done,
+      inProgress,
+      overdue,
+      completionRate: completionRate(done, total),
+      carriedOver,
+      delayTotal,
     };
   }
 }

@@ -16,7 +16,12 @@ COPY packages/shared-types/ packages/shared-types/
 COPY apps/web/ apps/web/
 
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm --filter @leader-sync/web build
+ENV NEXT_OUTPUT=standalone
+# 构建期断言：standalone server.js 必须产出，否则立即失败（避免运行时才报 "cannot find server.js"）。
+# 若 NEXT_OUTPUT 丢失导致非 standalone 构建，此处 fail fast。
+RUN pnpm --filter @leader-sync/web build \
+  && test -f apps/web/.next/standalone/apps/web/server.js \
+  || (echo "ERROR: standalone server.js missing — Docker 镜像需 NEXT_OUTPUT=standalone 构建" && exit 1)
 
 # ── Production ──
 FROM node:22-slim AS production

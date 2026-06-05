@@ -62,9 +62,9 @@ function getBarColor(status: string, isOverdue: boolean): string {
       return 'bg-[var(--accent-red)]';
     case 'pending':
     case 'not_started':
-      return 'bg-[#5a5a6e]';
+      return 'bg-[var(--text-muted)]';
     default:
-      return 'bg-[#5a5a6e]';
+      return 'bg-[var(--text-muted)]';
   }
 }
 

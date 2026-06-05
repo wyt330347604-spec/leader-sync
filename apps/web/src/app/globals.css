@@ -29,23 +29,34 @@
 }
 
 :root {
-  --bg-page: #0a0a0f;
-  --bg-card: #12121a;
-  --bg-surface: #1e1e2e;
-  --bg-hover: #1a1a2e;
-  --border: #2a2a3a;
-  --text-primary: #e4e4e7;
-  --text-secondary: #8b8b9e;
-  --text-muted: #5a5a6e;
-  --accent-blue: #3b82f6;
-  --accent-green: #22c55e;
-  --accent-red: #ef4444;
-  --accent-orange: #f59e0b;
-  --border-strong: #3a3a4a;
-  --hero-gradient-from: #12121a;
-  --hero-gradient-to: #1a1a2e;
-  --hero-card-bg: rgba(10, 10, 15, 0.6);
+  /* Graphite 冷中性灰（高级灰，Linear 风）。单一靛蓝强调 + 压低饱和语义色。 */
+  --bg-page: #0a0a0b;
+  --bg-card: #141417;
+  --bg-surface: #1c1c21;
+  --bg-hover: #232329;
+  --border: #2c2c33;
+  --text-primary: #ececef;
+  --text-secondary: #9a9aa6;
+  --text-muted: #66666f;
+  --accent-blue: #6366f1;
+  --accent-green: #2faa6e;
+  --accent-red: #e0556b;
+  --accent-orange: #d98a3a;
+  --border-strong: #3a3a44;
+  --hero-gradient-from: #141417;
+  --hero-gradient-to: #1c1c21;
+  --hero-card-bg: rgba(10, 10, 11, 0.6);
   --hero-text: #ffffff;
+  /* ---- 语义标签 token（收敛散落 hex）---- */
+  --tag-carry: #5eead4;
+  --tag-private: #9a9aa6;
+  --tag-collab: #8b8cf0;
+  --st-pending: #7c83ff;
+  --st-not-started: #a78bfa;
+  --st-in-progress: #d98a3a;
+  --st-stalled: #e0556b;
+  --st-done: #2faa6e;
+  --st-shelved: #66666f;
   color-scheme: dark;
   /* ---- project category (2026-05) ---- */
   --cat-jt: #475569;
@@ -61,23 +72,34 @@
 }
 
 [data-theme="light"] {
-  --bg-page: #f9fafb;
+  /* 浅色：精炼中性灰（zinc），与 Graphite 同体系。 */
+  --bg-page: #fafafa;
   --bg-card: #ffffff;
-  --bg-surface: #f3f4f6;
-  --bg-hover: #e5e7eb;
-  --border: #e5e7eb;
-  --text-primary: #111827;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
-  --accent-blue: #2563eb;
-  --accent-green: #16a34a;
-  --accent-red: #dc2626;
-  --accent-orange: #d97706;
-  --border-strong: #d1d5db;
-  --hero-gradient-from: #eff6ff;
-  --hero-gradient-to: #f0f9ff;
+  --bg-surface: #f4f4f5;
+  --bg-hover: #e9e9ec;
+  --border: #e4e4e7;
+  --text-primary: #1b1b1f;
+  --text-secondary: #5f5f6b;
+  --text-muted: #9a9aa6;
+  --accent-blue: #5457e0;
+  --accent-green: #2c9a64;
+  --accent-red: #d24b61;
+  --accent-orange: #c47a2e;
+  --border-strong: #d4d4d8;
+  --hero-gradient-from: #f4f4f5;
+  --hero-gradient-to: #ececef;
   --hero-card-bg: rgba(255, 255, 255, 0.8);
-  --hero-text: #111827;
+  --hero-text: #1b1b1f;
+  /* ---- 语义标签 token ---- */
+  --tag-carry: #0d9488;
+  --tag-private: #71717a;
+  --tag-collab: #6366f1;
+  --st-pending: #5457e0;
+  --st-not-started: #7c5cd6;
+  --st-in-progress: #c47a2e;
+  --st-stalled: #d24b61;
+  --st-done: #2c9a64;
+  --st-shelved: #9a9aa6;
   color-scheme: light;
   /* ---- project category (2026-05) ---- */
   --cat-jt: #475569;

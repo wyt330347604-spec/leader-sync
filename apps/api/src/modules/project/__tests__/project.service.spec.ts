@@ -80,3 +80,75 @@ describe('ProjectService.update — partial updates', () => {
       .rejects.toBeInstanceOf(BusinessException);
   });
 });
+
+describe('ProjectService — 子项目两级约束（parentProjectUid）', () => {
+  // select().from().where() → 可配置数组（按调用顺序）；insert/update.returning 可配置。
+  function mockDb() {
+    const selectWhere = vi.fn();
+    const insertReturning = vi.fn().mockResolvedValue([{ projectUid: 'new', name: 'X' }]);
+    const updateReturning = vi.fn().mockResolvedValue([{ projectUid: 'p1', name: 'X' }]);
+    const db: any = {
+      select: () => ({ from: () => ({ where: selectWhere, orderBy: () => Promise.resolve([]) }) }),
+      insert: () => ({ values: vi.fn(() => ({ returning: insertReturning })) }),
+      update: () => ({ set: vi.fn(() => ({ where: () => ({ returning: updateReturning }) })) }),
+    };
+    // 暴露 values 以便断言
+    const valuesSpy = vi.fn(() => ({ returning: insertReturning }));
+    db.insert = () => ({ values: valuesSpy });
+    return { db, selectWhere, valuesSpy, insertReturning, updateReturning };
+  }
+
+  it('create 子项目：父为顶级项目 → 成功，写入 parentProjectUid', async () => {
+    const { db, selectWhere, valuesSpy } = mockDb();
+    selectWhere.mockResolvedValueOnce([{ projectUid: 'top', parentProjectUid: null }]); // 父查找
+    const service = new ProjectService(db as any);
+    await service.create({ name: '子', parentProjectUid: 'top' });
+    expect(valuesSpy).toHaveBeenCalledWith(expect.objectContaining({ parentProjectUid: 'top' }));
+  });
+
+  it('create 子项目：父不存在 → 1003', async () => {
+    const { db, selectWhere } = mockDb();
+    selectWhere.mockResolvedValueOnce([]); // 父不存在
+    const service = new ProjectService(db as any);
+    await expect(service.create({ name: '子', parentProjectUid: 'ghost' }))
+      .rejects.toMatchObject({ businessCode: 1003 });
+  });
+
+  it('create 子项目：父本身是子项目 → 拒绝三级（1004）', async () => {
+    const { db, selectWhere } = mockDb();
+    selectWhere.mockResolvedValueOnce([{ projectUid: 'mid', parentProjectUid: 'top' }]); // 父已是子项目
+    const service = new ProjectService(db as any);
+    await expect(service.create({ name: '孙', parentProjectUid: 'mid' }))
+      .rejects.toMatchObject({ businessCode: 1004 });
+  });
+
+  it('update：自己已有子项目时不能降级为子项目（1004）', async () => {
+    const { db, selectWhere } = mockDb();
+    selectWhere
+      .mockResolvedValueOnce([{ projectUid: 'top', parentProjectUid: null }]) // 父合法
+      .mockResolvedValueOnce([{ projectUid: 'child' }]);                       // 自己有子项目
+    const service = new ProjectService(db as any);
+    await expect(service.update('self', { parentProjectUid: 'top' }))
+      .rejects.toMatchObject({ businessCode: 1004 });
+  });
+
+  it('update：parent = 自己 → 1004', async () => {
+    const { db } = mockDb();
+    const service = new ProjectService(db as any);
+    await expect(service.update('p1', { parentProjectUid: 'p1' }))
+      .rejects.toMatchObject({ businessCode: 1004 });
+  });
+
+  it('update：parentProjectUid=null 升级回顶级项目 → 允许', async () => {
+    const { db } = mockDb();
+    const service = new ProjectService(db as any);
+    await expect(service.update('p1', { parentProjectUid: null })).resolves.toBeDefined();
+  });
+
+  it('create：picUserId 透传写入', async () => {
+    const { db, valuesSpy } = mockDb();
+    const service = new ProjectService(db as any);
+    await service.create({ name: '项目X', picUserId: 'ou_pic' });
+    expect(valuesSpy).toHaveBeenCalledWith(expect.objectContaining({ picUserId: 'ou_pic' }));
+  });
+});

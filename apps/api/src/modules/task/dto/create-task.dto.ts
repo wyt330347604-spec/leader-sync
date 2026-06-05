@@ -1,5 +1,5 @@
 import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsDateString, IsIn } from 'class-validator';
-import { TaskType, Priority, AssignmentType, type CreateTaskDto } from '@leader-sync/shared-types';
+import { TaskType, Priority, AssignmentType, TaskVisibility, type CreateTaskDto } from '@leader-sync/shared-types';
 
 export class CreateTaskRequestDto implements CreateTaskDto {
   @IsString()
@@ -39,4 +39,8 @@ export class CreateTaskRequestDto implements CreateTaskDto {
   @IsString()
   @IsOptional()
   project_uid?: string;
+
+  @IsIn(Object.values(TaskVisibility))
+  @IsOptional()
+  visibility?: TaskVisibility;
 }

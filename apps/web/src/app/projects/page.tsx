@@ -34,6 +34,9 @@ interface Project {
   ownerName: string | null;
   region: string | null;
   subtitle: string | null;
+  parentProjectUid: string | null;
+  picUserId: string | null;
+  picName: string | null;
 }
 
 interface Permissions { canManage: boolean }
@@ -106,7 +109,8 @@ function ProjectsContent() {
           method: 'PATCH',
           body: JSON.stringify({
             name: v.name, category: v.category, ownerName: v.ownerName,
-            region: v.region, subtitle: v.subtitle,
+            region: v.region, subtitle: v.subtitle, parentProjectUid: v.parentProjectUid,
+            picUserId: v.pic?.userId ?? null,
           }),
         });
         if (v.isDefault && !editingProject.isDefault) {
@@ -117,7 +121,8 @@ function ProjectsContent() {
           method: 'POST',
           body: JSON.stringify({
             name: v.name, category: v.category, ownerName: v.ownerName,
-            region: v.region, subtitle: v.subtitle,
+            region: v.region, subtitle: v.subtitle, parentProjectUid: v.parentProjectUid,
+            picUserId: v.pic?.userId ?? null,
           }),
         });
         if (v.isDefault) {
@@ -163,7 +168,7 @@ function ProjectsContent() {
         {canManage && (
           <button
             onClick={openCreate}
-            className="rounded-full bg-[#3b82f6] px-5 py-2 text-sm font-medium text-white hover:bg-[#2563eb]"
+            className="rounded-full bg-[var(--accent-blue)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--accent-blue)]"
           >
             新建项目
           </button>
@@ -182,7 +187,7 @@ function ProjectsContent() {
       </div>
 
       {isLoading && <div className="py-12 text-center text-[var(--text-muted)]">加载中...</div>}
-      {error && <div className="py-12 text-center text-[#ef4444]">加载失败: {error.message}</div>}
+      {error && <div className="py-12 text-center text-[var(--accent-red)]">加载失败: {error.message}</div>}
 
       {!isLoading && !error && projects && (
         <>
@@ -223,7 +228,14 @@ function ProjectsContent() {
           region: editingProject.region as ProjectRegion | null,
           subtitle: editingProject.subtitle,
           isDefault: editingProject.isDefault,
+          parentProjectUid: editingProject.parentProjectUid,
+          pic: editingProject.picUserId
+            ? { userId: editingProject.picUserId, userName: editingProject.picName ?? editingProject.picUserId }
+            : null,
         } : undefined}
+        parentOptions={(projects ?? [])
+          .filter((p) => !p.parentProjectUid && p.projectUid !== editingProject?.projectUid)
+          .map((p) => ({ value: p.projectUid, label: p.name }))}
         submitting={submitting}
         onClose={closeModal}
         onSubmit={handleSubmit}
@@ -314,12 +326,12 @@ function ProjectCard({
           <div className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2 flex-wrap">
             <span>{project.name}</span>
             {project.subtitle && (
-              <span className="rounded-md bg-[#2563eb] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+              <span className="rounded-md bg-[var(--accent-blue)] px-1.5 py-0.5 text-[11px] font-semibold text-white">
                 {project.subtitle}
               </span>
             )}
             {project.isDefault && (
-              <span className="rounded-full border border-[#3b82f6]/20 bg-[#3b82f6]/10 px-2 py-0.5 text-[10px] text-[#3b82f6]">
+              <span className="rounded-full border border-[var(--accent-blue)]/20 bg-[var(--accent-blue)]/10 px-2 py-0.5 text-[10px] text-[var(--accent-blue)]">
                 默认
               </span>
             )}
@@ -330,7 +342,7 @@ function ProjectCard({
             <button
               onClick={() => onEdit(project)}
               aria-label="编辑项目"
-              className="rounded-full p-1.5 text-[var(--text-secondary)] hover:bg-[#3b82f6]/10 hover:text-[#3b82f6]"
+              className="rounded-full p-1.5 text-[var(--text-secondary)] hover:bg-[var(--accent-blue)]/10 hover:text-[var(--accent-blue)]"
               title="编辑"
             >
               <PencilIcon />
@@ -339,7 +351,7 @@ function ProjectCard({
               <button
                 onClick={() => onDelete(project)}
                 aria-label="删除项目"
-                className="rounded-full p-1.5 text-[#ef4444] hover:bg-[#ef4444]/10"
+                className="rounded-full p-1.5 text-[var(--accent-red)] hover:bg-[var(--accent-red)]/10"
                 title="删除"
               >
                 ×

@@ -11,11 +11,19 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ProjectModule } from './modules/project/project.module';
 import { UserModule } from './modules/user/user.module';
 import { NotificationPreferenceModule } from './modules/notification-preference/notification-preference.module';
+import { IncidentModule } from './modules/incident/incident.module';
+import { GradeModule } from './modules/grade/grade.module';
+import { MonthlyScoreModule } from './modules/monthly-score/monthly-score.module';
+import { AiModule } from './modules/ai/ai.module';
+import { FeishuBotModule } from './modules/feishu-bot/feishu-bot.module';
 import { DatabaseModule } from './database.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env', '../../.env'],
+    }),
     DatabaseModule,
     HealthModule,
     AuthModule,
@@ -24,6 +32,11 @@ import { DatabaseModule } from './database.module';
     ProjectModule,
     UserModule,
     NotificationPreferenceModule,
+    IncidentModule,
+    GradeModule,
+    MonthlyScoreModule,
+    AiModule,
+    FeishuBotModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: TraceIdInterceptor },

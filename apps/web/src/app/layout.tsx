@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { TopNav } from '@/components/top-nav';
 import { Toaster } from '@/components/ui/sonner';
+import { AiChatProvider } from '@/components/ai-chat-widget/ai-chat-provider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -13,10 +14,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="zh-CN">
       <body className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] antialiased">
         <TopNav />
-        <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-16">
+        <main className="mx-auto max-w-7xl px-4 sm:px-6 pt-16">
           {children}
         </main>
         <Toaster richColors position="top-center" />
+        <AiChatProvider />
       </body>
     </html>
   );

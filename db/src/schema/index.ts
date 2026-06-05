@@ -1,4 +1,5 @@
 export { task } from './task';
+export { taskUserOrder } from './task-user-order';
 export { taskLeader } from './task-leader';
 export { taskProgressLog } from './task-progress-log';
 export { externalMapping } from './external-mapping';
@@ -10,3 +11,7 @@ export { userRoleBinding } from './user-role-binding';
 export { orgCache } from './org-cache';
 export { project } from './project';
 export { userNotificationPreference } from './user-notification-preference';
+export { incident, incidentUser } from './incident';
+export { gradeHistory } from './grade';
+export { monthlyScore } from './monthly-score';
+export { aiConversation } from './ai-conversation';

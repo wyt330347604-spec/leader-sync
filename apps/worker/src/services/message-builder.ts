@@ -111,3 +111,80 @@ export function buildMonthlyReportCard(recipientName: string, month: string, sta
     ],
   };
 }
+
+/**
+ * Feishu card sent to each direct leader when the scoring window opens after monthly close.
+ * Spec §5.1: 标题 + 下属待打分人数 + 截止日期 + 行动按钮
+ */
+export function buildScoreWindowCard(
+  leaderName: string,
+  scoreMonth: string,
+  rateeCount: number,
+  deadlineDate: string,
+): object {
+  return {
+    config: { wide_screen_mode: true },
+    header: {
+      title: { tag: 'plain_text', content: `【评分窗口开启】${scoreMonth} 月度评分` },
+      template: 'violet',
+    },
+    elements: [
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: `**${leaderName}**，您有 **${rateeCount}** 位下属待完成月度打分，请在 **${deadlineDate}**（月结后 7 日）前完成。`,
+        },
+      },
+      { tag: 'hr' },
+      {
+        tag: 'action',
+        actions: [{
+          tag: 'button',
+          text: { tag: 'plain_text', content: '前往打分' },
+          type: 'primary',
+          url: `${config.appBaseUrl}/scores?month=${scoreMonth}`,
+        }],
+      },
+    ],
+  };
+}
+
+/**
+ * Feishu card for escalation notification when a challenge exceeds 48h without response.
+ * Spec §5.2: PMO + CC ratee
+ */
+export function buildEscalationCard(
+  rateeName: string,
+  raterName: string,
+  challengedAt: Date,
+  scoreUid: string,
+): object {
+  const challengedAtStr = challengedAt.toISOString().replace('T', ' ').slice(0, 16);
+  return {
+    config: { wide_screen_mode: true },
+    header: {
+      title: { tag: 'plain_text', content: '【评分质疑超时提醒】' },
+      template: 'orange',
+    },
+    elements: [
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: `**${rateeName}** 于 ${challengedAtStr} 提出质疑，**${raterName}** 尚未响应（已超 48 小时）。`,
+        },
+      },
+      { tag: 'hr' },
+      {
+        tag: 'action',
+        actions: [{
+          tag: 'button',
+          text: { tag: 'plain_text', content: '查看质疑' },
+          type: 'danger',
+          url: `${config.appBaseUrl}/scores/${scoreUid}`,
+        }],
+      },
+    ],
+  };
+}

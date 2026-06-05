@@ -165,3 +165,16 @@
 | `ownerName` | `project.owner_name` | `varchar(64)` | 否 | 项目负责人显示名（自由文本，未来再升级飞书 user_id 关系） | 手填 |
 | `region` | `project.region` | `varchar(32)` enum | 否 | 项目所在国家/地区 | 手填 |
 | `subtitle` | `project.subtitle` | `varchar(64)` | 否 | 项目副标签（"NBFC × 2"、"联合负责" 等） | 手填 |
+
+## task_user_order 表 — 2026-06 新增（每用户任务手动排序）
+
+个人视图排序偏好，**按用户隔离**，仅影响该用户自己的「我的任务」列表（任务为共享实体，排序不影响他人）。无记录的任务回落服务端默认排序。Migration `0010_task_user_order.sql`。
+
+| 字段名 (TS) | 数据库列 | 类型 | 必填 | 含义 | 来源 |
+|---|---|---|---|---|---|
+| `userId` | `task_user_order.user_id` | `varchar(128)` | 是 | 排序归属用户 | 系统 |
+| `taskUid` | `task_user_order.task_uid` | `varchar(64)` | 是 | 任务 UID | 系统 |
+| `position` | `task_user_order.position` | `double precision` | 是 | 组内排序位（拖拽落定按下标 0,1,2… upsert） | 拖拽 |
+| `updatedAt` | `task_user_order.updated_at` | `timestamptz` | 是 | 最后排序时间 | 系统 |
+
+唯一约束 `uniq_task_user_order_user_task (user_id, task_uid)` 作为 upsert 依据。写入端点：`PUT /api/v1/me/tasks/order { task_uids[] }`。

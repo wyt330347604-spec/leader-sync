@@ -8,6 +8,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { UserPicker } from '@/components/user-picker';
 import {
   ProjectCategory,
   ProjectCategoryLabel,
@@ -23,6 +24,10 @@ export interface ProjectFormValue {
   region: ProjectRegion | null;
   subtitle: string | null;
   isDefault: boolean;
+  /** 父项目 uid：空=顶级项目，非空=子项目（限两级）。 */
+  parentProjectUid: string | null;
+  /** PIC 负责人（真实用户）。 */
+  pic: { userId: string; userName: string } | null;
 }
 
 interface Props {
@@ -30,6 +35,8 @@ interface Props {
   mode: 'create' | 'edit';
   initial?: Partial<ProjectFormValue>;
   submitting?: boolean;
+  /** 可选父项目列表（仅顶级项目、且不含正在编辑的项目自身）。 */
+  parentOptions?: ComboboxOption[];
   onClose: () => void;
   onSubmit: (value: ProjectFormValue) => Promise<void> | void;
 }
@@ -41,6 +48,8 @@ const EMPTY: ProjectFormValue = {
   region: null,
   subtitle: '',
   isDefault: false,
+  parentProjectUid: null,
+  pic: null,
 };
 
 const REGION_OPTIONS: ComboboxOption[] = [
@@ -48,7 +57,7 @@ const REGION_OPTIONS: ComboboxOption[] = [
   ...ProjectRegionList.map((r) => ({ value: r, label: r })),
 ];
 
-export function ProjectModal({ open, mode, initial, submitting, onClose, onSubmit }: Props) {
+export function ProjectModal({ open, mode, initial, submitting, parentOptions, onClose, onSubmit }: Props) {
   const [v, setV] = useState<ProjectFormValue>(EMPTY);
 
   useEffect(() => {
@@ -108,7 +117,21 @@ export function ProjectModal({ open, mode, initial, submitting, onClose, onSubmi
             </div>
           </Field>
 
-          <Field label="负责人">
+          <Field label="父项目（留空=顶级项目；选择则成为其子项目）">
+            <Combobox
+              value={v.parentProjectUid ?? ''}
+              onChange={(val) => setV((s) => ({ ...s, parentProjectUid: val || null }))}
+              options={[{ value: '', label: '无（顶级项目）' }, ...(parentOptions ?? [])]}
+              placeholder="无（顶级项目）"
+              searchPlaceholder="搜索父项目"
+            />
+          </Field>
+
+          <Field label="PIC 负责人（用户，可用于过滤/追责）">
+            <UserPicker value={v.pic} onChange={(pic) => setV((s) => ({ ...s, pic }))} placeholder="搜索并指定 PIC" />
+          </Field>
+
+          <Field label="负责人（展示名，自由文本）">
             <input
               value={v.ownerName ?? ''}
               onChange={(e) => setV((s) => ({ ...s, ownerName: e.target.value }))}
@@ -157,7 +180,7 @@ export function ProjectModal({ open, mode, initial, submitting, onClose, onSubmi
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="rounded-full bg-[#3b82f6] px-6 py-2 text-sm font-medium text-white hover:bg-[#2563eb] disabled:opacity-50"
+            className="rounded-full bg-[var(--accent-blue)] px-6 py-2 text-sm font-medium text-white hover:bg-[var(--accent-blue)] disabled:opacity-50"
           >
             {submitting ? '提交中...' : (mode === 'create' ? '创建' : '保存')}
           </button>
@@ -171,7 +194,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
   return (
     <div>
       <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
-        {label}{required && <span className="text-[#ef4444] ml-0.5">*</span>}
+        {label}{required && <span className="text-[var(--accent-red)] ml-0.5">*</span>}
       </label>
       {children}
     </div>

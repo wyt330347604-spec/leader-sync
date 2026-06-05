@@ -1,0 +1,23 @@
+[Unit]
+Description=Leader-Sync Worker (cron: sync-inbound/outbound, reminders, monthly-close)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# pnpm --filter 把 exec 的 cwd 切到 apps/worker，dotenv 由此加载 apps/worker/.env
+WorkingDirectory=/opt/leader-sync
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/bin/node /usr/bin/pnpm --filter @leader-sync/worker exec tsx src/main.ts
+Restart=always
+RestartSec=5
+# 单实例 + cgroup 整组管理：stop 时连带 kill 子进程，杜绝孤儿/重复 worker
+KillMode=control-group
+# journald 行缓冲：解决 console.log 块缓冲导致"日志看着停了"的问题
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=leader-worker
+User=root
+
+[Install]
+WantedBy=multi-user.target

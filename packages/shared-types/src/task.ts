@@ -1,4 +1,4 @@
-import type { TaskType, Priority, AssignmentType, TaskStatus } from './enums';
+import type { TaskType, Priority, AssignmentType, TaskStatus, TaskVisibility } from './enums';
 
 export interface CreateTaskDto {
   title: string;
@@ -12,6 +12,7 @@ export interface CreateTaskDto {
   boss_attention_flag?: boolean;
   project_uid?: string;
   collaborators?: { user_id: string; user_name: string }[];
+  visibility?: TaskVisibility;
 }
 
 export interface UpdateTaskDto {
@@ -48,6 +49,8 @@ export interface DelayTaskDto {
 export interface TaskListQuery {
   status?: TaskStatus;
   bucket?: string;
+  /** 月份桶下限：month_bucket >= from（"本月及未来"视图）。 */
+  from?: string;
   priority?: Priority;
   role?: 'all' | 'assignee' | 'collaborator';
   page?: number;

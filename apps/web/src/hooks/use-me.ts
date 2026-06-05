@@ -6,6 +6,7 @@ export interface CurrentUser {
   readonly user_id: string;
   readonly open_id?: string;
   readonly user_name?: string;
+  readonly role?: string;
   readonly dept_id?: string;
   readonly dept_name?: string;
   readonly manager_user_id?: string;

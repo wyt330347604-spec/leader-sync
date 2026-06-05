@@ -55,6 +55,8 @@ export const task = pgTable(
     delayCount: integer('delay_count').notNull().default(0),
     monthlyCommitmentFlag: boolean('monthly_commitment_flag').default(false),
     bossAttentionFlag: boolean('boss_attention_flag').default(false),
+    // 可见性：public=公司共享（计入统计/同步）；private=个人仅创建者可见（不计入统计/不同步）
+    visibility: varchar('visibility', { length: 16 }).notNull().default('public'),
     overdueNotifiedLeaderAt: timestamp('overdue_notified_leader_at', { withTimezone: true }),
     monthlyCloseLocked: boolean('monthly_close_locked').default(false),
     projectUid: varchar('project_uid', { length: 64 }),

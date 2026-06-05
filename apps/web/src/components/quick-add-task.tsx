@@ -1,6 +1,5 @@
 'use client';
 import { useState, useEffect, useRef, useMemo } from 'react';
-import Link from 'next/link';
 import { toast } from 'sonner';
 import { Plus, X } from 'lucide-react';
 import { apiFetch } from '@/lib/api-client';
@@ -30,6 +29,7 @@ interface Project {
   readonly ownerName?: string | null;
   readonly region?: string | null;
   readonly subtitle?: string | null;
+  readonly parentProjectUid?: string | null;
 }
 
 interface QuickAddTaskProps {
@@ -43,6 +43,7 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
   const { data: me } = useMe();
   const [expanded, setExpanded] = useState(false);
   const [title, setTitle] = useState('');
+  const [visibility, setVisibility] = useState<'public' | 'private'>('public');
   const [priority, setPriority] = useState('urgent_important');
   const [dueAt, setDueAt] = useState('');
   const [projectUid, setProjectUid] = useState('');
@@ -54,15 +55,24 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
   const [assignee, setAssignee] = useState<{ userId: string; userName: string } | null>(null);
   const [showAssigneePopover, setShowAssigneePopover] = useState(false);
 
+  // 高级字段（就地展开，不跳转）
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [detail, setDetail] = useState('');
+  const [startAt, setStartAt] = useState('');
+  const [collaborators, setCollaborators] = useState<{ userId: string; userName: string }[]>([]);
+  const [collabQuery, setCollabQuery] = useState('');
+  const [collabResults, setCollabResults] = useState<readonly UserSearchResult[]>([]);
+  const [showCollabPopover, setShowCollabPopover] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
 
   const projectOptions: ComboboxOption[] = useMemo(
     () => [
-      { value: '', label: '选择项目' },
+      { value: '', label: '未归属（暂不选项目）' },
       ...projects.map((p) => ({
         value: p.projectUid,
-        label: p.name,
+        label: p.parentProjectUid ? `↳ ${p.name}` : p.name, // 子项目缩进标记
         leadingDot: p.category ? `var(--cat-${p.category})` : 'var(--text-muted)',
         badge: p.subtitle ?? (p.isDefault ? '默认' : undefined),
         badgeVariant: (p.subtitle ? 'subtitle' : 'default') as 'subtitle' | 'default',
@@ -72,14 +82,10 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
     [projects],
   );
 
-  // Load projects + default
+  // Load projects（项目驱动 V0：不再自动预选默认项目，留空=未归属，由用户主动选）
   useEffect(() => {
     apiFetch<readonly Project[]>('/api/v1/projects')
-      .then((list) => {
-        setProjects(list);
-        const def = list.find((p) => p.isDefault);
-        if (def && !projectUid) setProjectUid(def.projectUid);
-      })
+      .then((list) => setProjects(list))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -105,6 +111,20 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
     return () => clearTimeout(timer);
   }, [assigneeQuery]);
 
+  // Debounced collaborator search
+  useEffect(() => {
+    if (collabQuery.length < 1) {
+      setCollabResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      apiFetch<UserSearchResult[]>(`/api/v1/users/search?q=${encodeURIComponent(collabQuery)}`)
+        .then(setCollabResults)
+        .catch(() => setCollabResults([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [collabQuery]);
+
   function handleExpand() {
     setExpanded(true);
     setTimeout(() => titleInputRef.current?.focus(), 0);
@@ -112,14 +132,20 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
 
   function resetForm() {
     setTitle('');
+    setVisibility('public');
     setPriority('urgent_important');
     setDueAt('');
-    const def = projects.find((p) => p.isDefault);
-    setProjectUid(def?.projectUid ?? '');
+    setProjectUid(''); // 留空=未归属（不再预选默认项目）
     if (me) setAssignee({ userId: me.user_id, userName: me.user_name ?? '我' });
     setAssigneeQuery('');
     setAssigneeResults([]);
     setShowAssigneePopover(false);
+    setDetail('');
+    setStartAt('');
+    setCollaborators([]);
+    setCollabQuery('');
+    setCollabResults([]);
+    setShowCollabPopover(false);
   }
 
   function handleCancel() {
@@ -128,7 +154,10 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
   }
 
   async function handleSubmit() {
-    if (!title.trim() || !assignee || !dueAt || submitting) return;
+    const isPrivate = visibility === 'private';
+    // 私有：负责人固定为自己；公开：需选负责人。
+    const assigneeUserId = isPrivate ? me?.user_id : assignee?.userId;
+    if (!title.trim() || !assigneeUserId || !dueAt || submitting) return;
     setSubmitting(true);
     try {
       const created = await apiFetch<{ task_uid?: string; taskUid?: string }>('/api/v1/tasks', {
@@ -136,9 +165,15 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
         body: JSON.stringify({
           title: title.trim(),
           priority,
-          assignee_user_id: assignee.userId,
+          assignee_user_id: assigneeUserId,
           due_at: `${dueAt}T23:59:59+08:00`,
+          visibility,
           ...(projectUid ? { project_uid: projectUid } : {}),
+          ...(detail.trim() ? { detail: detail.trim() } : {}),
+          ...(startAt ? { start_at: `${startAt}T00:00:00+08:00` } : {}),
+          ...(!isPrivate && collaborators.length > 0
+            ? { collaborators: collaborators.map((c) => ({ user_id: c.userId, user_name: c.userName })) }
+            : {}),
         }),
       });
       toast.success('已创建');
@@ -158,7 +193,7 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
       <button
         type="button"
         onClick={handleExpand}
-        className="mb-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#3b82f6] to-[#2563eb] px-6 py-4 text-sm font-semibold text-white shadow-md shadow-[#3b82f6]/20 transition-all duration-200 hover:from-[#2563eb] hover:to-[#1d4ed8] hover:shadow-lg hover:shadow-[#3b82f6]/30 hover:-translate-y-0.5"
+        className="mb-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-blue)] px-6 py-4 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:opacity-90 hover:-translate-y-0.5"
       >
         <Plus className="size-5" strokeWidth={2.5} />
         新建任务
@@ -196,6 +231,27 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
         className={inputCls}
       />
 
+      {/* 可见性：公开（计入统计/共享）vs 仅自己可见（个人 to-do，不计入统计） */}
+      <div className="inline-flex rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-0.5 text-xs">
+        {([
+          { v: 'public', label: '公开' },
+          { v: 'private', label: '🔒 仅自己可见' },
+        ] as const).map((o) => (
+          <button
+            key={o.v}
+            type="button"
+            onClick={() => setVisibility(o.v)}
+            className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
+              visibility === o.v
+                ? 'bg-[var(--accent-blue)] text-white'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
         {/* Priority */}
         <select value={priority} onChange={(e) => setPriority(e.target.value)} className={inputCls}>
@@ -213,7 +269,12 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
           searchPlaceholder="搜索项目"
         />
 
-        {/* Assignee combobox */}
+        {/* Assignee combobox（私有时固定为自己） */}
+        {visibility === 'private' ? (
+          <div className={`${inputCls} flex items-center text-[var(--text-muted)]`}>
+            👤 我（仅自己可见）
+          </div>
+        ) : (
         <div className="relative">
           {assignee ? (
             <button
@@ -257,6 +318,7 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
             </>
           )}
         </div>
+        )}
 
         {/* Due date */}
         <DatePicker
@@ -267,13 +329,83 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
         />
       </div>
 
+      {/* 高级字段：就地展开，不跳转 */}
+      {showAdvanced && (
+        <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]/40 p-3">
+          <textarea
+            value={detail}
+            onChange={(e) => setDetail(e.target.value)}
+            placeholder="任务详情（选填）"
+            rows={2}
+            className={`${inputCls} resize-y`}
+          />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <DatePicker value={startAt} onChange={setStartAt} placeholder="开始日期（选填）" className="!py-2.5" />
+            {/* 协作人多选 */}
+            <div className="relative">
+              <input
+                type="text"
+                value={collabQuery}
+                onChange={(e) => { setCollabQuery(e.target.value); setShowCollabPopover(true); }}
+                onFocus={() => setShowCollabPopover(true)}
+                placeholder="添加协作人（选填）"
+                className={inputCls}
+              />
+              {showCollabPopover && collabResults.length > 0 && (
+                <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-lg">
+                  {collabResults
+                    .filter((u) => !collaborators.some((c) => c.userId === u.userId))
+                    .map((u) => (
+                      <button
+                        key={u.userId}
+                        type="button"
+                        onClick={() => {
+                          setCollaborators((prev) => [...prev, { userId: u.userId, userName: u.userName }]);
+                          setCollabQuery('');
+                          setCollabResults([]);
+                          setShowCollabPopover(false);
+                        }}
+                        className="flex w-full items-center justify-between px-4 py-2 text-left text-sm hover:bg-[var(--bg-hover)]"
+                      >
+                        <span className="text-[var(--text-primary)]">{u.userName}</span>
+                        <span className="text-xs text-[var(--text-muted)]">{u.deptName ?? ''}</span>
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+          {collaborators.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {collaborators.map((c) => (
+                <span
+                  key={c.userId}
+                  className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs"
+                  style={{ color: 'var(--tag-collab)', backgroundColor: 'color-mix(in srgb, var(--tag-collab) 15%, transparent)', borderColor: 'color-mix(in srgb, var(--tag-collab) 28%, transparent)' }}
+                >
+                  {c.userName}
+                  <button
+                    type="button"
+                    onClick={() => setCollaborators((prev) => prev.filter((x) => x.userId !== c.userId))}
+                    style={{ color: "var(--tag-collab)" }} className="opacity-70 hover:opacity-100"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between pt-1">
-        <Link
-          href="/tasks/create"
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
           className="text-xs text-[var(--text-muted)] hover:text-[var(--accent-blue)]"
         >
-          + 高级（详情、协作人、开始日期等）
-        </Link>
+          {showAdvanced ? '− 收起高级' : '+ 高级（详情、协作人、开始日期等）'}
+        </button>
         <div className="flex gap-2">
           <button
             type="button"
@@ -286,8 +418,8 @@ export function QuickAddTask({ onCreated }: QuickAddTaskProps) {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || !title.trim() || !assignee || !dueAt}
-            className="rounded-full bg-[#3b82f6] px-5 py-2 text-sm font-medium text-white transition-all hover:bg-[#2563eb] disabled:opacity-50"
+            disabled={submitting || !title.trim() || (visibility === 'public' && !assignee) || !dueAt}
+            className="rounded-full bg-[var(--accent-blue)] px-5 py-2 text-sm font-medium text-white transition-all hover:opacity-90 disabled:opacity-50"
           >
             {submitting ? '创建中...' : '创建'}
           </button>

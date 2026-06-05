@@ -20,6 +20,7 @@ import {
   type DelayTaskDto,
   type TaskListQuery,
 } from '@leader-sync/shared-types';
+import { canMutateTask, type Requester } from './task-permissions';
 
 const DONE_STATUSES: ReadonlySet<string> = new Set([
   TaskStatus.DONE,
@@ -50,18 +51,19 @@ export class TaskService {
   async createTask(userId: string, dto: CreateTaskDto) {
     const taskUid = generateTaskUid();
 
-    const assignee = await this.taskRepository.findOrgUser(dto.assignee_user_id);
+    // 私有（个人 to-do）：负责人强制=创建者本人，忽略协作人。
+    const isPrivate = dto.visibility === 'private';
+    const assigneeUserId = isPrivate ? userId : dto.assignee_user_id;
+
+    const assignee = await this.taskRepository.findOrgUser(assigneeUserId);
     const issuer = await this.taskRepository.findOrgUser(userId);
 
     const monthBucket = dto.due_at.slice(0, 7);
-    const status = dto.assignee_user_id ? TaskStatus.NOT_STARTED : TaskStatus.PENDING;
+    const status = assigneeUserId ? TaskStatus.NOT_STARTED : TaskStatus.PENDING;
 
-    // Resolve project
-    let projectUid = dto.project_uid ?? null;
-    if (!projectUid) {
-      const defaultProject = await this.taskRepository.getDefaultProject();
-      projectUid = defaultProject?.projectUid ?? null;
-    }
+    // 项目驱动 V0：不填项目 = 未归属（project_uid=null），不再自动落默认项目。
+    // 未归属任务进列表"未归属" triage 桶，等待人工挂到（子）项目。
+    const projectUid = dto.project_uid ?? null;
 
     // Leader = 创建者(issuer)的部门负责人；如创建者本身就是顶层（无 manager），fallback 到自己
     const leaderUserId = issuer?.managerUserId || userId;
@@ -77,7 +79,7 @@ export class TaskService {
       priority: dto.priority,
       status,
       progressPercent: 0,
-      assigneeUserId: dto.assignee_user_id,
+      assigneeUserId,
       assigneeName: assignee?.userName ?? '',
       assigneeManagerUserId: assignee?.managerUserId ?? null,
       assigneeManagerName: assignee?.managerName ?? null,
@@ -88,12 +90,14 @@ export class TaskService {
       issuerUserId: userId,
       assignerUserId: userId,
       assignmentType: dto.assignment_type ?? 'boss_assign',
-      collaborators: dto.collaborators ?? null,
-      startAt: dto.start_at ? new Date(dto.start_at) : null,
+      collaborators: isPrivate ? null : dto.collaborators ?? null,
+      // 开始时间不填默认为创建当天（任务一经创建即视为已开始）。
+      startAt: dto.start_at ? new Date(dto.start_at) : new Date(),
       dueAt: new Date(dto.due_at),
       monthBucket,
       bossAttentionFlag: dto.boss_attention_flag ?? false,
       projectUid,
+      visibility: isPrivate ? 'private' : 'public',
       version: 1,
       createdBy: userId,
     });
@@ -110,20 +114,58 @@ export class TaskService {
     return created;
   }
 
-  async getTask(taskUid: string) {
+  async getTask(taskUid: string, requester?: Requester) {
     const found = await this.taskRepository.findByUid(taskUid);
     if (!found) {
+      throw new BusinessException(ErrorCode.TASK_NOT_FOUND, 'Task not found', HttpStatus.NOT_FOUND);
+    }
+    // 私有任务仅创建者/相关人可读；他人当作不存在（不泄漏存在性）。
+    if (requester && found.visibility === 'private' && !canMutateTask(found, requester)) {
       throw new BusinessException(ErrorCode.TASK_NOT_FOUND, 'Task not found', HttpStatus.NOT_FOUND);
     }
     return found;
   }
 
-  async deleteTask(taskUid: string) {
+  /** 转为公开：仅相关人/admin。私有 → public。 */
+  async publishTask(taskUid: string, requester: Requester) {
     const found = await this.taskRepository.findByUid(taskUid);
     if (!found) {
       throw new BusinessException(ErrorCode.TASK_NOT_FOUND, 'Task not found', HttpStatus.NOT_FOUND);
     }
+    if (!canMutateTask(found, requester)) {
+      throw new BusinessException(ErrorCode.UNAUTHORIZED, 'NO_PERMISSION: cannot publish this task', HttpStatus.FORBIDDEN);
+    }
+    if (found.visibility === 'public') return { success: true };
+    await this.taskRepository.updateField(taskUid, { visibility: 'public', updatedAt: new Date() });
+    return { success: true };
+  }
+
+  async deleteTask(taskUid: string, requester: Requester) {
+    const found = await this.taskRepository.findByUid(taskUid);
+    if (!found) {
+      throw new BusinessException(ErrorCode.TASK_NOT_FOUND, 'Task not found', HttpStatus.NOT_FOUND);
+    }
+    if (!canMutateTask(found, requester)) {
+      throw new BusinessException(ErrorCode.UNAUTHORIZED, 'NO_PERMISSION: cannot delete this task', HttpStatus.FORBIDDEN);
+    }
     await this.taskRepository.softDelete(taskUid);
+    return { success: true };
+  }
+
+  async restoreTask(taskUid: string, requester: Requester) {
+    // 读取含已删除记录以校验归属（#8 includeDeleted）。
+    const found = await this.taskRepository.findByUid(taskUid, { includeDeleted: true });
+    if (!found || !found.deletedAt) {
+      throw new BusinessException(
+        ErrorCode.TASK_NOT_FOUND,
+        'Task not found or not deleted',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (!canMutateTask(found, requester)) {
+      throw new BusinessException(ErrorCode.UNAUTHORIZED, 'NO_PERMISSION: cannot restore this task', HttpStatus.FORBIDDEN);
+    }
+    await this.taskRepository.restore(taskUid);
     return { success: true };
   }
 
@@ -410,6 +452,7 @@ export class TaskService {
       {
         status: query.status,
         bucket: query.bucket,
+        from: query.from,
         priority: query.priority,
         role: query.role,
       },
@@ -418,6 +461,35 @@ export class TaskService {
     );
 
     return { items, total, page, page_size: pageSize };
+  }
+
+  /**
+   * 批量把任务归类到某项目（未归属 triage）。projectUid=null 即移回未归属。
+   * 逐条按 canMutateTask 过滤：只改请求者有权操作的任务，其余跳过。
+   */
+  async bulkAssignProject(
+    requester: Requester,
+    taskUids: string[],
+    projectUid: string | null,
+  ): Promise<{ updated: number; skipped: number }> {
+    const unique = Array.from(new Set(taskUids));
+    if (unique.length === 0) return { updated: 0, skipped: 0 };
+    const tasks = await this.taskRepository.findByUids(unique);
+    const allowed = tasks.filter((t) => canMutateTask(t, requester)).map((t) => t.taskUid);
+    const updated = await this.taskRepository.bulkSetProject(allowed, projectUid);
+    return { updated, skipped: unique.length - updated };
+  }
+
+  /**
+   * 保存当前用户对一组任务的手动排序（个人视图）。
+   * task_uids 为某一分组内拖拽后的完整有序列表。仅影响该用户，不动他人。
+   */
+  async reorderMyTasks(userId: string, taskUids: string[]): Promise<{ updated: number }> {
+    // 去重保序，避免重复 uid 导致 upsert 同批冲突。
+    const seen = new Set<string>();
+    const unique = taskUids.filter((u) => (seen.has(u) ? false : (seen.add(u), true)));
+    await this.taskRepository.setUserOrder(userId, unique);
+    return { updated: unique.length };
   }
 
   async addLeader(taskUid: string, leaderUserId: string, leaderName?: string) {

@@ -80,11 +80,11 @@ test.describe('Desktop visual audit', () => {
     await snap(page, '06-tasks-status-done');
   });
 
-  test('07-tasks-status-stalled', async ({ page }) => {
+  test('07-tasks-status-deleted', async ({ page }) => {
     await visit(page, '/tasks');
-    await page.getByRole('button', { name: '已停滞' }).click();
+    await page.getByRole('button', { name: '已删除' }).click();
     await page.waitForTimeout(500);
-    await snap(page, '07-tasks-status-stalled');
+    await snap(page, '07-tasks-status-deleted');
   });
 
   test('08-tasks-status-all', async ({ page }) => {

@@ -56,7 +56,7 @@ function WidgetContent() {
   if (error) {
     return (
       <div className="flex h-32 items-center justify-center">
-        <p className="text-xs text-[#ef4444]">加载失败</p>
+        <p className="text-xs text-[var(--accent-red)]">加载失败</p>
       </div>
     );
   }
@@ -86,15 +86,15 @@ function WidgetContent() {
             <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">总任务</p>
           </div>
           <div className="text-center rounded-lg bg-[var(--bg-card)] border border-[var(--border)] py-2">
-            <p className="tabular-nums text-2xl font-bold text-[#22c55e]">{stats.done}</p>
+            <p className="tabular-nums text-2xl font-bold text-[var(--accent-green)]">{stats.done}</p>
             <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">已完成</p>
           </div>
           <div className="text-center rounded-lg bg-[var(--bg-card)] border border-[var(--border)] py-2">
-            <p className="tabular-nums text-2xl font-bold text-[#ef4444]">{stats.overdue}</p>
+            <p className="tabular-nums text-2xl font-bold text-[var(--accent-red)]">{stats.overdue}</p>
             <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">已延期</p>
           </div>
           <div className="text-center rounded-lg bg-[var(--bg-card)] border border-[var(--border)] py-2">
-            <p className="tabular-nums text-2xl font-bold text-[#f59e0b]">{stats.carryOver}</p>
+            <p className="tabular-nums text-2xl font-bold text-[var(--accent-orange)]">{stats.carryOver}</p>
             <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">继承</p>
           </div>
         </div>
@@ -119,14 +119,14 @@ function WidgetContent() {
                   <p className="truncate text-sm font-medium text-[var(--text-primary)]">{l.leaderName}</p>
                   <div className="mt-1 flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
                     <span className="tabular-nums">总 {l.total}</span>
-                    <span className="tabular-nums text-[#22c55e]/70">完 {l.done}</span>
+                    <span className="tabular-nums text-[var(--accent-green)]/70">完 {l.done}</span>
                     <span className="tabular-nums">{l.doneRate}%</span>
                   </div>
                 </div>
                 {l.overdue > 0 && (
-                  <div className="ml-2 flex shrink-0 items-center gap-1 rounded-full bg-[#ef4444]/10 border border-[#ef4444]/20 px-2.5 py-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#ef4444]" />
-                    <span className="tabular-nums text-[11px] font-medium text-[#ef4444]">
+                  <div className="ml-2 flex shrink-0 items-center gap-1 rounded-full bg-[var(--accent-red)]/10 border border-[var(--accent-red)]/20 px-2.5 py-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-red)]" />
+                    <span className="tabular-nums text-[11px] font-medium text-[var(--accent-red)]">
                       {l.overdue} 延期
                     </span>
                   </div>
@@ -142,7 +142,7 @@ function WidgetContent() {
         <a
           href="/dashboard"
           target="_top"
-          className="flex items-center justify-center rounded-full bg-[#3b82f6] py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#2563eb]"
+          className="flex items-center justify-center rounded-full bg-[var(--accent-blue)] py-2.5 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[var(--accent-blue)]"
         >
           查看完整驾驶舱 &rarr;
         </a>

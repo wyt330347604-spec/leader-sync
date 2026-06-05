@@ -2,13 +2,23 @@
 import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react';
 import { useDashboard } from '@/hooks/use-dashboard';
 import { useGantt } from '@/hooks/use-gantt';
+import { useLeaderMonthly } from '@/hooks/use-leader-monthly';
+import { useLeaderWeekly } from '@/hooks/use-leader-weekly';
+import { useMyMonthly } from '@/hooks/use-my-monthly';
 import type { DashboardPeriod } from '@/hooks/use-dashboard';
 import { LoadingScreen } from "@/components/loading-screen";
 import { ensureAuth } from '@/lib/auth';
 import { apiFetch, ApiError } from '@/lib/api-client';
-import { TaskStatusLabel, PriorityLabel } from '@leader-sync/shared-types';
+import { TaskStatusLabel, PriorityLabel, UserRole } from '@leader-sync/shared-types';
+import { useMe } from '@/hooks/use-me';
 import { GanttChart } from '@/components/gantt-chart';
+import { ProjectPortfolio } from '@/components/project-portfolio';
 import { StatusBadge } from '@/components/status-badge';
+import { DashboardTabBar } from '@/components/dashboard-tab-bar';
+import { LeaderMonthlyCard } from '@/components/leader-monthly-card';
+import { LeaderWeeklyPanel } from '@/components/leader-weekly-panel';
+import { MyMonthlySummaryCard } from '@/components/my-monthly-summary-card';
+import { MemberTaskDrawer } from '@/components/member-task-drawer';
 import TinyPinyin from 'tiny-pinyin';
 
 /* ---------- helpers ---------- */
@@ -463,7 +473,7 @@ interface RiskTask {
 const RISK_REASON_STYLES: Record<string, { bg: string; text: string; border: string }> = {
   '延期': { bg: 'bg-[var(--accent-red)]/10', text: 'text-[var(--accent-red)]', border: 'border-[var(--accent-red)]/20' },
   '继承': { bg: 'bg-[var(--accent-orange)]/10', text: 'text-[var(--accent-orange)]', border: 'border-[var(--accent-orange)]/20' },
-  '停滞': { bg: 'bg-[#8b5cf6]/10', text: 'text-[#8b5cf6]', border: 'border-[#8b5cf6]/20' },
+  '停滞': { bg: 'bg-[var(--st-not-started)]/10', text: 'text-[var(--st-not-started)]', border: 'border-[var(--st-not-started)]/20' },
   '临期': { bg: 'bg-[#eab308]/10', text: 'text-[#eab308]', border: 'border-[#eab308]/20' },
   '重点无进度': { bg: 'bg-[var(--accent-blue)]/10', text: 'text-[var(--accent-blue)]', border: 'border-[var(--accent-blue)]/20' },
 };
@@ -476,7 +486,7 @@ function RiskReasonTags({ reasons }: { readonly reasons: readonly string[] }) {
   return (
     <div className="flex flex-wrap gap-1 mt-1">
       {reasons.map((r) => {
-        const style = RISK_REASON_STYLES[r] || { bg: 'bg-[#5a5a6e]/10', text: 'text-[var(--text-muted)]', border: 'border-[#5a5a6e]/20' };
+        const style = RISK_REASON_STYLES[r] || { bg: 'bg-[var(--text-muted)]/10', text: 'text-[var(--text-muted)]', border: 'border-[var(--text-muted)]/20' };
         return (
           <span
             key={r}
@@ -699,7 +709,7 @@ function RiskTable({ tasks, onMutate }: { readonly tasks: readonly RiskTask[]; r
                 </div>
                 <div className="flex items-center gap-3 text-xs">
                   {group.overdueCount > 0 && <span className="text-[var(--accent-red)]">延期 {group.overdueCount}</span>}
-                  {group.stalledCount > 0 && <span className="text-[#8b5cf6]">停滞 {group.stalledCount}</span>}
+                  {group.stalledCount > 0 && <span className="text-[var(--st-not-started)]">停滞 {group.stalledCount}</span>}
                   {group.nearDueCount > 0 && <span className="text-[var(--accent-orange)]">临期 {group.nearDueCount}</span>}
                 </div>
               </div>
@@ -849,7 +859,7 @@ function TaskInlineRow({
           <span className="shrink-0 text-[10px] text-[var(--accent-orange)]">★</span>
         )}
         <a
-          href={`/tasks/${task.taskUid}`}
+          href={`/tasks?task=${task.taskUid}`}
           className="truncate text-sm text-[var(--text-primary)] hover:text-[var(--accent-blue)] hover:underline"
         >
           {task.title}
@@ -1100,7 +1110,7 @@ function LeaderCard({ leader }: { readonly leader: LeaderSummary }) {
             <span className="text-[var(--text-muted)]">继承</span>
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-[#8b5cf6]" />
+            <span className="h-2 w-2 rounded-full bg-[var(--st-not-started)]" />
             <span className="tabular-nums text-[var(--text-primary)]">{riskCount}</span>
             <span className="text-[var(--text-muted)]">风险</span>
           </span>
@@ -1305,7 +1315,121 @@ function GanttView({
   );
 }
 
+/* ---------- Leader Team Tab (Tab B) ---------- */
+
+type LeaderSubView = 'monthly' | 'weekly';
+
+function LeaderTeamTab({ month }: { readonly month: string }) {
+  const [subView, setSubView] = useState<LeaderSubView>('monthly');
+  const [drawerUser, setDrawerUser] = useState<{ userId: string; name: string } | null>(null);
+
+  const { data: monthly, error: monthlyError, isLoading: monthlyLoading } = useLeaderMonthly(month, subView === 'monthly');
+  const { data: weekly, error: weeklyError, isLoading: weeklyLoading } = useLeaderWeekly(subView === 'weekly');
+
+  const hasTeam = monthly && monthly.total > 0;
+
+  return (
+    <div>
+      {/* Sub-view toggle */}
+      <div className="mb-5 flex items-center gap-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] p-1 w-fit">
+        {(['monthly', 'weekly'] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setSubView(v)}
+            className={`rounded-md px-4 py-1.5 text-xs font-medium transition-all duration-200 ${
+              subView === v
+                ? 'bg-[var(--accent-blue)] text-white shadow-sm'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border)]'
+            }`}
+          >
+            {v === 'monthly' ? '月度' : '周度'}
+          </button>
+        ))}
+      </div>
+
+      {subView === 'monthly' && (
+        <>
+          {monthlyLoading ? (
+            <div className="flex min-h-[200px] items-center justify-center">
+              <p className="text-[var(--text-muted)]">加载中...</p>
+            </div>
+          ) : monthlyError ? (
+            <div className="flex min-h-[200px] items-center justify-center">
+              <p className="text-[var(--accent-red)] text-sm">加载失败: {monthlyError.message}</p>
+            </div>
+          ) : monthly && hasTeam ? (
+            <LeaderMonthlyCard
+              data={monthly}
+              onDrillDown={(userId, name) => setDrawerUser({ userId, name })}
+            />
+          ) : (
+            <div className="flex min-h-[200px] items-center justify-center">
+              <p className="text-[var(--text-muted)]">本月暂无团队任务数据</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {subView === 'weekly' && (
+        <>
+          {weeklyLoading ? (
+            <div className="flex min-h-[200px] items-center justify-center">
+              <p className="text-[var(--text-muted)]">加载中...</p>
+            </div>
+          ) : weeklyError ? (
+            <div className="flex min-h-[200px] items-center justify-center">
+              <p className="text-[var(--accent-red)] text-sm">加载失败: {weeklyError.message}</p>
+            </div>
+          ) : weekly ? (
+            <LeaderWeeklyPanel data={weekly} />
+          ) : (
+            <div className="flex min-h-[200px] items-center justify-center">
+              <p className="text-[var(--text-muted)]">本周暂无团队任务数据</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Member task drawer */}
+      {drawerUser && (
+        <MemberTaskDrawer
+          userId={drawerUser.userId}
+          userName={drawerUser.name}
+          month={month}
+          onClose={() => setDrawerUser(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ---------- My Summary Tab (Tab C) ---------- */
+
+function MyCompletionTab({ month }: { readonly month: string }) {
+  const { data, error, isLoading } = useMyMonthly(month);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[200px] items-center justify-center">
+        <p className="text-[var(--text-muted)]">加载中...</p>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="flex min-h-[200px] items-center justify-center">
+        <p className="text-[var(--accent-red)] text-sm">加载失败: {error.message}</p>
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  return <MyMonthlySummaryCard data={data} />;
+}
+
 /* ---------- Main ---------- */
+
+type MainTab = 'projects' | 'boss' | 'leader' | 'me';
 
 function DashboardContent() {
   const [authed, setAuthed] = useState(false);
@@ -1317,12 +1441,34 @@ function DashboardContent() {
   const [groupMode, setGroupMode] = useState<GroupMode>('person');
   const [filterPersons, setFilterPersons] = useState<string[]>([]);
   const [filterTaskTitle, setFilterTaskTitle] = useState('');
+  const [activeTab, setActiveTab] = useState<MainTab>('me');
+
+  const { data: me } = useMe();
+  const role = me?.role ?? '';
+  const canCompanyView = role === UserRole.BOSS || role === UserRole.PMO || role === UserRole.ADMIN;
+  const canLeaderView = canCompanyView || role === UserRole.LEADER;
 
   useEffect(() => {
     ensureAuth().then(setAuthed);
   }, []);
 
-  const { data, error, isLoading, mutate } = useDashboard(period);
+  // 首次加载完用户信息后：有全员视图权限者默认进「项目」tab（项目驱动首屏）。仅执行一次，不覆盖用户点击。
+  const didInitTab = useRef(false);
+  useEffect(() => {
+    if (!me || didInitTab.current) return;
+    didInitTab.current = true;
+    if (canCompanyView) setActiveTab('projects');
+  }, [me, canCompanyView]);
+
+  // 角色变化后，若当前 tab 越权（如普通员工默认不该停在 projects/boss/leader），回落到「我的完成情况」。
+  useEffect(() => {
+    if (activeTab === 'projects' && !canCompanyView) setActiveTab('me');
+    if (activeTab === 'boss' && !canCompanyView) setActiveTab('me');
+    if (activeTab === 'leader' && !canLeaderView) setActiveTab('me');
+  }, [activeTab, canCompanyView, canLeaderView]);
+
+  // 仅有全员概览权限的用户才拉取 /boss 数据，避免普通员工触发 403。
+  const { data, error, isLoading, mutate } = useDashboard(period, canCompanyView);
 
   const handleMutate = useCallback(() => {
     mutate();
@@ -1360,79 +1506,114 @@ function DashboardContent() {
   }
 
   const periodLabel = getPeriodDisplayLabel(period);
+  const currentMonth = period.mode === 'month' ? period.value : formatMonth(new Date());
+
+  // 按角色显示 tab：全员概览仅 Boss/PMO/Admin；我的团队仅 leader 及以上；我的完成情况所有人。
+  const MAIN_TABS: { key: MainTab; label: string }[] = [];
+  if (canCompanyView) MAIN_TABS.push({ key: 'projects', label: '项目' });
+  if (canCompanyView) MAIN_TABS.push({ key: 'boss', label: 'Boss 全员概览' });
+  if (canLeaderView) MAIN_TABS.push({ key: 'leader', label: '我的团队' });
+  MAIN_TABS.push({ key: 'me', label: '我的完成情况' });
 
   return (
     <div className="pb-16">
-      <div className="mb-8 flex items-center justify-between gap-4 pt-8">
+      <div className="mb-6 flex items-start justify-between gap-4 pt-8 flex-wrap">
         <h2 className="sr-only">驾驶舱</h2>
-        <PeriodSelector period={period} onChange={setPeriod} />
-        <ViewSwitcher activeView={activeView} onChange={setActiveView} />
+        <DashboardTabBar
+          tabs={MAIN_TABS}
+          activeKey={activeTab}
+          onChange={(k) => setActiveTab(k as MainTab)}
+        />
+        <div className="flex items-center gap-3">
+          {activeTab !== 'projects' && <PeriodSelector period={period} onChange={setPeriod} />}
+          {activeTab === 'boss' && <ViewSwitcher activeView={activeView} onChange={setActiveView} />}
+        </div>
       </div>
 
-      {activeView === 'gantt' ? (
+      {/* Tab: 项目组合（项目驱动首屏，仅全员视图角色） */}
+      {activeTab === 'projects' && (
+        <ProjectPortfolio enabled={canCompanyView} />
+      )}
+
+      {/* Tab C: My completion (default for all) */}
+      {activeTab === 'me' && (
+        <MyCompletionTab month={currentMonth} />
+      )}
+
+      {/* Tab B: Leader team */}
+      {activeTab === 'leader' && (
+        <LeaderTeamTab month={currentMonth} />
+      )}
+
+      {/* Tab A: Boss overview (existing content) */}
+      {activeTab === 'boss' && (
         <>
-          <FilterBar
-            persons={allPersonNames}
-            selectedPersons={filterPersons}
-            onPersonsChange={setFilterPersons}
-            taskTitle={filterTaskTitle}
-            onTaskTitleChange={setFilterTaskTitle}
-          />
-          <GanttView
-            period={period}
-            filterPersons={filterPersons}
-            filterTaskTitle={filterTaskTitle}
-          />
-        </>
-      ) : isLoading ? (
-        <div className="flex min-h-[40vh] items-center justify-center">
-          <p className="text-[var(--text-muted)]">加载中...</p>
-        </div>
-      ) : error ? (
-        <div className="flex min-h-[40vh] items-center justify-center">
-          <p className="text-[var(--accent-red)]">加载失败: {error.message}</p>
-        </div>
-      ) : data ? (
-        <>
-          <HeroStats
-            stats={{
-              total: data.stats?.total ?? 0,
-              done: data.stats?.done ?? 0,
-              overdue: data.stats?.overdue ?? 0,
-              carryOver: data.stats?.carryOver ?? 0,
-              riskCount: data.stats?.riskCount ?? 0,
-              weeklyNewCount: data.stats?.weeklyNewCount ?? 0,
-              weeklyDoneCount: data.stats?.weeklyDoneCount ?? 0,
-            }}
-            periodLabel={periodLabel}
-          />
-          <div className="mt-10">
-            <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
-                {groupMode === 'person' ? '人员概览' : groupMode === 'leader' ? 'Leader 概览' : '项目概览'}
-              </h3>
-              <GroupToggle groupMode={groupMode} onChange={setGroupMode} />
+          {activeView === 'gantt' ? (
+            <>
+              <FilterBar
+                persons={allPersonNames}
+                selectedPersons={filterPersons}
+                onPersonsChange={setFilterPersons}
+                taskTitle={filterTaskTitle}
+                onTaskTitleChange={setFilterTaskTitle}
+              />
+              <GanttView
+                period={period}
+                filterPersons={filterPersons}
+                filterTaskTitle={filterTaskTitle}
+              />
+            </>
+          ) : isLoading ? (
+            <div className="flex min-h-[40vh] items-center justify-center">
+              <p className="text-[var(--text-muted)]">加载中...</p>
             </div>
-            {groupMode === 'person' ? (
-              <PersonAccordion persons={data.personSummary ?? []} onMutate={handleMutate} />
-            ) : groupMode === 'leader' ? (
-              <LeaderCards leaders={data.leaderSummary ?? []} />
-            ) : (
-              <ProjectCards projects={data.projectSummary ?? []} />
-            )}
-          </div>
-          <div className="mt-10">
-            <FilterBar
-              persons={allPersonNames}
-              selectedPersons={filterPersons}
-              onPersonsChange={setFilterPersons}
-              taskTitle={filterTaskTitle}
-              onTaskTitleChange={setFilterTaskTitle}
-            />
-          </div>
-          <RiskTable tasks={filteredRiskTasks} onMutate={handleMutate} />
+          ) : error ? (
+            <div className="flex min-h-[40vh] items-center justify-center">
+              <p className="text-[var(--accent-red)]">加载失败: {error.message}</p>
+            </div>
+          ) : data ? (
+            <>
+              <HeroStats
+                stats={{
+                  total: data.stats?.total ?? 0,
+                  done: data.stats?.done ?? 0,
+                  overdue: data.stats?.overdue ?? 0,
+                  carryOver: data.stats?.carryOver ?? 0,
+                  riskCount: data.stats?.riskCount ?? 0,
+                  weeklyNewCount: data.stats?.weeklyNewCount ?? 0,
+                  weeklyDoneCount: data.stats?.weeklyDoneCount ?? 0,
+                }}
+                periodLabel={periodLabel}
+              />
+              <div className="mt-10">
+                <div className="mb-5 flex items-center justify-between">
+                  <h3 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
+                    {groupMode === 'person' ? '人员概览' : groupMode === 'leader' ? 'Leader 概览' : '项目概览'}
+                  </h3>
+                  <GroupToggle groupMode={groupMode} onChange={setGroupMode} />
+                </div>
+                {groupMode === 'person' ? (
+                  <PersonAccordion persons={data.personSummary ?? []} onMutate={handleMutate} />
+                ) : groupMode === 'leader' ? (
+                  <LeaderCards leaders={data.leaderSummary ?? []} />
+                ) : (
+                  <ProjectCards projects={data.projectSummary ?? []} />
+                )}
+              </div>
+              <div className="mt-10">
+                <FilterBar
+                  persons={allPersonNames}
+                  selectedPersons={filterPersons}
+                  onPersonsChange={setFilterPersons}
+                  taskTitle={filterTaskTitle}
+                  onTaskTitleChange={setFilterTaskTitle}
+                />
+              </div>
+              <RiskTable tasks={filteredRiskTasks} onMutate={handleMutate} />
+            </>
+          ) : null}
         </>
-      ) : null}
+      )}
     </div>
   );
 }
