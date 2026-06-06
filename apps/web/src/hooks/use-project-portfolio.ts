@@ -30,6 +30,13 @@ export interface PortfolioNode {
   readonly spanEnd: string | null;
   readonly health: ProjectHealth;
   readonly incidentCount?: number;
+  readonly requirementCount?: number;
+  readonly requirementOnLineCount?: number;
+  // R0 业务线(顶级)字段
+  readonly isBusinessLine?: boolean;
+  readonly appCount?: number;
+  readonly atRiskCount?: number;
+  readonly overdueCount?: number;
   readonly tasks?: readonly PortfolioTask[];
   readonly subProjects?: readonly PortfolioNode[];
 }

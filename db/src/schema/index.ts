@@ -1,5 +1,6 @@
 export { task } from './task';
 export { taskUserOrder } from './task-user-order';
+export { requirement, requirementArtifact } from './requirement';
 export { taskLeader } from './task-leader';
 export { taskProgressLog } from './task-progress-log';
 export { externalMapping } from './external-mapping';

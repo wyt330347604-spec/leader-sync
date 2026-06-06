@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>需求轴 · 容量 · 联动 — 交互 Demo (R0–R3) v4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--bg:#0a0a0b;--bg-soft:#111114;--card:#16161a;--surface:#1c1c21;--line:#26262d;
+    --ink:#ececef;--ink-2:#a0a0ac;--ink-3:#66666f;--indigo:#6366f1;--indigo-2:#818cf8;--green:#2faa6e;--amber:#d98a3a;--red:#e0556b;--teal:#5eead4;
+    --mono:'IBM Plex Mono',monospace;--display:'Fraunces',serif;--sans:'Manrope',-apple-system,'PingFang SC',sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased;background-image:radial-gradient(800px 400px at 90% -5%,rgba(99,102,241,.10),transparent);background-attachment:fixed}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px}.mono{font-family:var(--mono)}
+  header{padding:40px 0 18px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--ink-3)}
+  h1{font-family:var(--display);font-weight:900;font-size:clamp(28px,4.5vw,46px);letter-spacing:-.02em;margin:8px 0}h1 em{font-style:italic;color:var(--indigo-2)}
+  .sub{color:var(--ink-2);max-width:780px;font-size:15px}.note{font-family:var(--mono);font-size:11px;color:var(--amber);margin-top:8px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin:24px 0 0;position:sticky;top:0;background:var(--bg);z-index:20;padding-top:8px}
+  .tab{font-size:13.5px;font-weight:600;padding:10px 16px;border:none;background:none;color:var(--ink-3);cursor:pointer;border-bottom:2px solid transparent;font-family:var(--sans)}
+  .tab .r{font-family:var(--mono);font-size:10px;color:var(--indigo);margin-right:6px}.tab.on{color:var(--ink);border-bottom-color:var(--indigo)}
+  .panel{display:none;padding:28px 0 80px;animation:fade .3s}.panel.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  h2{font-family:var(--display);font-weight:600;font-size:26px;margin-bottom:4px;letter-spacing:-.01em}
+  .lead{color:var(--ink-2);font-size:14px;margin-bottom:18px;max-width:820px}
+  .health{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:600}
+  .h-ok{color:var(--green);background:color-mix(in srgb,var(--green) 15%,transparent)}.h-risk{color:var(--amber);background:color-mix(in srgb,var(--amber) 15%,transparent)}.h-over{color:var(--red);background:color-mix(in srgb,var(--red) 15%,transparent)}
+  .dot{width:7px;height:7px;border-radius:99px;display:inline-block}
+  .ring{position:relative;border-radius:50%;flex:none}.ring i{position:absolute;inset:3px;border-radius:50%;background:var(--card);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:var(--mono)}
+  .chip{font-family:var(--mono);font-size:10.5px;padding:2px 8px;border-radius:6px;border:1px solid var(--line);color:var(--ink-2)}
+  .p0{color:var(--red);border-color:color-mix(in srgb,var(--red) 45%,transparent);font-weight:700}.p1{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 40%,transparent)}.p2{color:var(--ink-2)}
+  .reqcount{font-family:var(--mono);font-size:11px;color:var(--indigo-2);background:color-mix(in srgb,var(--indigo) 14%,transparent);border-radius:6px;padding:2px 8px}
+  .muted{color:var(--ink-3);font-size:12px}.perm-tag{font-family:var(--mono);font-size:10px;color:var(--ink-3);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+  .demoflag{font-family:var(--mono);font-size:10px;color:var(--ink-3);border:1px dashed var(--line);border-radius:6px;padding:3px 9px;display:inline-block;margin-bottom:14px}
+  .bl{background:var(--card);border:1px solid var(--line);border-radius:16px;margin-bottom:12px;overflow:hidden}
+  .node{display:flex;align-items:center;gap:14px;padding:13px 18px}.node:hover{background:var(--bg-soft)}
+  .node.clk{cursor:pointer}.node.exp{cursor:pointer}
+  .node .nm{font-weight:700}.node .mt{display:flex;gap:12px;flex-wrap:wrap;margin-top:3px;font-size:12px;color:var(--ink-2)}
+  .lvl-bl{border-left:4px solid var(--indigo)}.lvl-app{border-left:3px solid #2563EB;background:var(--bg-soft)}
+  .lvl-req{border-left:3px solid var(--amber);background:#0e0e11}.lvl-req:hover{background:#15151a}
+  .kids{display:none}.kids.open{display:block}
+  .indent1{padding-left:34px}.indent2{padding-left:54px}
+  .caret{color:var(--ink-3);font-size:11px;width:12px;display:inline-block}
+  .go{font-family:var(--mono);font-size:10px;color:var(--indigo-2);border:1px solid color-mix(in srgb,var(--indigo) 30%,transparent);border-radius:6px;padding:2px 7px;margin-left:auto}
+  .loop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg-soft);border:1px dashed var(--line);border-radius:10px;padding:8px 12px;margin-bottom:16px;font-size:12px;color:var(--ink-2)}
+  .loop b{color:var(--indigo-2)}.loop .a{color:var(--ink-3)}
+  /* flow R1 (rich) */
+  .flow{display:flex;align-items:stretch;flex-wrap:wrap;gap:0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:8px}
+  .step{display:flex;flex-direction:column;gap:3px;padding:8px 11px;border-radius:10px;min-width:104px;border:1px solid var(--line)}
+  .step .who{font-family:var(--mono);font-size:9.5px;color:var(--ink-3)}.step .st{font-size:12.5px;font-weight:700}
+  .step .ded{font-size:9.5px;color:var(--green);margin-top:2px}
+  .step.pm{background:color-mix(in srgb,var(--indigo) 12%,transparent);border-color:color-mix(in srgb,var(--indigo) 32%,transparent)}
+  .step.gate{background:color-mix(in srgb,var(--amber) 11%,transparent);border-color:color-mix(in srgb,var(--amber) 34%,transparent)}
+  .step.dev{background:color-mix(in srgb,#2563EB 10%,transparent);border-color:color-mix(in srgb,#2563EB 30%,transparent)}
+  .step.cap{background:color-mix(in srgb,var(--teal) 10%,transparent);border-color:color-mix(in srgb,var(--teal) 34%,transparent)}
+  .fa{color:var(--ink-3);align-self:center;padding:0 5px;font-size:13px}
+  .rejnote{font-size:11px;color:var(--ink-3);margin:0 0 18px}.rejnote b{color:var(--amber)}
+  .board{display:grid;grid-auto-flow:column;grid-auto-columns:152px;gap:10px;overflow-x:auto;padding-bottom:8px}
+  .col{background:var(--bg-soft);border:1px solid var(--line);border-radius:12px;padding:10px;min-height:110px}
+  .col h3{font-size:12px;color:var(--ink-2);margin-bottom:8px;display:flex;justify-content:space-between}.col h3 b{font-family:var(--mono);color:var(--ink-3)}
+  .col .owner{font-family:var(--mono);font-size:9px;color:var(--indigo-2);display:block;margin-top:2px}
+  .req{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px;margin-bottom:8px;border-left:3px solid var(--ink-3);cursor:pointer}.req:hover{border-color:var(--indigo)}
+  .req.is-p0{border-left-color:var(--red)}.req.is-p1{border-left-color:var(--amber)}
+  .req .t{font-size:12px;font-weight:600;line-height:1.35}.req .f{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;align-items:center}.req .pm{font-size:10px;color:var(--ink-3)}
+  .subtabs{display:inline-flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:4px;margin-bottom:16px}
+  .subtab{font-size:12.5px;font-weight:600;padding:6px 14px;border:none;background:none;color:var(--ink-2);border-radius:7px;cursor:pointer;font-family:var(--sans)}.subtab.on{background:var(--indigo);color:#fff}
+  .gview{display:none}.gview.on{display:block}
+  .cap{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .axis{display:grid;background:var(--surface)}.axis div{padding:6px 8px;font-family:var(--mono);font-size:10.5px;color:var(--ink-3);border-right:1px solid var(--line);text-align:center}
+  .caprow{display:grid;border-bottom:1px solid var(--line)}.caprow:last-child{border:none}
+  .capname{padding:12px 14px;font-size:12.5px;font-weight:600;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:3px;justify-content:center}.capname .role{font-size:10px;color:var(--ink-3);font-weight:400}
+  .capname.rq{border-left:3px solid var(--amber)}.capname.tsk{padding-left:26px;font-weight:400;color:var(--ink-2);font-size:11.5px}
+  .grid5{position:relative}.lane{position:relative;height:34px;border-bottom:1px dashed var(--line)}.lane:last-child{border:none}
+  .taskbar{position:absolute;top:5px;height:24px;border-radius:6px;display:flex;align-items:center;padding:0 8px;font-size:11px;color:#fff;white-space:nowrap;overflow:hidden}
+  .load{display:grid}.load div{height:18px;border-right:1px solid var(--line);font-family:var(--mono);font-size:9.5px;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+  .axislabel{display:flex;gap:18px;font-size:11px;color:var(--ink-3);margin-top:12px;flex-wrap:wrap}
+  .scenario{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;max-width:680px}
+  .btn{font-family:var(--sans);font-weight:600;font-size:14px;border:none;border-radius:10px;padding:11px 20px;cursor:pointer}
+  .btn-p0{background:var(--red);color:#fff}.btn-primary{background:var(--indigo);color:#fff}.btn-ghost{background:none;border:1px solid var(--line);color:var(--ink-2)}
+  .field{margin-bottom:14px}.field label{display:block;font-size:12px;color:var(--ink-3);margin-bottom:5px;font-weight:600}
+  .field input,.field select{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:9px 11px;color:var(--ink);font-size:13.5px;font-family:var(--sans)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .ov{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}.ov.on{display:flex}
+  .modal{background:var(--card);border:1px solid var(--line);border-radius:18px;max-width:580px;width:100%;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,.5);max-height:90vh;overflow:auto}
+  .modal h3{font-family:var(--display);font-size:22px;margin-bottom:4px}
+  .stepper{display:flex;flex-wrap:wrap;gap:5px;margin:14px 0}
+  .stepper .s{font-family:var(--mono);font-size:10.5px;padding:4px 8px;border-radius:7px;border:1px solid var(--line);color:var(--ink-3)}
+  .stepper .s.done{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent)}.stepper .s.cur{color:#fff;background:var(--indigo);border-color:var(--indigo)}
+  .sech{font-size:11px;color:var(--ink-3);font-family:var(--mono);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.08em}
+  .tasklist{background:var(--bg-soft);border:1px solid var(--line);border-radius:10px;padding:6px 12px}
+  .tasklist .ti{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}.tasklist .ti:last-child{border:none}
+  .deliv{display:flex;flex-wrap:wrap;gap:6px}.deliv a{font-size:11px;border:1px solid var(--line);border-radius:7px;padding:3px 9px;color:var(--indigo-2);background:var(--bg-soft)}
+  .links{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .impact{background:var(--bg-soft);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:16px 0;font-size:13.5px}
+  .impact .row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);align-items:flex-start}.impact .row:last-child{border:none}
+  .impact .k{color:var(--ink-3);width:84px;flex:none;font-size:12px}.impact .v{color:var(--ink)}.arrow{color:var(--red);font-weight:700}
+  .notify{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}.ntag{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;color:var(--ink-2)}
+  .ok-banner{display:none;margin-top:16px;padding:12px 16px;border-radius:10px;background:color-mix(in srgb,var(--green) 12%,transparent);color:var(--green);font-size:13.5px;border:1px solid color-mix(in srgb,var(--green) 30%,transparent)}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="eyebrow">Leader-Sync · Interactive Prototype · v4（流程对齐《需求管理规范》）</div>
+  <h1>需求轴 · 容量 · <em>P0 联动</em></h1>
+  <p class="sub">业务线 → app → 需求 → 任务；流程按规范两图补全（双评审 · 任务分解+工时 · 双验收 · 双上线 · 回退 · 产出物）。数据为示意(mock)。</p>
+  <div class="note">⚠ 设计 demo，按钮可点不连后端。</div>
+</div></header>
+
+<div class="wrap">
+<div class="tabs">
+  <button class="tab on" onclick="show('r0',this)"><span class="r">R0</span>业务线概览</button>
+  <button class="tab" onclick="show('r1',this)"><span class="r">R1</span>需求池 · 流程</button>
+  <button class="tab" onclick="show('r2',this)"><span class="r">R2</span>甘特(需求/人力)</button>
+  <button class="tab" onclick="show('r3',this)"><span class="r">R3</span>提需求 · P0 联动</button>
+</div>
+
+<!-- R0 -->
+<div id="r0" class="panel on">
+  <h2>业务线概览 — 全程可点击联动</h2>
+  <p class="lead">业务线永续(无交付日)。展开看 app 与需求数；<b>点任意需求 → 进入它的流程/任务详情</b>，再跳需求池 / 回业务线，闭环。</p>
+  <div class="loop"><b>联动闭环：</b> 业务线概览 <span class="a">→</span> 点需求 <span class="a">→</span> 需求流程/任务 <span class="a">→</span> 需求池定位 / 回业务线 <span class="a">↺</span></div>
+  <div class="bl">
+    <div class="node lvl-bl exp" onclick="k(this)"><span class="caret">▸</span>
+      <div class="ring" style="width:42px;height:42px;background:conic-gradient(var(--green) 230deg,#2c2c33 0)"><i style="font-size:11px">64</i></div>
+      <div style="flex:1"><div class="nm">印度金融 <span class="perm-tag">业务线·永续</span></div>
+        <div class="mt"><span><b>3</b> app</span><span class="reqcount">需求 12（挂业务线 3 · app 9）</span><span class="h-ok health"><span class="dot" style="background:var(--green)"></span>整体正常</span><span>PIC Mia</span></div></div></div>
+    <div class="kids">
+      <div class="node indent1 lvl-req clk" onclick="openReq()"><span style="width:12px"></span><div style="flex:1"><span class="chip p1">P1</span> <b style="font-size:13px">跨 app 风控统一</b> <span class="muted">挂业务线本身 · PM 张小亮 · 开发中</span></div><span class="reqcount">3 任务</span><span class="go">流程 ↗</span></div>
+      <div class="node indent1 lvl-app exp" onclick="k(this)"><span class="caret">▸</span><div style="flex:1"><b>cash 印度</b> <span class="perm-tag">app</span> <span class="muted">负责 Mia</span></div><span class="reqcount">需求 5</span><span class="h-risk health" style="margin-left:8px"><span class="dot" style="background:var(--amber)"></span>预警 1</span></div>
+      <div class="kids">
+        <div class="node indent2 lvl-req clk" onclick="openReq()"><span style="width:12px"></span><div style="flex:1"><span class="chip p0">P0</span> <b style="font-size:13px">NBFC 合规改造</b> <span class="muted">PM 张小亮 · 期望 6/20 · 测试中</span></div><span class="reqcount">4 任务</span><span class="go">流程 ↗</span></div>
+        <div class="node indent2 lvl-req clk" onclick="openReq()"><span style="width:12px"></span><div style="flex:1"><span class="chip p2">P2</span> <b style="font-size:13px">回款对账自动化</b> <span class="muted">PM 张小亮 · 排期中</span></div><span class="reqcount">0 任务</span><span class="go">流程 ↗</span></div>
+      </div>
+      <div class="node indent1 lvl-app exp" onclick="k(this)"><span class="caret">▸</span><div style="flex:1"><b>allenpay</b> <span class="perm-tag">app</span> <span class="muted">负责 Yang</span></div><span class="reqcount">需求 4</span><span class="h-ok health" style="margin-left:8px"><span class="dot" style="background:var(--green)"></span>正常</span></div>
+      <div class="kids"><div class="node indent2 lvl-req clk" onclick="openReq()"><span style="width:12px"></span><div style="flex:1"><span class="chip p1">P1</span> <b style="font-size:13px">提现限额风控</b> <span class="muted">PM 张小亮 · 开发中</span></div><span class="reqcount">3 任务</span><span class="go">流程 ↗</span></div></div>
+    </div>
+  </div>
+  <div class="bl">
+    <div class="node lvl-bl exp" onclick="k(this)"><span class="caret">▸</span>
+      <div class="ring" style="width:42px;height:42px;background:conic-gradient(var(--amber) 160deg,#2c2c33 0)"><i style="font-size:11px">45</i></div>
+      <div style="flex:1"><div class="nm">印尼电商 <span class="perm-tag">业务线·永续</span></div>
+      <div class="mt"><span><b>2</b> app</span><span class="reqcount">需求 8（挂业务线 2 · app 6）</span><span class="h-over health"><span class="dot" style="background:var(--red)"></span>逾期 1</span><span>PIC 张三</span></div></div></div>
+    <div class="kids"><div class="node indent1 lvl-req clk" onclick="openReq()"><span style="width:12px"></span><div style="flex:1"><span class="chip p0">P0</span> <b style="font-size:13px">支付通道接入</b> <span class="muted">电商主站 · PM 张小亮 · 期望 6/10 · 开发中</span></div><span class="reqcount">5 任务</span><span class="go">流程 ↗</span></div></div>
+  </div>
+</div>
+
+<!-- R1 -->
+<div id="r1" class="panel">
+  <h2>需求池 · 流程（对齐规范：双评审 / 分解+工时 / 双验收 / 双上线 / 回退 / 产出物）</h2>
+  <p class="lead">需求由 4 类来源提报 → 必须经 <b>PM 收口</b>；<b>需求评审</b>(产品×技术) 与 <b>技术评审</b>(研发，含任务分解+工时评估) 两道闸门；开发⇄测试缺陷回流；<b>产品验收(预发)</b> 与 <b>业务验收(生产)</b> 两道；技术上线 + 业务上线。每阶段留产出物。</p>
+
+  <div class="flow">
+    <div class="step"><span class="who">4类来源/提出人</span><span class="st">提报</span><span class="ded">▸需求收集表</span></div><span class="fa">→</span>
+    <div class="step pm"><span class="who">PM</span><span class="st">收口·分析</span><span class="ded">▸PRD</span></div><span class="fa">→</span>
+    <div class="step gate"><span class="who">PM × 技术</span><span class="st">⚑需求评审</span></div><span class="fa">→</span>
+    <div class="step cap"><span class="who">研发负责人</span><span class="st">⚑技术评审</span><span class="ded">▸技术设计</span></div><span class="fa">→</span>
+    <div class="step cap"><span class="who">研发/测试</span><span class="st">任务分解+估工时</span><span class="ded">★喂容量</span></div><span class="fa">→</span>
+    <div class="step pm"><span class="who">PM</span><span class="st">排期·定版本</span><span class="ded">▸排期表</span></div><span class="fa">→</span>
+    <div class="step dev"><span class="who">研发</span><span class="st">开发·单元自测</span></div><span class="fa">⇄</span>
+    <div class="step dev"><span class="who">测试</span><span class="st">测试</span><span class="ded">▸测试用例</span></div><span class="fa">→</span>
+    <div class="step pm"><span class="who">PM</span><span class="st">产品验收·预发</span><span class="ded">▸验收报告</span></div><span class="fa">→</span>
+    <div class="step"><span class="who">研发/运维</span><span class="st">技术上线</span><span class="ded">▸上线公告</span></div><span class="fa">→</span>
+    <div class="step gate"><span class="who">业务方/提出人</span><span class="st">业务验收·生产</span><span class="ded">▸业务确认</span></div><span class="fa">→</span>
+    <div class="step"><span class="who">运维</span><span class="st">业务上线</span></div><span class="fa">→</span>
+    <div class="step pm"><span class="who">PM</span><span class="st">复盘</span></div>
+  </div>
+  <p class="rejnote">↩ <b>回退</b>：需求评审/技术评审不通过 → 退回分析/修改；单元自测或测试缺陷 → 退回开发；产品/业务验收不通过 → 退回处理。每次回退留痕。</p>
+
+  <div style="display:flex;gap:10px;margin:10px 0 14px;flex-wrap:wrap">
+    <button class="btn btn-primary" onclick="openNew()">+ 提需求（4类来源）</button>
+    <span class="chip">视角: PM 张小亮（看全部）</span><span class="chip">目标版本: v2026.6</span>
+  </div>
+  <div class="board">
+    <div class="col"><h3>待收口 <b>2</b><span class="owner">提出人·等PM认领</span></h3>
+      <div class="req is-p2" onclick="openReq()"><div class="t">PC 报表导出</div><div class="f"><span class="chip p2">P2</span><span class="pm">来源:运营</span></div></div>
+      <div class="req is-p1" onclick="openReq()"><div class="t">回款对账自动化</div><div class="f"><span class="chip p1">P1</span><span class="pm">来源:财务</span></div></div></div>
+    <div class="col"><h3>分析 <b>1</b><span class="owner">PM · 出PRD</span></h3><div class="req is-p1" onclick="openReq()"><div class="t">运营 KPI 看板</div><div class="f"><span class="chip p1">P1</span></div></div></div>
+    <div class="col"><h3>需求评审 <b>1</b><span class="owner">⚑ 产品×技术</span></h3><div class="req is-p2" onclick="openReq()"><div class="t">移动端首页改版</div><div class="f"><span class="chip p2">P2</span></div></div></div>
+    <div class="col"><h3>技术评审 <b>1</b><span class="owner">⚑ 研发·分解+工时</span></h3><div class="req is-p0" onclick="openReq()"><div class="t">NBFC 合规改造</div><div class="f"><span class="chip p0">P0</span></div></div></div>
+    <div class="col"><h3>排期 <b>1</b><span class="owner">PM · 定版本</span></h3><div class="req is-p1" onclick="openReq()"><div class="t">提现限额风控</div><div class="f"><span class="chip p1">P1</span></div></div></div>
+    <div class="col"><h3>开发 <b>1</b><span class="owner">研发·单元自测</span></h3><div class="req is-p0" onclick="openReq()"><div class="t">支付通道接入</div><div class="f"><span class="chip p0">P0</span></div></div></div>
+    <div class="col"><h3>测试 <b>1</b><span class="owner">测试·用例/回归</span></h3><div class="req is-p1" onclick="openReq()"><div class="t">退税流程</div><div class="f"><span class="chip p1">P1</span></div></div></div>
+    <div class="col"><h3>产品验收 <b>1</b><span class="owner">PM·预发</span></h3><div class="req is-p2" onclick="openReq()"><div class="t">通知中心 v1</div><div class="f"><span class="chip p2">P2</span></div></div></div>
+    <div class="col"><h3>业务验收 <b>1</b><span class="owner">业务方·生产</span></h3><div class="req is-p1" onclick="openReq()"><div class="t">合规字段补充</div><div class="f"><span class="chip p1">P1</span></div></div></div>
+    <div class="col"><h3>已上线 <b>1</b><span class="owner">复盘待办</span></h3><div class="req is-p1" onclick="openReq()"><div class="t">月报自动生成</div><div class="f"><span class="chip p1">P1</span></div></div></div>
+  </div>
+  <p class="muted" style="margin-top:14px">「待收口」=提出人刚提、PM未认领；两道评审是闸门（不过回退）；「技术评审」里做<b>任务分解+工时评估</b>，工时进 R2 容量；验收分预发(产品)与生产(业务)两次。</p>
+</div>
+
+<!-- R2 -->
+<div id="r2" class="panel">
+  <h2>甘特图：需求维度 + 人力维度</h2>
+  <p class="lead">同一批任务两种切法：<b>需求维度</b>=按需求排时间线(展开见任务)；<b>人力维度</b>=按人排产能(并行+每日负载+过载)。工时来自"技术评审·任务分解"环节。</p>
+  <div class="subtabs"><button class="subtab on" onclick="gv('greq',this)">需求维度时间线</button><button class="subtab" onclick="gv('gppl',this)">人力维度(容量)</button></div>
+  <div id="greq" class="gview on"><div class="cap">
+    <div class="axis" style="grid-template-columns:220px repeat(5,1fr)"><div style="border:none">需求 / 任务</div><div>6/8</div><div>6/9</div><div>6/10</div><div>6/11</div><div>6/12</div></div>
+    <div class="caprow" style="grid-template-columns:220px 1fr"><div class="capname rq">NBFC 合规改造<span class="role">P0·cash印度·期望6/20</span></div><div class="grid5"><div class="lane"><div class="taskbar" style="left:0%;width:80%;background:#e0556b">需求整体</div></div></div></div>
+    <div class="caprow" style="grid-template-columns:220px 1fr"><div class="capname tsk">└ 合规字段补充 (Mia)</div><div class="grid5"><div class="lane"><div class="taskbar" style="left:0%;width:38%;background:#2faa6e">已完成</div></div></div></div>
+    <div class="caprow" style="grid-template-columns:220px 1fr"><div class="capname tsk">└ 测试用例执行 (小苡)</div><div class="grid5"><div class="lane"><div class="taskbar" style="left:40%;width:40%;background:#6366f1">进行中</div></div></div></div>
+    <div class="caprow" style="grid-template-columns:220px 1fr"><div class="capname rq">提现限额风控<span class="role">P1·allenpay·期望6/18</span></div><div class="grid5"><div class="lane"><div class="taskbar" style="left:20%;width:70%;background:#d98a3a">需求整体</div></div></div></div>
+    <div class="caprow" style="grid-template-columns:220px 1fr"><div class="capname rq">支付通道接入<span class="role">P0·电商主站·期望6/10</span></div><div class="grid5"><div class="lane"><div class="taskbar" style="left:0%;width:58%;background:#e0556b">需求整体（逾期风险）</div></div></div></div>
+  </div></div>
+  <div id="gppl" class="gview"><div class="cap">
+    <div class="axis" style="grid-template-columns:120px repeat(5,1fr)"><div style="border:none"></div><div>6/8 一</div><div>6/9 二</div><div>6/10 三</div><div>6/11 四</div><div>6/12 五</div></div>
+    <div class="caprow" style="grid-template-columns:120px 1fr"><div class="capname">张三<span class="role">研发</span></div><div class="grid5"><div class="lane"><div class="taskbar" style="left:0%;width:58%;background:#6366f1">支付-对接Stripe·60%</div></div><div class="lane"><div class="taskbar" style="left:0%;width:100%;background:#5a5a6e">支付-联调·40%</div></div><div class="load" style="grid-template-columns:repeat(5,1fr)"><div style="background:color-mix(in srgb,var(--green) 18%,transparent)">100%</div><div style="background:color-mix(in srgb,var(--green) 18%,transparent)">100%</div><div style="background:color-mix(in srgb,var(--amber) 16%,transparent)">90%</div><div>40%</div><div>40%</div></div></div></div>
+    <div class="caprow" style="grid-template-columns:120px 1fr"><div class="capname">李四<span class="role">研发</span></div><div class="grid5"><div class="lane"><div class="taskbar" style="left:20%;width:60%;background:#2faa6e">退税流程·80%</div></div><div class="load" style="grid-template-columns:repeat(5,1fr)"><div>0%</div><div style="background:color-mix(in srgb,var(--green) 18%,transparent)">80%</div><div style="background:color-mix(in srgb,var(--green) 18%,transparent)">80%</div><div style="background:color-mix(in srgb,var(--green) 18%,transparent)">80%</div><div>0%</div></div></div></div>
+  </div><div class="axislabel"><span><span class="dot" style="background:var(--green)"></span> ≤100%</span><span><span class="dot" style="background:var(--amber)"></span> 接近满载</span><span><span class="dot" style="background:var(--red)"></span> >100% 过载</span></div></div>
+</div>
+
+<!-- R3 -->
+<div id="r3" class="panel">
+  <h2>提需求 · P0 联动</h2>
+  <p class="lead">P0 不是单独按钮——它就是<b>"提需求"时选 P0</b>。提交 P0(占某人产能)时，系统自动算影响、通知、走人工确认（规范 3.1 紧急需求）。P1/P2 则正常进 PM 收口。</p>
+  <div class="scenario">
+    <div class="muted" style="margin-bottom:12px">▌ 提需求表单（演示已预填一条 P0）</div>
+    <div class="field"><label>需求标题</label><input value="风控紧急合规" /></div>
+    <div class="grid2">
+      <div class="field"><label>优先级</label><select id="prio"><option selected>P0（紧急·需确认上线时间）</option><option>P1</option><option>P2</option></select></div>
+      <div class="field"><label>来源</label><select><option>业务方提报</option><option>产品规划</option><option>技术优化</option><option>用户反馈</option></select></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>挂到</label><select><option>印尼电商 / 电商主站(app)</option><option>印尼电商（业务线本身）</option></select></div>
+      <div class="field"><label>期望上线</label><input value="6/9" /></div>
+    </div>
+    <div class="field"><label>指派 / 预估工时</label><input value="张三 · 1 人天 · 投入度100%" /></div>
+    <button class="btn btn-p0" onclick="submitReq()">提交需求</button>
+    <div id="okbanner" class="ok-banner">✓ P0 已确认延期。「支付通道接入」交付 6/10 → 6/11；通知已发 张三/李雷/郑俨斌；变更留痕（原因：P0「风控紧急合规」，批准 张小亮）。</div>
+  </div>
+</div>
+</div>
+
+<!-- 需求详情/流程 modal -->
+<div class="ov" id="reqov"><div class="modal">
+  <div style="display:flex;justify-content:space-between;align-items:center"><h3>需求 · 支付通道接入</h3><span class="chip p0">P0</span></div>
+  <div class="muted" style="margin:4px 0">业务线 印尼电商 / app 电商主站 · 来源 业务方提报 · 目标版本 v2026.6 · 提出人 郑俨斌 · PM 张小亮 · 期望上线 6/10 · 验收 李雷 · 工时 5 人天</div>
+  <div class="stepper"><span class="s done">收集</span><span class="s done">分析</span><span class="s done">需求评审</span><span class="s done">技术评审</span><span class="s done">排期</span><span class="s cur">开发</span><span class="s">测试</span><span class="s">产品验收</span><span class="s">技术上线</span><span class="s">业务验收</span><span class="s">业务上线</span><span class="s">复盘</span></div>
+  <div class="sech">拆出的任务（5）</div>
+  <div class="tasklist">
+    <div class="ti"><span>对接 Stripe</span><span class="muted">张三 · 1人天 · 进行中 60%</span></div>
+    <div class="ti"><span>支付联调</span><span class="muted">张三 · 1人天 · 待开始</span></div>
+    <div class="ti"><span>回调验签</span><span class="muted">李四 · 0.5人天 · 待开始</span></div>
+    <div class="ti"><span>测试用例执行</span><span class="muted">测试-小苡 · 1人天 · 待开始</span></div>
+    <div class="ti"><span>上线部署</span><span class="muted">运维 · 0.5人天 · 待开始</span></div>
+  </div>
+  <div class="sech">产出物（规范要求留痕）</div>
+  <div class="deliv"><a>📄 PRD</a><a>📄 技术设计文档</a><a>📄 测试用例</a><a>📄 验收报告</a><a>📄 业务确认报告</a></div>
+  <div class="links">
+    <button class="btn btn-ghost" onclick="alert('demo: 在需求池看板中定位')">在需求池定位 →</button>
+    <button class="btn btn-ghost" onclick="alert('demo: 回到 印尼电商/电商主站')">← 回业务线</button>
+    <button class="btn btn-ghost" onclick="alert('demo: 打开人力甘特看张三负载')">看负责人产能 →</button>
+    <button class="btn btn-ghost" onclick="alert('demo: 打回上一步（技术评审），记回退原因')">↩ 打回上一步</button>
+  </div>
+  <div style="text-align:right;margin-top:14px"><button class="btn btn-primary" onclick="closeReq()">关闭</button></div>
+</div></div>
+
+<!-- 提需求 form modal -->
+<div class="ov" id="newov"><div class="modal">
+  <h3>+ 提需求</h3><div class="muted">任何人可提（4类来源）；提交后进 PM 收口（待收口列）。</div>
+  <div class="field" style="margin-top:14px"><label>需求标题</label><input placeholder="例如：导出报表加筛选" /></div>
+  <div class="grid2"><div class="field"><label>优先级</label><select id="nprio"><option>P2</option><option>P1</option><option>P0（紧急·需确认上线）</option></select></div>
+  <div class="field"><label>来源</label><select><option>业务方提报</option><option>产品规划</option><option>技术优化</option><option>用户反馈</option></select></div></div>
+  <div class="field"><label>挂到</label><select><option>印度金融（业务线本身）</option><option>印度金融 / cash印度(app)</option></select></div>
+  <div style="text-align:right;margin-top:8px"><button class="btn btn-ghost" onclick="closeNew()">取消</button> <button class="btn btn-primary" onclick="submitNew()">提交</button></div>
+</div></div>
+
+<!-- P0 影响预览 modal -->
+<div class="ov" id="ov"><div class="modal">
+  <h3>⚡ P0 影响预览</h3><div class="muted">P0「风控紧急合规」· 1 人天 · 指派 张三 · 投入度100%</div>
+  <div class="impact">
+    <div class="row"><span class="k">产能冲突</span><span class="v">张三 <b>6/8–6/9</b> 已100% → 插 P0 后 <span class="arrow">过载200%</span></span></div>
+    <div class="row"><span class="k">连锁顺延</span><span class="v">需求「支付通道接入」下「对接Stripe」+1 工作日</span></div>
+    <div class="row"><span class="k">需求影响</span><span class="v">「支付通道接入」交付 <b>6/10</b> <span class="arrow">→ 6/11</span></span></div>
+    <div class="row"><span class="k">需通知</span><span class="v"><div class="notify"><span class="ntag">负责 张三</span><span class="ntag">验收 李雷</span><span class="ntag">提出人 郑俨斌</span><span class="ntag">业务线 印尼电商</span></div></span></div>
+    <div class="row"><span class="k">留痕</span><span class="v">变更原因 = P0「风控紧急合规」；批准人待确认</span></div>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-ghost" onclick="closeP0()">取消</button><button class="btn btn-primary" onclick="confirmP0()">确认延期并通知</button></div>
+</div></div>
+
+<script>
+  function show(id,el){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));document.getElementById(id).classList.add('on');document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));el.classList.add('on');window.scrollTo({top:0,behavior:'smooth'});}
+  function k(el){const c=el.nextElementSibling;if(c&&c.classList.contains('kids')){c.classList.toggle('open');const car=el.querySelector('.caret');if(car)car.textContent=c.classList.contains('open')?'▾':'▸';}}
+  function gv(id,el){document.querySelectorAll('.gview').forEach(g=>g.classList.remove('on'));document.getElementById(id).classList.add('on');document.querySelectorAll('.subtab').forEach(t=>t.classList.remove('on'));el.classList.add('on');}
+  function openReq(){document.getElementById('reqov').classList.add('on');}
+  function closeReq(){document.getElementById('reqov').classList.remove('on');}
+  function openNew(){document.getElementById('newov').classList.add('on');}
+  function closeNew(){document.getElementById('newov').classList.remove('on');}
+  function submitNew(){const p=document.getElementById('nprio').value;closeNew();if(p.indexOf('P0')>=0){document.getElementById('ov').classList.add('on');}else{alert('demo: 需求已提交，进入「待收口」列等 PM 认领');}}
+  function submitReq(){const p=document.getElementById('prio').value;if(p.indexOf('P0')>=0){document.getElementById('ov').classList.add('on');}else{alert('demo: P1/P2 需求已提交，进入 PM 收口（不触发延期预览）');}}
+  function closeP0(){document.getElementById('ov').classList.remove('on');}
+  function confirmP0(){closeP0();document.getElementById('okbanner').style.display='block';show('r3',document.querySelectorAll('.tab')[3]);}
+  ['reqov','newov','ov'].forEach(id=>document.getElementById(id).addEventListener('click',e=>{if(e.target.id===id)e.currentTarget.classList.remove('on');}));
+</script>
+</body>
+</html>

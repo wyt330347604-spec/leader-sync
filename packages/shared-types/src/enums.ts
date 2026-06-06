@@ -198,3 +198,65 @@ export const GradeTriggerType = {
   MANUAL_ADJUSTMENT: 'manual_adjustment',   // 手动调整（含降级 / 纠错 / 特殊情况，需填写 note）
 } as const;
 export type GradeTriggerType = (typeof GradeTriggerType)[keyof typeof GradeTriggerType];
+
+// ── 需求轴（项目驱动 R1）──────────────────────────────────────────────
+export const RequirementSource = {
+  BIZ: 'biz',          // 业务方提报
+  PLAN: 'plan',        // 产品规划
+  TECH: 'tech',        // 技术优化
+  FEEDBACK: 'feedback',// 用户反馈
+} as const;
+export type RequirementSource = (typeof RequirementSource)[keyof typeof RequirementSource];
+export const RequirementSourceLabel: Record<string, string> = {
+  biz: '业务方提报', plan: '产品规划', tech: '技术优化', feedback: '用户反馈',
+};
+
+export const RequirementPriority = { P0: 'P0', P1: 'P1', P2: 'P2' } as const;
+export type RequirementPriority = (typeof RequirementPriority)[keyof typeof RequirementPriority];
+
+// 生命周期状态（对齐《需求管理规范》两图）
+export const RequirementStatus = {
+  COLLECTED: 'collected',         // 收集/待收口
+  ANALYZING: 'analyzing',         // 分析(PM·出PRD)
+  REQ_REVIEW: 'req_review',       // 需求评审(PM×技术)
+  TECH_REVIEW: 'tech_review',     // 技术评审(研发·分解+工时)
+  SCHEDULED: 'scheduled',         // 排期(PM·定版本)
+  DEVELOPING: 'developing',       // 开发(研发·单元自测)
+  TESTING: 'testing',             // 测试(用例评审→冒烟→功能→集成→回归)
+  PRODUCT_ACCEPT: 'product_accept', // 产品验收(PM·预发)
+  TECH_RELEASE: 'tech_release',   // 技术上线
+  BIZ_ACCEPT: 'biz_accept',       // 业务验收(业务方·生产)
+  RELEASED: 'released',           // 业务上线
+  RETRO: 'retro',                 // 复盘
+  CLOSED: 'closed',               // 关闭
+  REJECTED: 'rejected',           // 驳回
+} as const;
+export type RequirementStatus = (typeof RequirementStatus)[keyof typeof RequirementStatus];
+export const RequirementStatusLabel: Record<string, string> = {
+  collected: '收集', analyzing: '分析', req_review: '需求评审', tech_review: '技术评审',
+  scheduled: '排期', developing: '开发', testing: '测试', product_accept: '产品验收',
+  tech_release: '技术上线', biz_accept: '业务验收', released: '已上线', retro: '复盘',
+  closed: '关闭', rejected: '驳回',
+};
+// 看板顺序（不含 closed/rejected 末态）
+export const RequirementStatusOrder: string[] = [
+  'collected','analyzing','req_review','tech_review','scheduled','developing',
+  'testing','product_accept','tech_release','biz_accept','released','retro',
+];
+// 合法状态流转（含回退）。键=from，值=允许 to 集合。任意态→rejected 另行允许。
+export const RequirementTransitions: Record<string, string[]> = {
+  collected: ['analyzing'],
+  analyzing: ['req_review'],
+  req_review: ['tech_review', 'analyzing'],        // 评审不过 → 退回分析
+  tech_review: ['scheduled', 'analyzing'],         // 技术评审不过 → 退回分析
+  scheduled: ['developing'],
+  developing: ['testing'],
+  testing: ['product_accept', 'developing'],       // 缺陷 → 退回开发
+  product_accept: ['tech_release', 'developing'],  // 验收不过 → 退回开发
+  tech_release: ['biz_accept'],
+  biz_accept: ['released', 'developing'],           // 业务验收不过 → 退回开发
+  released: ['retro'],
+  retro: ['closed'],
+  closed: [],
+  rejected: ['collected'],                          // 驳回后可重开
+};

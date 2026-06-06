@@ -6,6 +6,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   text,
   timestamp,
@@ -60,6 +61,10 @@ export const task = pgTable(
     overdueNotifiedLeaderAt: timestamp('overdue_notified_leader_at', { withTimezone: true }),
     monthlyCloseLocked: boolean('monthly_close_locked').default(false),
     projectUid: varchar('project_uid', { length: 64 }),
+    // 项目驱动 R1/R2：任务从需求拆出；工时(人天)+投入度(%) 供人力容量甘特
+    requirementUid: varchar('requirement_uid', { length: 64 }),
+    estEffortDays: numeric('est_effort_days', { precision: 5, scale: 1 }),
+    allocationPct: integer('allocation_pct'),
     version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

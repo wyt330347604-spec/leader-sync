@@ -19,6 +19,36 @@ function IncidentBadge({ projectUid, count }: { projectUid: string; count: numbe
   );
 }
 
+/** 需求徽章（可点击 → 跳转到按业务线过滤的需求池）。R1c 联动。 */
+function RequirementBadge({ businessLineUid, count, label }: { businessLineUid: string; count: number; label?: string }) {
+  const router = useRouter();
+  if (count <= 0) return null;
+  return (
+    <span
+      role="button"
+      title="查看需求池"
+      onClick={(e) => { e.stopPropagation(); router.push(`/requirements?business_line=${businessLineUid}`); }}
+      className="inline-flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium hover:opacity-80"
+      style={{ color: 'var(--accent-blue)', backgroundColor: 'color-mix(in srgb, var(--accent-blue) 14%, transparent)' }}
+    >🧩 {count} {label ?? '需求'}</span>
+  );
+}
+
+/** app 维度需求徽章 → 跳转到按 app 过滤的需求池。 */
+function RequirementBadgeApp({ appProjectUid, count }: { appProjectUid: string; count: number }) {
+  const router = useRouter();
+  if (count <= 0) return null;
+  return (
+    <span
+      role="button"
+      title="查看该 app 需求"
+      onClick={(e) => { e.stopPropagation(); router.push(`/requirements?app=${appProjectUid}`); }}
+      className="inline-flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium hover:opacity-80"
+      style={{ color: 'var(--accent-blue)', backgroundColor: 'color-mix(in srgb, var(--accent-blue) 14%, transparent)' }}
+    >🧩 {count} 需求</span>
+  );
+}
+
 const HEALTH: Record<ProjectHealth, { label: string; color: string }> = {
   on_track: { label: '正常', color: 'var(--accent-green)' },
   at_risk: { label: '预警', color: 'var(--accent-orange)' },
@@ -85,6 +115,7 @@ function SubRow({ node }: { node: PortfolioNode }) {
         </div>
         <div className="mt-0.5 flex items-center gap-3">
           <CountPills counts={node.counts} />
+          <RequirementBadgeApp appProjectUid={node.projectUid} count={node.requirementCount ?? 0} />
           <IncidentBadge projectUid={node.projectUid} count={node.incidentCount ?? 0} />
           <span className="text-xs text-[var(--text-muted)]">{fmtSpan(node.spanStart, node.spanEnd)}</span>
         </div>
@@ -111,6 +142,7 @@ function ProjectCard({ node }: { node: PortfolioNode }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="truncate text-base font-semibold text-[var(--text-primary)]">{node.name}</h3>
+            <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--text-muted)]">业务线·永续</span>
             <HealthDot health={node.health} />
             {node.picName ? (
               <span className="text-xs text-[var(--text-secondary)]">PIC {node.picName}</span>
@@ -118,12 +150,19 @@ function ProjectCard({ node }: { node: PortfolioNode }) {
               <span className="text-xs text-[var(--text-muted)]">负责人 {node.ownerName}</span>
             ) : null}
           </div>
-          <div className="mt-1 flex items-center gap-3 flex-wrap">
+          {/* R0：业务线永续、无交付日，展示 app 数 + 预警/逾期里程碑数 */}
+          <div className="mt-1 flex items-center gap-3 flex-wrap text-xs">
+            <span className="text-[var(--text-secondary)]"><b className="text-[var(--text-primary)]">{node.appCount ?? subs.length}</b> 个 app</span>
+            {(node.atRiskCount ?? 0) > 0 && <span style={{ color: 'var(--accent-orange)' }}>预警 {node.atRiskCount}</span>}
+            {(node.overdueCount ?? 0) > 0 && <span style={{ color: 'var(--accent-red)' }}>逾期 {node.overdueCount}</span>}
             <CountPills counts={node.counts} />
+            <RequirementBadge businessLineUid={node.projectUid} count={node.requirementCount ?? 0} />
+            {(node.requirementOnLineCount ?? 0) > 0 && (
+              <span className="text-[11px] text-[var(--text-muted)]">（{node.requirementOnLineCount} 挂业务线）</span>
+            )}
             <IncidentBadge projectUid={node.projectUid} count={node.incidentCount ?? 0} />
-            <span className="text-xs text-[var(--text-muted)]">{fmtSpan(node.spanStart, node.spanEnd)}</span>
             {subs.length > 0 && (
-              <span className="text-xs text-[var(--text-secondary)]">{subs.length} 个子项目 {open ? '▾' : '▸'}</span>
+              <span className="text-[var(--text-secondary)]">{open ? '▾ 收起' : '▸ 展开 app'}</span>
             )}
           </div>
         </div>

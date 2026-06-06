@@ -1,7 +1,7 @@
 import { Injectable, Inject, HttpStatus } from '@nestjs/common';
 import { DATABASE_TOKEN } from '../../database.module';
 import type { Database } from '@leader-sync/db';
-import { task, taskLeader, monthlySnapshot, orgCache, project, incident } from '@leader-sync/db';
+import { task, taskLeader, monthlySnapshot, orgCache, project, incident, requirement } from '@leader-sync/db';
 import { eq, and, sql, inArray, desc } from 'drizzle-orm';
 import { BusinessException } from '../../common/exceptions/business.exception';
 import { TERMINAL_STATUSES, cumulativeCounts, isInDueSet, completionRate } from '@leader-sync/shared-types';
@@ -695,6 +695,18 @@ export class DashboardService {
     }
     const directIncidents = (uid: string) => incByProject.get(uid) ?? 0;
 
+    // 需求计数（R1c 联动）：未删除需求按归属聚合。挂 app 的归 app；挂业务线本身的归业务线直接计数。
+    const reqs = await this.db
+      .select({ businessLineUid: requirement.businessLineUid, appProjectUid: requirement.appProjectUid })
+      .from(requirement)
+      .where(sql`${requirement.deletedAt} IS NULL`);
+    const reqByApp = new Map<string, number>();
+    const reqOnLine = new Map<string, number>();
+    for (const r of reqs) {
+      if (r.appProjectUid) reqByApp.set(r.appProjectUid, (reqByApp.get(r.appProjectUid) ?? 0) + 1);
+      else reqOnLine.set(r.businessLineUid, (reqOnLine.get(r.businessLineUid) ?? 0) + 1);
+    }
+
     const meta = (p: (typeof projects)[number]) => ({
       projectUid: p.projectUid,
       name: p.name,
@@ -735,13 +747,27 @@ export class DashboardService {
         const subProjects = subs.map((s) => ({
           ...buildNode(s, directTasks(s.projectUid)),
           incidentCount: directIncidents(s.projectUid),
+          requirementCount: reqByApp.get(s.projectUid) ?? 0,
         }));
         // 顶级项目滚动汇总 = 直接任务 + 所有子项目任务（传递）；直接任务用于本行 bar/下钻。
         const direct = directTasks(p.projectUid);
         const allTasks = [...direct, ...subs.flatMap((s) => directTasks(s.projectUid))];
         // 事故数 = 本项目 + 所有子项目（传递）
         const incidentCount = directIncidents(p.projectUid) + subs.reduce((n, s) => n + directIncidents(s.projectUid), 0);
-        return { ...buildNode(p, allTasks, direct), incidentCount, subProjects };
+        const node = { ...buildNode(p, allTasks, direct), incidentCount, subProjects };
+        // R0 业务线语义：业务线永续、无交付日。健康度=最差子项目(app)；附 app 计数。
+        const atRiskCount = subProjects.filter((s) => s.health === 'at_risk').length;
+        const overdueCount = subProjects.filter((s) => s.health === 'overdue').length;
+        const blHealth = subProjects.length > 0
+          ? (overdueCount > 0 ? 'overdue' : atRiskCount > 0 ? 'at_risk' : 'on_track')
+          : node.health;
+        // 需求：挂业务线本身 + 各 app 之和（业务线概览同时展示两者）
+        const reqOnLineCount = reqOnLine.get(p.projectUid) ?? 0;
+        const requirementCount = reqOnLineCount + subProjects.reduce((n, s) => n + s.requirementCount, 0);
+        return {
+          ...node, isBusinessLine: true, appCount: subProjects.length, atRiskCount, overdueCount, health: blHealth,
+          requirementCount, requirementOnLineCount: reqOnLineCount,
+        };
       });
   }
 

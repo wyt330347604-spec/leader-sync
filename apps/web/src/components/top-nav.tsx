@@ -7,6 +7,7 @@ import { useMe } from '@/hooks/use-me';
 const BASE_NAV_LINKS = [
   { href: '/tasks', label: '我的任务' },
   { href: '/dashboard', label: '驾驶舱' },
+  { href: '/requirements', label: '需求池' },
   { href: '/projects', label: '项目管理' },
   { href: '/settings/notifications', label: '设置' },
 ];

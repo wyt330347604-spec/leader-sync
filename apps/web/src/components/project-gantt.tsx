@@ -169,7 +169,7 @@ export function ProjectGantt({ nodes }: { nodes: readonly PortfolioNode[] }) {
                 depth={0}
                 color={HEALTH_COLOR[p.health]}
                 progress={p.progress}
-                bar={pos(ms(p.spanStart), ms(p.spanEnd), range.min, range.max)}
+                bar={null}
                 expandable={hasChildren}
                 expanded={pOpen}
                 onToggle={() => hasChildren && toggle(p.projectUid)}
