@@ -1,10 +1,11 @@
-import { Injectable, HttpStatus } from '@nestjs/common';
+import { Injectable, HttpStatus, Logger } from '@nestjs/common';
 import { nanoid } from 'nanoid';
 import { RequirementRepository, type RequirementListFilter } from './requirement.repository';
 import { BusinessException } from '../../common/exceptions/business.exception';
 import { ErrorCode, RequirementStatus, RequirementTransitions } from '@leader-sync/shared-types';
 import type { CreateRequirementDto, UpdateRequirementDto, LinkTasksDto, AddArtifactDto, ImpactPreviewDto } from './dto/requirement.dto';
-import { computeImpact } from './requirement.impact';
+import { computeImpact, type ImpactResult, type ProjectMeta } from './requirement.impact';
+import { RequirementFeishuService } from './requirement-feishu.service';
 
 const COMPANY_ID = process.env.COMPANY_ID ?? 'default';
 const PM_ROLES: ReadonlySet<string> = new Set(['pmo', 'boss', 'admin']);
@@ -34,7 +35,11 @@ function isValidTransition(from: string, to: string): boolean {
 
 @Injectable()
 export class RequirementService {
-  constructor(private readonly repo: RequirementRepository) {}
+  private readonly logger = new Logger(RequirementService.name);
+  constructor(
+    private readonly repo: RequirementRepository,
+    private readonly feishu: RequirementFeishuService,
+  ) {}
 
   async create(reporter: { userId: string; userName: string }, dto: CreateRequirementDto) {
     if (dto.priority === 'P0' && !dto.expected_release_date) {
@@ -42,7 +47,7 @@ export class RequirementService {
     }
     const requirementUid = genUid();
     const now = new Date();
-    return this.repo.insert({
+    const created = await this.repo.insert({
       requirementUid,
       title: dto.title,
       value: dto.value ?? null,
@@ -61,6 +66,9 @@ export class RequirementService {
       createdAt: now,
       updatedAt: now,
     });
+    // R3：新提 P0 → 算影响并飞书下发（不阻断创建）
+    if (dto.priority === 'P0') this.dispatchP0Impact(created, 'create').catch(() => {});
+    return created;
   }
 
   async list(requester: Requester, filter: Omit<RequirementListFilter, 'viewerUserIds'>) {
@@ -117,7 +125,17 @@ export class RequirementService {
       }
     }
     values.version = (req.version ?? 1) + 1;
-    return this.repo.update(uid, values as any);
+    const updated = await this.repo.update(uid, values as any);
+
+    // R3：变更需求 → 升级为 P0 或 P0 改期 时重新算影响并飞书下发（不阻断更新）
+    if (updated) {
+      const becameP0 = dto.priority === 'P0' && req.priority !== 'P0';
+      const reschedP0 = updated.priority === 'P0'
+        && dto.expected_release_date !== undefined
+        && dto.expected_release_date !== req.expectedReleaseDate;
+      if (becameP0 || reschedP0) this.dispatchP0Impact(updated, 'change').catch(() => {});
+    }
+    return updated;
   }
 
   /** PM 认领：设承接人 = 当前用户；collected → analyzing。 */
@@ -205,9 +223,20 @@ export class RequirementService {
 
   /** R3：算 P0/变更影响 + 通知名单（不改期，供人工确认）。窗口=今天→期望上线。 */
   async impactPreview(dto: ImpactPreviewDto, now: Date = new Date()) {
-    const scopeUids = Array.from(new Set([dto.app_project_uid, dto.business_line_uid].filter((v): v is string => !!v)));
+    const { impact } = await this.buildImpact(dto.business_line_uid, dto.app_project_uid ?? null, dto.expected_release_date, now);
+    return impact;
+  }
+
+  /** 影响评估底座：算范围、窗口、容量任务、项目元信息，返回结果 + 项目（供下发取 PIC open_id）。 */
+  private async buildImpact(
+    businessLineUid: string,
+    appProjectUid: string | null,
+    expectedReleaseDate: string,
+    now: Date,
+  ): Promise<{ impact: ImpactResult; projects: ProjectMeta[] }> {
+    const scopeUids = Array.from(new Set([appProjectUid, businessLineUid].filter((v): v is string => !!v)));
     const windowStart = now.getTime();
-    const windowEnd = new Date(`${dto.expected_release_date}T23:59:59`).getTime();
+    const windowEnd = new Date(`${expectedReleaseDate}T23:59:59`).getTime();
     const [tasks, projects] = await Promise.all([
       this.repo.capacityTasks(),
       this.repo.findProjects(scopeUids),
@@ -218,7 +247,35 @@ export class RequirementService {
       const u = await this.repo.findOrgUser(id);
       if (u?.userName) picNames.set(id, u.userName);
     }));
-    return computeImpact({ scopeUids, windowStart, windowEnd, tasks, projects, picNames });
+    const impact = computeImpact({ scopeUids, windowStart, windowEnd, tasks, projects, picNames });
+    return { impact, projects };
+  }
+
+  /** R3：算影响 + 飞书下发给受影响负责人 + 项目 PIC（open_id）。失败仅告警。 */
+  private async dispatchP0Impact(
+    req: { requirementUid: string; title: string; businessLineUid: string; appProjectUid: string | null; expectedReleaseDate: string | null },
+    kind: 'create' | 'change',
+    now: Date = new Date(),
+  ): Promise<void> {
+    try {
+      if (!req.expectedReleaseDate) return; // 无期望上线 → 无窗口，不下发
+      const { impact, projects } = await this.buildImpact(req.businessLineUid, req.appProjectUid, req.expectedReleaseDate, now);
+      const openIds = [
+        ...impact.affectedPeople.map((p) => p.userId),
+        ...projects.map((p) => p.picUserId).filter((v): v is string => !!v),
+      ];
+      await this.feishu.notifyP0Impact(openIds, {
+        requirementUid: req.requirementUid,
+        title: req.title,
+        expectedReleaseDate: req.expectedReleaseDate,
+        peopleCount: impact.summary.peopleCount,
+        taskCount: impact.summary.taskCount,
+        overloadedCount: impact.summary.overloadedCount,
+        kind,
+      });
+    } catch (err) {
+      this.logger.warn(`dispatchP0Impact failed for ${req.requirementUid}: ` + (err as Error).message);
+    }
   }
 
   private async requireFound(uid: string) {

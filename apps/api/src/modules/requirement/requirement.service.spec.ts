@@ -7,16 +7,23 @@ import { RequirementStatus } from '@leader-sync/shared-types';
 
 function mockRepo(): Record<keyof RequirementRepository, ReturnType<typeof vi.fn>> {
   return {
-    insert: vi.fn(),
+    insert: vi.fn((v) => Promise.resolve({ requirementUid: 'r', ...v })),
     findByUid: vi.fn(),
-    update: vi.fn().mockResolvedValue({ ok: true }),
+    update: vi.fn((uid, v) => Promise.resolve({ requirementUid: uid, ...v })),
     list: vi.fn().mockResolvedValue([]),
     findArtifacts: vi.fn().mockResolvedValue([]),
     insertArtifact: vi.fn(),
     findTasksByRequirement: vi.fn().mockResolvedValue([]),
     linkTasks: vi.fn().mockResolvedValue(2),
     findOrgUser: vi.fn().mockResolvedValue(null),
+    findLinkableTasks: vi.fn().mockResolvedValue([]),
+    taskSpansByRequirement: vi.fn().mockResolvedValue(new Map()),
+    capacityTasks: vi.fn().mockResolvedValue([]),
+    findProjects: vi.fn().mockResolvedValue([]),
   } as any;
+}
+function mockFeishu() {
+  return { notifyP0Impact: vi.fn().mockResolvedValue(0), sendTextToUser: vi.fn().mockResolvedValue(true) };
 }
 const PM: Requester = { userIds: ['ou_pm'], userName: 'PM', role: 'pmo' };
 const EMP: Requester = { userIds: ['ou_emp'], userName: '员工', role: 'employee' };
@@ -24,7 +31,8 @@ const EMP: Requester = { userIds: ['ou_emp'], userName: '员工', role: 'employe
 describe('RequirementService', () => {
   let svc: RequirementService;
   let repo: ReturnType<typeof mockRepo>;
-  beforeEach(() => { repo = mockRepo(); svc = new RequirementService(repo as any); });
+  let feishu: ReturnType<typeof mockFeishu>;
+  beforeEach(() => { repo = mockRepo(); feishu = mockFeishu(); svc = new RequirementService(repo as any, feishu as any); });
 
   describe('create', () => {
     it('默认 collected + reporter', async () => {
@@ -38,6 +46,27 @@ describe('RequirementService', () => {
     it('P0 缺期望上线 → 报错', async () => {
       await expect(svc.create({ userId: 'u', userName: 'u' }, { title: 'X', business_line_uid: 'bl', priority: 'P0' } as any))
         .rejects.toBeInstanceOf(BusinessException);
+    });
+  });
+
+  describe('R3 P0 飞书下发', () => {
+    it('新提 P0（含期望上线）→ 触发影响下发', async () => {
+      await svc.create({ userId: 'ou_emp', userName: '员工' },
+        { title: 'X', business_line_uid: 'bl', priority: 'P0', expected_release_date: '2026-07-15' } as any);
+      await vi.waitFor(() => expect(feishu.notifyP0Impact).toHaveBeenCalled());
+      expect(feishu.notifyP0Impact.mock.calls[0][1].kind).toBe('create');
+    });
+    it('非 P0 不下发', async () => {
+      await svc.create({ userId: 'ou_emp', userName: '员工' },
+        { title: 'X', business_line_uid: 'bl', priority: 'P2' } as any);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(feishu.notifyP0Impact).not.toHaveBeenCalled();
+    });
+    it('变更升级为 P0（含期望上线）→ 触发变更下发', async () => {
+      repo.findByUid.mockResolvedValue({ requirementUid: 'r', status: 'collected', version: 1, priority: 'P2', pmUserId: 'ou_pm', businessLineUid: 'bl', appProjectUid: null, expectedReleaseDate: null });
+      await svc.update('r', PM, { priority: 'P0', expected_release_date: '2026-07-15' } as any);
+      await vi.waitFor(() => expect(feishu.notifyP0Impact).toHaveBeenCalled());
+      expect(feishu.notifyP0Impact.mock.calls[0][1].kind).toBe('change');
     });
   });
 
