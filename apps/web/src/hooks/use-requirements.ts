@@ -202,8 +202,11 @@ export interface ImpactResult {
   readonly summary: { peopleCount: number; taskCount: number; overloadedCount: number };
 }
 
-export function previewImpact(input: { business_line_uid: string; app_project_uid?: string | null; expected_release_date: string }) {
-  return apiFetch<ImpactResult>('/api/v1/requirements/impact-preview', { method: 'POST', body: JSON.stringify(input) });
+export function previewImpact(
+  input: { business_line_uid: string; app_project_uid?: string | null; expected_release_date: string },
+  signal?: AbortSignal,
+) {
+  return apiFetch<ImpactResult>('/api/v1/requirements/impact-preview', { method: 'POST', body: JSON.stringify(input), signal });
 }
 
 export function addRequirementArtifact(uid: string, artifact: { type: string; title: string; url?: string }) {

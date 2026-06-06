@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsIn, IsArray, IsNumber, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsIn, IsArray, IsNumber, IsDateString, Min, Max } from 'class-validator';
 import { RequirementSource, RequirementPriority, RequirementStatus } from '@leader-sync/shared-types';
 
 export class CreateRequirementDto {
@@ -20,7 +20,7 @@ export class UpdateRequirementDto {
   @IsString() @IsOptional() target_version?: string | null;
   @IsString() @IsOptional() acceptor_user_id?: string | null;
   @IsDateString() @IsOptional() expected_release_date?: string | null;
-  @IsNumber() @IsOptional() est_effort_days?: number | null;
+  @IsNumber() @Min(0) @Max(1000) @IsOptional() est_effort_days?: number | null;
   // 状态流转（含回退 / 驳回）。校验合法性在 service。
   @IsIn(Object.values(RequirementStatus)) @IsOptional() status?: string;
   @IsString() @IsOptional() transition_reason?: string; // 回退/驳回原因，留痕
@@ -28,8 +28,8 @@ export class UpdateRequirementDto {
 
 export class LinkTasksDto {
   @IsArray() @IsString({ each: true }) task_uids!: string[];
-  @IsNumber() @IsOptional() est_effort_days?: number;
-  @IsNumber() @IsOptional() allocation_pct?: number;
+  @IsNumber() @Min(0) @Max(1000) @IsOptional() est_effort_days?: number;
+  @IsNumber() @Min(0) @Max(100) @IsOptional() allocation_pct?: number;
 }
 
 export class AddArtifactDto {

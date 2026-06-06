@@ -12,6 +12,7 @@ import { RequirementImpactPreview } from '@/components/requirement-impact-previe
 import { RequirementGantt } from '@/components/requirement-gantt';
 import { CapacityGantt } from '@/components/capacity-gantt';
 import { useProjects } from '@/hooks/use-projects';
+import { useMe } from '@/hooks/use-me';
 import {
   useRequirements, useRequirementGantt, useCapacity,
   createRequirement, type CreateRequirementInput, type Requirement,
@@ -29,8 +30,12 @@ function RequirementsContent() {
 
   const [view, setView] = useState<'kanban' | 'req_gantt' | 'capacity'>('kanban');
   const [businessLineUid, setBusinessLineUid] = useState<string>(params.get('business_line') ?? '');
-  const [appProjectUid] = useState<string>(params.get('app') ?? '');
+  // app 过滤纯 URL 驱动：直接读 params（reactive），避免冻结在挂载值导致深链/客户端跳转后过滤不更新
+  const appProjectUid = params.get('app') ?? '';
   const [priority, setPriority] = useState<string>('');
+
+  const { data: me } = useMe();
+  const isPM = ['pmo', 'boss', 'admin'].includes(me?.role ?? '');
 
   useEffect(() => { ensureAuth().then(setAuthed); }, []);
 
@@ -42,7 +47,7 @@ function RequirementsContent() {
   const { data: requirements, isLoading, error, mutate } = useRequirements(filter, authed);
   const ganttFilter = useMemo(() => ({ businessLineUid: businessLineUid || undefined, appProjectUid: appProjectUid || undefined }), [businessLineUid, appProjectUid]);
   const { data: ganttReqs, isLoading: ganttLoading } = useRequirementGantt(ganttFilter, authed && view === 'req_gantt');
-  const { data: capacity, isLoading: capLoading } = useCapacity(authed && view === 'capacity');
+  const { data: capacity, isLoading: capLoading } = useCapacity(authed && view === 'capacity' && isPM);
 
   const projectNames = useMemo(() => {
     const m = new Map<string, string>();
@@ -117,7 +122,8 @@ function RequirementsContent() {
           tabs={[
             { key: 'kanban', label: '需求看板' },
             { key: 'req_gantt', label: '需求甘特' },
-            { key: 'capacity', label: '人力容量' },
+            // 人力容量为管理视图（全员负载），仅 PM/管理员可见
+            ...(isPM ? [{ key: 'capacity', label: '人力容量' }] : []),
           ]}
           activeKey={view}
           onChange={(k) => setView(k as typeof view)}

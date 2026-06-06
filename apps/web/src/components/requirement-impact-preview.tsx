@@ -24,15 +24,22 @@ export function RequirementImpactPreview({ priority, businessLineUid, appProject
 
   useEffect(() => {
     if (!active) { setData(null); setErr(null); return; }
-    let cancelled = false;
+    const controller = new AbortController();
     setLoading(true); setErr(null);
     const handle = setTimeout(() => {
-      previewImpact({ business_line_uid: businessLineUid, app_project_uid: appProjectUid, expected_release_date: expectedReleaseDate! })
-        .then((r) => { if (!cancelled) setData(r); })
-        .catch((e) => { if (!cancelled) setErr(e instanceof Error ? e.message : String(e)); })
-        .finally(() => { if (!cancelled) setLoading(false); });
+      previewImpact(
+        { business_line_uid: businessLineUid, app_project_uid: appProjectUid, expected_release_date: expectedReleaseDate! },
+        controller.signal,
+      )
+        .then((r) => { if (!controller.signal.aborted) setData(r); })
+        .catch((e) => {
+          if (controller.signal.aborted || (e as Error)?.name === 'AbortError') return; // 被新输入取消，忽略
+          setErr(e instanceof Error ? e.message : String(e));
+        })
+        .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 350);
-    return () => { cancelled = true; clearTimeout(handle); };
+    // 清理：中止在途请求 + 取消未触发的 debounce，避免快速改输入时累积全表扫请求
+    return () => { controller.abort(); clearTimeout(handle); };
   }, [active, businessLineUid, appProjectUid, expectedReleaseDate]);
 
   if (!active) return null;

@@ -46,6 +46,16 @@ test('R1c 需求详情：stepper + 流转 + 任务 + 产出物', async ({ contex
   await page.screenshot({ path: 'screenshots/r1-audit/06-detail.png', fullPage: true });
 });
 
+test('R1 安全：非 PM 员工看不到「人力容量」管理 tab', async ({ context, page }) => {
+  await devLogin(context, 'ou_dev_alice'); // employee
+  await setTheme(page, 'dark');
+  await visit(page, '/requirements');
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: 'screenshots/r1-audit/08-nonpm-no-capacity-tab.png', fullPage: true });
+  await expect(page.getByRole('button', { name: '需求看板' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '人力容量' })).toHaveCount(0);
+});
+
 test('R1c 业务线概览需求计数联动', async ({ context, page }) => {
   await devLogin(context, 'ou_dev_harvey');
   await setTheme(page, 'dark');

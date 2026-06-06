@@ -50,18 +50,18 @@ export class RequirementController {
   }
 
   @Get('requirements/capacity')
-  capacity() {
-    return this.svc.capacity();
+  capacity(@CurrentUser() user: CurrentUserPayload) {
+    return this.svc.capacity(requesterFrom(user));
   }
 
   @Get('requirements/:uid')
-  getOne(@Param('uid') uid: string) {
-    return this.svc.getOne(uid);
+  getOne(@CurrentUser() user: CurrentUserPayload, @Param('uid') uid: string) {
+    return this.svc.getOne(uid, requesterFrom(user));
   }
 
   @Get('requirements/:uid/candidate-tasks')
-  candidateTasks(@Param('uid') uid: string) {
-    return this.svc.candidateTasks(uid);
+  candidateTasks(@CurrentUser() user: CurrentUserPayload, @Param('uid') uid: string) {
+    return this.svc.candidateTasks(uid, requesterFrom(user));
   }
 
   @Patch('requirements/:uid')

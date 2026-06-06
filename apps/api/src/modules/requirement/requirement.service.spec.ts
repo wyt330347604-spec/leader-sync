@@ -20,6 +20,7 @@ function mockRepo(): Record<keyof RequirementRepository, ReturnType<typeof vi.fn
     taskSpansByRequirement: vi.fn().mockResolvedValue(new Map()),
     capacityTasks: vi.fn().mockResolvedValue([]),
     findProjects: vi.fn().mockResolvedValue([]),
+    findOrgUsersByIds: vi.fn().mockResolvedValue([]),
   } as any;
 }
 function mockFeishu() {
@@ -113,22 +114,69 @@ describe('RequirementService', () => {
   });
 
   describe('linkTasks', () => {
-    it('PM 挂任务 → 返回 linked 数', async () => {
-      repo.findByUid.mockResolvedValue({ requirementUid: 'r', pmUserId: 'ou_pm' });
+    it('PM 挂候选任务 → 返回 linked 数（不回写需求级工时）', async () => {
+      repo.findByUid.mockResolvedValue({ requirementUid: 'r', pmUserId: 'ou_pm', businessLineUid: 'bl', appProjectUid: null });
+      repo.findLinkableTasks.mockResolvedValue([{ taskUid: 't1' }, { taskUid: 't2' }]);
       const res = await svc.linkTasks('r', PM, { task_uids: ['t1', 't2'], est_effort_days: 3 } as any);
       expect(repo.linkTasks).toHaveBeenCalledWith('r', ['t1', 't2'], 3, undefined);
       expect(res).toEqual({ linked: 2 });
+      // 不再用每任务工时覆盖需求级 est_effort_days
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+    it('挂载范围外的任务 → 400（防越权重挂别的线/已删任务）', async () => {
+      repo.findByUid.mockResolvedValue({ requirementUid: 'r', pmUserId: 'ou_pm', businessLineUid: 'bl', appProjectUid: null });
+      repo.findLinkableTasks.mockResolvedValue([{ taskUid: 't1' }]); // t2 不在候选集
+      await expect(svc.linkTasks('r', PM, { task_uids: ['t1', 't2'] } as any))
+        .rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+      expect(repo.linkTasks).not.toHaveBeenCalled();
     });
   });
 
-  describe('list 行级安全', () => {
-    it('非特权角色注入 viewerUserIds', async () => {
+  describe('行级安全 / 角色门禁', () => {
+    it('list：非特权角色注入 viewerUserIds', async () => {
       await svc.list(EMP, {});
       expect(repo.list.mock.calls[0][0].viewerUserIds).toEqual(['ou_emp']);
     });
-    it('PM/特权不注入 viewerUserIds（看全部）', async () => {
+    it('list：PM/特权不注入 viewerUserIds（看全部）', async () => {
       await svc.list(PM, {});
       expect(repo.list.mock.calls[0][0].viewerUserIds).toBeUndefined();
+    });
+    it('getOne：提出人可看自己的', async () => {
+      repo.findByUid.mockResolvedValue({ requirementUid: 'r', reporterUserId: 'ou_emp', pmUserId: null });
+      await expect(svc.getOne('r', EMP)).resolves.toMatchObject({ requirementUid: 'r' });
+    });
+    it('getOne：非提出人/非承接的普通用户 → 403', async () => {
+      repo.findByUid.mockResolvedValue({ requirementUid: 'r', reporterUserId: 'ou_other', pmUserId: 'ou_pmx' });
+      await expect(svc.getOne('r', EMP)).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
+    });
+    it('getOne：PM 可看任意', async () => {
+      repo.findByUid.mockResolvedValue({ requirementUid: 'r', reporterUserId: 'ou_other', pmUserId: null });
+      await expect(svc.getOne('r', PM)).resolves.toMatchObject({ requirementUid: 'r' });
+    });
+    it('candidateTasks：非 PM → 403', async () => {
+      repo.findByUid.mockResolvedValue({ requirementUid: 'r', businessLineUid: 'bl', appProjectUid: null, pmUserId: null });
+      await expect(svc.candidateTasks('r', EMP)).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
+    });
+    it('capacity：非 PM → 403', async () => {
+      await expect(svc.capacity(EMP)).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
+    });
+    it('capacity：PM 可查看', async () => {
+      await expect(svc.capacity(PM)).resolves.toEqual([]);
+    });
+  });
+
+  describe('impact 窗口钳制（过去期望上线日不误报无影响）', () => {
+    it('过去日期 → windowEnd 钳到至少当天，仍计算负载', async () => {
+      const tasks = [{
+        taskUid: 't', title: 'x', assigneeUserId: 'ou_a', assigneeName: 'A',
+        startAt: new Date(Date.now() - 5 * 86400000), dueAt: new Date(Date.now() + 5 * 86400000),
+        allocationPct: 120, estEffortDays: '3', requirementUid: null, status: 'in_progress', projectUid: 'bl',
+      }];
+      repo.capacityTasks.mockResolvedValue(tasks);
+      repo.findProjects.mockResolvedValue([]);
+      const res = await svc.impactPreview({ business_line_uid: 'bl', expected_release_date: '2020-01-01' } as any);
+      expect(res.summary.peopleCount).toBe(1);
+      expect(res.affectedPeople[0].peakLoadPct).toBe(120); // 循环执行了（未因过去日期跳过）
     });
   });
 });

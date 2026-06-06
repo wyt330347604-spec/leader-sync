@@ -108,6 +108,15 @@ export class RequirementRepository {
     return u || null;
   }
 
+  /** 批量取 org_cache（按 user_id 或 open_id 命中），供影响评估取显示名 + 解析 open_id。 */
+  async findOrgUsersByIds(ids: string[]) {
+    if (ids.length === 0) return [];
+    return this.db
+      .select({ userId: orgCache.userId, userName: orgCache.userName, openId: orgCache.openId })
+      .from(orgCache)
+      .where(sql`(${inArray(orgCache.userId, ids)} OR ${inArray(orgCache.openId, ids)})`);
+  }
+
   /** 需求维度甘特：每个需求关联任务的最早开始 / 最晚截止（无任务则为 null）。 */
   async taskSpansByRequirement(uids: string[]) {
     if (uids.length === 0) return new Map<string, { start: Date | null; end: Date | null }>();
