@@ -13,6 +13,8 @@ interface Props {
   submitting?: boolean;
   /** 预选业务线（从业务线概览「提需求」进入时带入）。 */
   defaultBusinessLineUid?: string | null;
+  /** 预选归属 app（从 app 过滤进入时带入）。 */
+  defaultAppProjectUid?: string | null;
   /** R3：P0/期望上线变化时渲染的影响预览插槽。 */
   impactSlot?: (ctx: { priority: string; businessLineUid: string; appProjectUid: string | null; expectedReleaseDate: string | null }) => ReactNode;
   onClose: () => void;
@@ -31,7 +33,7 @@ const PRIORITY_DESC: Record<string, string> = {
 
 const APP_SELF = '__self__'; // 挂业务线本身
 
-export function RequirementFormModal({ open, submitting, defaultBusinessLineUid, impactSlot, onClose, onSubmit }: Props) {
+export function RequirementFormModal({ open, submitting, defaultBusinessLineUid, defaultAppProjectUid, impactSlot, onClose, onSubmit }: Props) {
   const { businessLines, appsByLine } = useProjects(open);
   const [title, setTitle] = useState('');
   const [value, setValue] = useState('');
@@ -46,11 +48,11 @@ export function RequirementFormModal({ open, submitting, defaultBusinessLineUid,
     if (open) {
       setTitle(''); setValue(''); setDescription('');
       setBusinessLineUid(defaultBusinessLineUid ?? '');
-      setAppProjectUid(APP_SELF);
+      setAppProjectUid(defaultAppProjectUid ?? APP_SELF);
       setSource(RequirementSource.BIZ); setPriority(RequirementPriority.P2);
       setExpectedReleaseDate('');
     }
-  }, [open, defaultBusinessLineUid]);
+  }, [open, defaultBusinessLineUid, defaultAppProjectUid]);
 
   const lineOptions: ComboboxOption[] = useMemo(
     () => businessLines.map((b) => ({ value: b.projectUid, label: b.name })),
@@ -88,6 +90,9 @@ export function RequirementFormModal({ open, submitting, defaultBusinessLineUid,
         <DialogHeader>
           <DialogTitle className="text-[var(--text-primary)]">提需求</DialogTitle>
         </DialogHeader>
+        <p className="-mt-1 mb-1 text-[11px] text-[var(--text-muted)]">
+          任何人都可提；提交后进入「收集」列，等 PM 认领收口，再依次走分析 → 评审 → 开发 → 验收 → 上线。
+        </p>
 
         <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
           <Field label="标题" required>

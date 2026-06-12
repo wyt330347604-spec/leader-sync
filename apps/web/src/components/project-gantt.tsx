@@ -1,5 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
+import { DAY, ms, monthTicks, pos } from '@/lib/gantt-scale';
 import type { PortfolioNode, PortfolioTask, ProjectHealth } from '@/hooks/use-project-portfolio';
 
 const HEALTH_COLOR: Record<ProjectHealth, string> = {
@@ -15,10 +16,7 @@ function taskColor(t: PortfolioTask): string {
   return 'var(--accent-blue)';
 }
 
-const DAY = 24 * 60 * 60 * 1000;
-const ms = (s: string | null | undefined) => (s ? new Date(s).getTime() : null);
-
-/** 收集所有节点/任务的时间端点，求全局范围。 */
+/** 收集所有节点/任务的时间端点，求全局范围（DAY/ms/monthTicks/pos 复用 lib/gantt-scale）。 */
 function globalRange(nodes: readonly PortfolioNode[]): { min: number; max: number } | null {
   let min: number | null = null, max: number | null = null;
   const acc = (a: number | null, b: number | null) => {
@@ -33,30 +31,6 @@ function globalRange(nodes: readonly PortfolioNode[]): { min: number; max: numbe
   nodes.forEach(visit);
   if (min === null || max === null || max <= min) return min !== null ? { min, max: min + 30 * DAY } : null;
   return { min, max };
-}
-
-/** 月度刻度。 */
-function monthTicks(min: number, max: number): { left: number; label: string }[] {
-  const ticks: { left: number; label: string }[] = [];
-  const span = max - min;
-  const d = new Date(min);
-  d.setDate(1);
-  if (d.getTime() < min) d.setMonth(d.getMonth() + 1);
-  while (d.getTime() <= max) {
-    ticks.push({ left: ((d.getTime() - min) / span) * 100, label: `${d.getMonth() + 1}月` });
-    d.setMonth(d.getMonth() + 1);
-  }
-  return ticks;
-}
-
-function pos(start: number | null, end: number | null, min: number, max: number): { left: number; width: number } | null {
-  if (start === null && end === null) return null;
-  const span = max - min;
-  const s = start ?? (end as number) - 7 * DAY;
-  const e = end ?? (start as number) + 7 * DAY;
-  const left = Math.max(0, ((s - min) / span) * 100);
-  const width = Math.max(1.5, Math.min(100 - left, ((e - s) / span) * 100));
-  return { left, width };
 }
 
 interface RowProps {

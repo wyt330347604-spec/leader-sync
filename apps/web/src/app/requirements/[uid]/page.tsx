@@ -7,10 +7,13 @@ import { LoadingScreen } from '@/components/loading-screen';
 import { useMe } from '@/hooks/use-me';
 import { RequirementLinkTasksModal } from '@/components/requirement-link-tasks-modal';
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
   useRequirement, updateRequirement, claimRequirement, linkRequirementTasks, addRequirementArtifact,
 } from '@/hooks/use-requirements';
 import {
-  RequirementStatusOrder, RequirementStatusLabel, RequirementTransitions,
+  RequirementStatusOrder, RequirementStatusLabel, RequirementStatusMeta, RequirementTransitions,
   RequirementSourceLabel, RequirementStatus,
 } from '@leader-sync/shared-types';
 
@@ -41,6 +44,9 @@ export default function RequirementDetailPage({ params }: { params: Promise<{ ui
   const [authed, setAuthed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  // 回退/驳回需记原因（留痕）：点击后先弹确认 + 原因输入
+  const [pending, setPending] = useState<{ to: string; dir: Dir } | null>(null);
+  const [reason, setReason] = useState('');
   const { data: me } = useMe();
 
   useEffect(() => { ensureAuth().then(setAuthed); }, []);
@@ -66,7 +72,24 @@ export default function RequirementDetailPage({ params }: { params: Promise<{ ui
     finally { setBusy(false); }
   }, [mutate]);
 
-  const transition = (to: string) => run(() => updateRequirement(uid, { status: to }), `已流转：${RequirementStatusLabel[to]}`);
+  // 前进直接走；回退/驳回先收原因（留痕）
+  const onTransitionClick = (to: string, dir: Dir) => {
+    if (dir === 'forward') {
+      run(() => updateRequirement(uid, { status: to }), `已流转：${RequirementStatusLabel[to]}`);
+    } else {
+      setReason('');
+      setPending({ to, dir });
+    }
+  };
+  const confirmPending = async () => {
+    if (!pending) return;
+    const { to, dir } = pending;
+    await run(
+      () => updateRequirement(uid, { status: to, transition_reason: reason.trim() || undefined }),
+      dir === 'reject' ? '已驳回' : `已退回：${RequirementStatusLabel[to]}`,
+    );
+    setPending(null);
+  };
   const claim = () => run(() => claimRequirement(uid), '已认领，进入分析');
 
   if (!authed || (isLoading && !req)) return <LoadingScreen />;
@@ -74,6 +97,7 @@ export default function RequirementDetailPage({ params }: { params: Promise<{ ui
   if (!req) return null;
 
   const curIdx = RequirementStatusOrder.indexOf(req.status);
+  const curMeta = RequirementStatusMeta[req.status];
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-20 pt-8">
@@ -120,15 +144,35 @@ export default function RequirementDetailPage({ params }: { params: Promise<{ ui
           ))}
         </div>
 
+        {/* 你现在在这一步：当前态负责人 + 该做什么，解决“看不懂卡在哪/谁该动” */}
+        {curMeta && (
+          <div className="mt-3 rounded-lg bg-[var(--bg-surface)]/60 px-3 py-2 text-xs">
+            <span className="text-[var(--text-secondary)]">当前在「{RequirementStatusLabel[req.status]}」</span>
+            <span className="mx-1 text-[var(--text-muted)]">·</span>
+            <span className="text-[var(--accent-blue)]">负责人 {curMeta.owner}</span>
+            <span className="mx-1 text-[var(--text-muted)]">·</span>
+            <span className="text-[var(--text-muted)]">{curMeta.hint}</span>
+            {curMeta.gate && <span className="ml-1 text-[var(--accent-orange)]">⚑ 评审/验收闸门，不通过会退回</span>}
+          </div>
+        )}
+
         {transitions.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--border)] pt-4">
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-4">
             {isPM ? transitions.map(({ to, dir }) => (
-              <button key={to} onClick={() => transition(to)} disabled={busy}
+              <button key={to} onClick={() => onTransitionClick(to, dir)} disabled={busy}
+                title={dir === 'forward'
+                  ? `进入「${RequirementStatusLabel[to]}」· 负责人 ${RequirementStatusMeta[to]?.owner ?? ''}`
+                  : dir === 'reject' ? '驳回该需求（需填原因，可重开）' : `退回到「${RequirementStatusLabel[to]}」（需填原因）`}
                 className={`rounded-full px-4 py-1.5 text-xs font-medium disabled:opacity-40 ${DIR_STYLE[dir]}`}>
                 {DIR_PREFIX[dir]}{RequirementStatusLabel[to]}
               </button>
             )) : (
-              <p className="text-xs text-[var(--text-muted)]">仅承接 PM / 管理员可流转状态。</p>
+              <p className="text-xs text-[var(--text-muted)]">
+                {req.pmName
+                  ? `当前由 PM ${req.pmName} 推进（${curMeta?.owner ?? ''} 阶段）。`
+                  : '待 PM 认领后推进。'}
+                {curMeta?.owner?.includes('业务方') && '　轮到业务方验收，请线下确认后通知 PM 流转。'}
+              </p>
             )}
           </div>
         )}
@@ -170,6 +214,37 @@ export default function RequirementDetailPage({ params }: { params: Promise<{ ui
           setLinkOpen(false);
         }}
       />
+
+      {/* 回退/驳回原因（留痕） */}
+      <Dialog open={pending !== null} onOpenChange={(o) => !o && setPending(null)}>
+        <DialogContent className="bg-[var(--bg-card)] border-[var(--border)] max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[var(--text-primary)]">
+              {pending?.dir === 'reject' ? '驳回需求' : `退回到「${pending ? RequirementStatusLabel[pending.to] : ''}」`}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-[var(--text-muted)]">
+            {pending?.dir === 'reject' ? '驳回后需求可重开。' : '退回后由对应阶段负责人重新处理。'}请填写原因（留痕，可供后续追溯）。
+          </p>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            placeholder="原因，如：评审未通过 / 验收发现缺陷 / 需求不成立…"
+            className="w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-blue)]"
+          />
+          <DialogFooter>
+            <button onClick={() => setPending(null)} disabled={busy} className="rounded-full border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]">取消</button>
+            <button
+              onClick={confirmPending}
+              disabled={busy}
+              className={`rounded-full px-5 py-2 text-sm font-medium text-white disabled:opacity-40 ${pending?.dir === 'reject' ? 'bg-[var(--accent-red)]' : 'bg-[var(--accent-orange)]'}`}
+            >
+              {busy ? '处理中...' : pending?.dir === 'reject' ? '确认驳回' : '确认退回'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

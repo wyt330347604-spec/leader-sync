@@ -2,72 +2,18 @@
  * IncidentFeishuService
  *
  * Thin Feishu notification wrapper for the incident module.
- * Uses the Feishu HTTP API directly (same pattern as FeishuAuthService).
- * Failures are logged as warnings and never surface to the API response.
+ * Delegates token + send to the shared FeishuMessengerService; keeps only the
+ * incident-specific message composition. Failures never surface to the API response.
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { FeishuMessengerService } from '../../common/feishu/feishu-messenger.service';
 
 @Injectable()
 export class IncidentFeishuService {
-  private readonly logger = new Logger(IncidentFeishuService.name);
-  private appAccessToken: string | null = null;
-  private tokenExpiresAt = 0;
-
-  private get appId(): string {
-    return process.env.FEISHU_APP_ID ?? '';
-  }
-
-  private get appSecret(): string {
-    return process.env.FEISHU_APP_SECRET ?? '';
-  }
-
-  private async getAppAccessToken(): Promise<string> {
-    if (this.appAccessToken && Date.now() < this.tokenExpiresAt) {
-      return this.appAccessToken;
-    }
-    try {
-      const res = await fetch(
-        'https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ app_id: this.appId, app_secret: this.appSecret }),
-        },
-      );
-      const data = (await res.json()) as { code: number; app_access_token: string; expire: number };
-      if (data.code !== 0) throw new Error('token fetch failed');
-      this.appAccessToken = data.app_access_token;
-      this.tokenExpiresAt = Date.now() + (data.expire - 300) * 1000;
-      return this.appAccessToken!;
-    } catch (err) {
-      this.logger.warn('Failed to get Feishu app access token', (err as Error).message);
-      return '';
-    }
-  }
+  constructor(private readonly messenger: FeishuMessengerService) {}
 
   async sendTextToUser(openId: string, text: string): Promise<void> {
-    try {
-      const token = await this.getAppAccessToken();
-      if (!token) return;
-      const res = await fetch('https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          receive_id: openId,
-          msg_type: 'text',
-          content: JSON.stringify({ text }),
-        }),
-      });
-      const data = (await res.json()) as { code: number; msg: string };
-      if (data.code !== 0) {
-        this.logger.warn(`Send message to ${openId} failed: ${data.msg}`);
-      }
-    } catch (err) {
-      this.logger.warn(`sendTextToUser failed for ${openId}:`, (err as Error).message);
-    }
+    await this.messenger.sendTextToUser(openId, text);
   }
 
   /**

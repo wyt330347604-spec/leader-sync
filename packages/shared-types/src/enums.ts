@@ -238,6 +238,29 @@ export const RequirementStatusLabel: Record<string, string> = {
   tech_release: '技术上线', biz_accept: '业务验收', released: '已上线', retro: '复盘',
   closed: '关闭', rejected: '驳回',
 };
+// 流程元信息（单一数据源）：每个状态的负责人 / 是否评审验收闸门 / 该步要做什么。
+// 看板列、需求详情提示条、流程说明图例共用，避免“流程知识”散落在用户脑子里。
+export interface RequirementStatusMetaItem {
+  owner: string;     // 这一步谁负责/谁动它
+  gate?: boolean;    // 是否评审/验收闸门（不通过会退回）
+  hint: string;      // 这一步要做什么
+}
+export const RequirementStatusMeta: Record<string, RequirementStatusMetaItem> = {
+  collected: { owner: '提出人 · 待 PM 认领', hint: '提交后等 PM 认领收口' },
+  analyzing: { owner: 'PM', hint: 'PM 出 PRD' },
+  req_review: { owner: 'PM × 技术', gate: true, hint: '产品技术对齐，不过退回分析' },
+  tech_review: { owner: '研发', gate: true, hint: '任务分解 + 估工时，不过退回分析' },
+  scheduled: { owner: 'PM', hint: '定目标版本 / 迭代' },
+  developing: { owner: '研发', hint: '编码 + 单元自测' },
+  testing: { owner: '测试', gate: true, hint: '用例→冒烟→功能→集成→回归，缺陷退开发' },
+  product_accept: { owner: 'PM', gate: true, hint: '预发验收，不过退开发' },
+  tech_release: { owner: '研发 / 运维', hint: '上线到技术环境' },
+  biz_accept: { owner: '业务方', gate: true, hint: '生产验收，不过退开发' },
+  released: { owner: '系统', hint: '业务上线完成' },
+  retro: { owner: 'PM', hint: 'PM 复盘总结' },
+  closed: { owner: '—', hint: '已关闭（终态）' },
+  rejected: { owner: 'PM', hint: '已驳回，可重开回收集' },
+};
 // 看板顺序（不含 closed/rejected 末态）
 export const RequirementStatusOrder: string[] = [
   'collected','analyzing','req_review','tech_review','scheduled','developing',

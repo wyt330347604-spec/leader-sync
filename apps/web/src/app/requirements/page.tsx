@@ -18,8 +18,16 @@ import {
   createRequirement, type CreateRequirementInput, type Requirement,
 } from '@/hooks/use-requirements';
 import {
-  RequirementStatusOrder, RequirementStatusLabel, RequirementPriority,
+  RequirementStatusOrder, RequirementStatusLabel, RequirementStatusMeta, RequirementPriority,
 } from '@leader-sync/shared-types';
+
+/** 看板列按阶段分组，给 12 个状态一个“从左到右的流水线”语义。 */
+const PHASE_OF: Record<string, string> = {
+  collected: '收口', analyzing: '评审', req_review: '评审', tech_review: '评审',
+  scheduled: '研发', developing: '研发', testing: '研发',
+  product_accept: '验收上线', tech_release: '验收上线', biz_accept: '验收上线', released: '验收上线',
+  retro: '复盘',
+};
 
 function RequirementsContent() {
   const router = useRouter();
@@ -117,6 +125,29 @@ function RequirementsContent() {
         </button>
       </div>
 
+      {/* 流程说明：默认折叠，点开即看到「状态→负责人→这步干什么」，解决“看不懂流程”。 */}
+      <details className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--bg-card)]">
+        <summary className="cursor-pointer select-none px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+          需求流程说明 · 谁负责 / 下一步做什么（点开）
+        </summary>
+        <div className="border-t border-[var(--border)] px-4 py-3">
+          <p className="mb-2 text-xs text-[var(--text-muted)]">
+            任何人都可提需求 → 进「收集」列等 PM 认领收口 → 依次走评审 / 研发 / 验收上线 / 复盘。带 <span className="text-[var(--accent-orange)]">⚑</span> 的是评审/验收闸门，不通过会退回上一步；驳回可记原因并重开。仅 PM / 管理员可推进状态。
+          </p>
+          <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+            {RequirementStatusOrder.map((s) => (
+              <div key={s} className="flex items-baseline gap-2 text-[11px]">
+                <span className="w-16 shrink-0 font-medium text-[var(--text-primary)]">
+                  {RequirementStatusMeta[s]?.gate && <span className="text-[var(--accent-orange)]">⚑</span>}{RequirementStatusLabel[s]}
+                </span>
+                <span className="text-[var(--accent-blue)]">{RequirementStatusMeta[s]?.owner}</span>
+                <span className="truncate text-[var(--text-muted)]">{RequirementStatusMeta[s]?.hint}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </details>
+
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <DashboardTabBar
           tabs={[
@@ -140,17 +171,33 @@ function RequirementsContent() {
         <>
           {isLoading && <div className="py-12 text-center text-[var(--text-muted)]">加载中...</div>}
           {error && <div className="py-12 text-center text-[var(--accent-red)]">加载失败: {error.message}</div>}
-          {!isLoading && !error && (
+          {!isLoading && !error && stats.total === 0 && (
+            <div className="rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
+              <p className="text-sm text-[var(--text-secondary)]">{isPM ? '需求池为空' : '你还没有提过需求'}</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                {isPM ? '点右上角「+ 提需求」发起，或等业务方提报后在「收集」列认领收口' : '点右上角「+ 提需求」发起，提交后由 PM 认领推进'}
+              </p>
+            </div>
+          )}
+          {!isLoading && !error && stats.total > 0 && (
             <div className="overflow-x-auto pb-4">
               <div className="flex gap-3" style={{ minWidth: 'max-content' }}>
-                {RequirementStatusOrder.map((status) => {
+                {RequirementStatusOrder.map((status, i) => {
                   const items = byStatus.get(status) ?? [];
+                  const meta = RequirementStatusMeta[status];
+                  const newPhase = i === 0 || PHASE_OF[status] !== PHASE_OF[RequirementStatusOrder[i - 1]];
                   return (
                     <div key={status} className="flex w-56 shrink-0 flex-col">
-                      <div className="mb-2 flex items-center justify-between px-1">
-                        <span className="text-xs font-semibold text-[var(--text-secondary)]">{RequirementStatusLabel[status]}</span>
+                      {newPhase && (
+                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{PHASE_OF[status]}</div>
+                      )}
+                      <div className="mb-1 flex items-center justify-between px-1">
+                        <span className="text-xs font-semibold text-[var(--text-secondary)]">
+                          {meta?.gate && <span className="mr-0.5 text-[var(--accent-orange)]">⚑</span>}{RequirementStatusLabel[status]}
+                        </span>
                         <span className="rounded-full bg-[var(--bg-surface)] px-1.5 text-[10px] text-[var(--text-muted)]">{items.length}</span>
                       </div>
+                      <div className="mb-1.5 px-1 text-[10px] leading-tight text-[var(--text-muted)]">{meta?.owner}</div>
                       <div className="flex flex-col gap-2 rounded-xl bg-[var(--bg-surface)]/40 p-2 min-h-[120px]">
                         {items.map((r) => (
                           <RequirementCard key={r.requirementUid} requirement={r} projectNames={projectNames} onClick={openDetail} />
@@ -180,6 +227,7 @@ function RequirementsContent() {
         open={modalOpen}
         submitting={submitting}
         defaultBusinessLineUid={businessLineUid || null}
+        defaultAppProjectUid={appProjectUid || null}
         impactSlot={(ctx) => <RequirementImpactPreview {...ctx} />}
         onClose={() => setModalOpen(false)}
         onSubmit={handleCreate}
