@@ -72,12 +72,14 @@ export class RequirementRepository {
       .where(and(eq(task.requirementUid, uid), sql`${task.deletedAt} IS NULL`));
   }
 
-  /** 把现有任务挂到需求并写工时/投入度；返回更新条数。 */
-  async linkTasks(uid: string, taskUids: string[], estEffortDays?: number | null, allocationPct?: number | null) {
+  /** 把现有任务挂到需求并写工时/投入度 + 项目归属（随需求）；返回更新条数。 */
+  async linkTasks(uid: string, taskUids: string[], estEffortDays?: number | null, allocationPct?: number | null, projectUid?: string | null) {
     if (taskUids.length === 0) return 0;
     const set: Record<string, unknown> = { requirementUid: uid, updatedAt: new Date() };
     if (estEffortDays != null) set.estEffortDays = String(estEffortDays);
     if (allocationPct != null) set.allocationPct = allocationPct;
+    // 需求拆出的任务，项目归属随需求（app 优先，否则业务线）——单一真相，避免任务项目与需求项目分叉
+    if (projectUid != null) set.projectUid = projectUid;
     const rows = await this.db.update(task).set(set).where(inArray(task.taskUid, taskUids)).returning({ taskUid: task.taskUid });
     return rows.length;
   }

@@ -1,7 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react';
 import { useDashboard } from '@/hooks/use-dashboard';
-import { useGantt } from '@/hooks/use-gantt';
 import { useLeaderMonthly } from '@/hooks/use-leader-monthly';
 import { useLeaderWeekly } from '@/hooks/use-leader-weekly';
 import { useMyMonthly } from '@/hooks/use-my-monthly';
@@ -11,7 +10,6 @@ import { ensureAuth } from '@/lib/auth';
 import { apiFetch, ApiError } from '@/lib/api-client';
 import { TaskStatusLabel, PriorityLabel, UserRole } from '@leader-sync/shared-types';
 import { useMe } from '@/hooks/use-me';
-import { GanttChart } from '@/components/gantt-chart';
 import { ProjectPortfolio } from '@/components/project-portfolio';
 import { StatusBadge } from '@/components/status-badge';
 import { DashboardTabBar } from '@/components/dashboard-tab-bar';
@@ -1258,63 +1256,6 @@ function ProjectCards({ projects }: { readonly projects: readonly ProjectSummary
 
 /* ---------- View Switcher ---------- */
 
-type DashboardView = 'overview' | 'gantt';
-
-const VIEW_TABS: readonly { view: DashboardView; label: string }[] = [
-  { view: 'overview', label: '概览' },
-  { view: 'gantt', label: '甘特图' },
-];
-
-function ViewSwitcher({
-  activeView,
-  onChange,
-}: {
-  readonly activeView: DashboardView;
-  readonly onChange: (v: DashboardView) => void;
-}) {
-  return (
-    <div className="flex items-center gap-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] p-1">
-      {VIEW_TABS.map((tab) => (
-        <button
-          key={tab.view}
-          onClick={() => onChange(tab.view)}
-          className={`rounded-md px-4 py-1.5 text-xs font-medium transition-all duration-200 ${
-            activeView === tab.view
-              ? 'bg-[var(--accent-blue)] text-white shadow-sm'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border)]'
-          }`}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/* ---------- Gantt View Wrapper ---------- */
-
-function GanttView({
-  period,
-  filterPersons,
-  filterTaskTitle,
-}: {
-  readonly period: DashboardPeriod;
-  readonly filterPersons: readonly string[];
-  readonly filterTaskTitle: string;
-}) {
-  const { data, error, isLoading } = useGantt(period);
-
-  return (
-    <GanttChart
-      data={data}
-      isLoading={isLoading}
-      error={error}
-      filterPersons={filterPersons}
-      filterTaskTitle={filterTaskTitle}
-    />
-  );
-}
-
 /* ---------- Leader Team Tab (Tab B) ---------- */
 
 type LeaderSubView = 'monthly' | 'weekly';
@@ -1437,7 +1378,6 @@ function DashboardContent() {
     mode: 'month',
     value: formatMonth(new Date()),
   }));
-  const [activeView, setActiveView] = useState<DashboardView>('overview');
   const [groupMode, setGroupMode] = useState<GroupMode>('person');
   const [filterPersons, setFilterPersons] = useState<string[]>([]);
   const [filterTaskTitle, setFilterTaskTitle] = useState('');
@@ -1464,7 +1404,8 @@ function DashboardContent() {
   useEffect(() => {
     if (activeTab === 'projects' && !canCompanyView) setActiveTab('me');
     if (activeTab === 'boss' && !canCompanyView) setActiveTab('me');
-    if (activeTab === 'leader' && !canLeaderView) setActiveTab('me');
+    // 我的团队仅纯 Leader 可见；越权或升级为全员视图者回落
+    if (activeTab === 'leader' && (!canLeaderView || canCompanyView)) setActiveTab(canCompanyView ? 'boss' : 'me');
   }, [activeTab, canCompanyView, canLeaderView]);
 
   // 仅有全员概览权限的用户才拉取 /boss 数据，避免普通员工触发 403。
@@ -1512,7 +1453,8 @@ function DashboardContent() {
   const MAIN_TABS: { key: MainTab; label: string }[] = [];
   if (canCompanyView) MAIN_TABS.push({ key: 'projects', label: '项目' });
   if (canCompanyView) MAIN_TABS.push({ key: 'boss', label: 'Boss 全员概览' });
-  if (canLeaderView) MAIN_TABS.push({ key: 'leader', label: '我的团队' });
+  // 「我的团队」只给纯 Leader；Boss/PMO/Admin 用 Boss 全员概览→按 Leader 分组（覆盖且更全），避免两处重复
+  if (canLeaderView && !canCompanyView) MAIN_TABS.push({ key: 'leader', label: '我的团队' });
   MAIN_TABS.push({ key: 'me', label: '我的完成情况' });
 
   return (
@@ -1526,7 +1468,6 @@ function DashboardContent() {
         />
         <div className="flex items-center gap-3">
           {activeTab !== 'projects' && <PeriodSelector period={period} onChange={setPeriod} />}
-          {activeTab === 'boss' && <ViewSwitcher activeView={activeView} onChange={setActiveView} />}
         </div>
       </div>
 
@@ -1548,22 +1489,7 @@ function DashboardContent() {
       {/* Tab A: Boss overview (existing content) */}
       {activeTab === 'boss' && (
         <>
-          {activeView === 'gantt' ? (
-            <>
-              <FilterBar
-                persons={allPersonNames}
-                selectedPersons={filterPersons}
-                onPersonsChange={setFilterPersons}
-                taskTitle={filterTaskTitle}
-                onTaskTitleChange={setFilterTaskTitle}
-              />
-              <GanttView
-                period={period}
-                filterPersons={filterPersons}
-                filterTaskTitle={filterTaskTitle}
-              />
-            </>
-          ) : isLoading ? (
+          {isLoading ? (
             <div className="flex min-h-[40vh] items-center justify-center">
               <p className="text-[var(--text-muted)]">加载中...</p>
             </div>

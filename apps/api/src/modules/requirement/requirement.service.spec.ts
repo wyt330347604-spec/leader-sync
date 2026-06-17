@@ -114,14 +114,20 @@ describe('RequirementService', () => {
   });
 
   describe('linkTasks', () => {
-    it('PM 挂候选任务 → 返回 linked 数（不回写需求级工时）', async () => {
-      repo.findByUid.mockResolvedValue({ requirementUid: 'r', pmUserId: 'ou_pm', businessLineUid: 'bl', appProjectUid: null });
+    it('PM 挂候选任务 → 项目归属随需求（app 优先），不回写需求级工时', async () => {
+      repo.findByUid.mockResolvedValue({ requirementUid: 'r', pmUserId: 'ou_pm', businessLineUid: 'bl', appProjectUid: 'app1' });
       repo.findLinkableTasks.mockResolvedValue([{ taskUid: 't1' }, { taskUid: 't2' }]);
       const res = await svc.linkTasks('r', PM, { task_uids: ['t1', 't2'], est_effort_days: 3 } as any);
-      expect(repo.linkTasks).toHaveBeenCalledWith('r', ['t1', 't2'], 3, undefined);
+      // 末位 projectUid = appProjectUid('app1')；任务随需求项目
+      expect(repo.linkTasks).toHaveBeenCalledWith('r', ['t1', 't2'], 3, undefined, 'app1');
       expect(res).toEqual({ linked: 2 });
-      // 不再用每任务工时覆盖需求级 est_effort_days
       expect(repo.update).not.toHaveBeenCalled();
+    });
+    it('需求只挂业务线时，任务项目归属落到业务线', async () => {
+      repo.findByUid.mockResolvedValue({ requirementUid: 'r', pmUserId: 'ou_pm', businessLineUid: 'bl', appProjectUid: null });
+      repo.findLinkableTasks.mockResolvedValue([{ taskUid: 't1' }]);
+      await svc.linkTasks('r', PM, { task_uids: ['t1'] } as any);
+      expect(repo.linkTasks).toHaveBeenCalledWith('r', ['t1'], undefined, undefined, 'bl');
     });
     it('挂载范围外的任务 → 400（防越权重挂别的线/已删任务）', async () => {
       repo.findByUid.mockResolvedValue({ requirementUid: 'r', pmUserId: 'ou_pm', businessLineUid: 'bl', appProjectUid: null });

@@ -174,7 +174,9 @@ export class RequirementService {
       throw new BusinessException(ErrorCode.INVALID_PARAMS, `任务不在可挂载范围内：${illegal.join(', ')}`, HttpStatus.BAD_REQUEST);
     }
     // est_effort_days 在此为「每个任务」的工时，仅写任务；需求层总工时由 update 单独维护（不再用同一值覆盖需求）
-    const updated = await this.repo.linkTasks(uid, wanted, dto.est_effort_days, dto.allocation_pct);
+    // 项目归属随需求（app 优先，否则业务线）：需求拆出的任务天然属于同一项目，不再出现双指针分叉
+    const projectUid = req.appProjectUid ?? req.businessLineUid;
+    const updated = await this.repo.linkTasks(uid, wanted, dto.est_effort_days, dto.allocation_pct, projectUid);
     return { linked: updated };
   }
 
