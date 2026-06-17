@@ -12,7 +12,7 @@
 
 **Primary entry points users see**:
 1. Feishu Bitable (multidimensional table) — `base Hvctbu6dTaLLRysBCrLcIqF1nwx / 督办子表 tblOP52tRfq7K8TV`
-2. Web UI — five pages: `/tasks`, `/tasks/create`, `/tasks/[uid]`, `/dashboard`, `/projects`, `/settings/notifications`, `/widget` (Feishu webview)
+2. Web UI — pages: `/tasks`, `/tasks/create`, `/tasks/[uid]`, `/dashboard`, `/projects`, `/requirements`, `/settings/notifications` (`/widget` Feishu webview 已于 2026-06 移除)
 3. Feishu cards (push) — weekly digest, daily overdue, monthly close
 
 **Three source-of-truth principle**:
@@ -404,7 +404,7 @@ Common error codes: 1001 (bad request), 1002 (no permission, HTTP 403), 1003 (no
 | `/dashboard` | `dashboard/page.tsx` | boss dashboard |
 | `/projects` | `projects/page.tsx` | project architecture overview (5 categories, 21 projects) |
 | `/settings/notifications` | `settings/notifications/page.tsx` | per-user opt-out toggles |
-| `/widget` | `widget/page.tsx` | embedded Feishu webview entry |
+| `/requirements` | `requirements/page.tsx` | 需求池（看板 / 需求甘特 / 人力容量） |
 | `/(auth)/callback` | `(auth)/callback/page.tsx` | OAuth client-side handler |
 
 ### 8.2 UI Primitives (`src/components/ui/`)

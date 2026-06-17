@@ -124,3 +124,24 @@ body {
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+/* ── 操作反馈动画：创建/完成 高亮脉冲 + 删除淡出 ───────────────── */
+@keyframes flash-create {
+  0%   { background-color: color-mix(in srgb, var(--accent-blue) 30%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent-blue); }
+  60%  { background-color: color-mix(in srgb, var(--accent-blue) 18%, transparent); }
+  100% { background-color: transparent; box-shadow: inset 0 0 0 0 transparent; }
+}
+@keyframes flash-done {
+  0%   { background-color: color-mix(in srgb, var(--accent-green) 32%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent-green); }
+  60%  { background-color: color-mix(in srgb, var(--accent-green) 18%, transparent); }
+  100% { background-color: transparent; box-shadow: inset 0 0 0 0 transparent; }
+}
+/* 创建：先从顶部滑入，再高亮脉冲褪去 */
+.flash-create { animation: flash-create 1.9s ease-out forwards; }
+.flash-done   { animation: flash-done 1.9s ease-out forwards; }
+
+@keyframes row-exit {
+  0%   { opacity: 1; transform: translateX(0); max-height: 200px; }
+  100% { opacity: 0; transform: translateX(28px); max-height: 0; }
+}
+.row-exit { animation: row-exit 0.32s ease-in forwards; overflow: hidden; pointer-events: none; }

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, Suspense, type ReactNode } from 'react';
+import { useState, useEffect, useRef, Suspense, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { useTasks } from '@/hooks/use-tasks';
@@ -129,7 +129,10 @@ function TaskListContent() {
   });
 
   const [completing, setCompleting] = useState<string | null>(null);
-  const [flashTaskUid, setFlashTaskUid] = useState<string | null>(null);
+  // 操作反馈：create=蓝色脉冲、done=绿色脉冲；removingUid=删除淡出
+  const [flash, setFlash] = useState<{ uid: string; kind: 'create' | 'done' } | null>(null);
+  const [removingUid, setRemovingUid] = useState<string | null>(null);
+  const scrolledFlashRef = useRef<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ uid: string; title: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
@@ -237,23 +240,31 @@ function TaskListContent() {
   }, [searchParams]);
 
   function handleQuickCreated(newUid: string) {
-    setFlashTaskUid(newUid);
-    setTimeout(() => setFlashTaskUid(null), 1500);
+    scrolledFlashRef.current = null; // 允许滚动到新任务
+    setFlash({ uid: newUid, kind: 'create' });
+    setTimeout(() => setFlash((f) => (f?.uid === newUid ? null : f)), 2000);
     mutate();
   }
 
   async function handleDeleteConfirmed() {
     if (!deleteTarget || deleting) return;
+    const uid = deleteTarget.uid;
     setDeleting(true);
     try {
-      await apiFetch(`/api/v1/tasks/${deleteTarget.uid}`, { method: 'DELETE' });
+      await apiFetch(`/api/v1/tasks/${uid}`, { method: 'DELETE' });
+      setDeleteTarget(null);
+      // 先播放淡出退场动画，再刷新列表（避免任务“瞬间消失”）
+      setRemovingUid(uid);
+      await new Promise((r) => setTimeout(r, 300));
       toast.success('已删除');
       await mutate();
+      setRemovingUid(null);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : '删除失败');
+      setRemovingUid(null);
+      setDeleteTarget(null);
     } finally {
       setDeleting(false);
-      setDeleteTarget(null);
     }
   }
 
@@ -319,6 +330,9 @@ function TaskListContent() {
       });
       toast.success('已完成');
       await mutate();
+      // 绿色脉冲反馈：让“完成”这一动作看得见
+      setFlash({ uid: taskUid, kind: 'done' });
+      setTimeout(() => setFlash((f) => (f?.uid === taskUid ? null : f)), 2000);
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === 409) {
         toast.error('数据已被修改，请刷新');
@@ -407,7 +421,9 @@ function TaskListContent() {
   function renderRow(t: any, groupKey: string, groupItems: any[]) {
     const taskUid = t.task_uid || t.taskUid;
     const isDone = t.status === 'done';
-    const isFlash = flashTaskUid === taskUid;
+    const isFlash = flash?.uid === taskUid;
+    const flashKind = isFlash ? flash!.kind : null;
+    const isRemoving = removingUid === taskUid;
     const carried = isCarried(t);
     const expanded = expandedUid === taskUid;
     const proj = projectOf(t);
@@ -419,24 +435,35 @@ function TaskListContent() {
     return (
       <div key={taskUid}>
       <div
+        ref={(el) => {
+          // 新建/完成时把该行平滑滚动到可视区中央（每次 flash 仅滚一次）
+          if (el && isFlash && scrolledFlashRef.current !== taskUid) {
+            scrolledFlashRef.current = taskUid;
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }}
         onDragOver={canDrag && dragUid ? (e) => { e.preventDefault(); if (dragOverUid !== taskUid) setDragOverUid(taskUid); } : undefined}
         onDrop={canDrag && dragUid ? (e) => { e.preventDefault(); handleDropReorder(groupKey, groupItems, taskUid); } : undefined}
         style={carried && !isDeletedView && !isFlash ? {
           backgroundColor: 'color-mix(in srgb, var(--tag-carry) 7%, transparent)',
           borderColor: 'color-mix(in srgb, var(--tag-carry) 30%, transparent)',
         } : undefined}
-        className={`flex items-stretch overflow-hidden rounded-xl border transition-colors duration-1000 ease-out ${
+        className={`flex items-stretch overflow-hidden rounded-xl border ease-out ${
+          isRemoving ? 'row-exit' : ''
+        } ${
           expanded ? 'rounded-b-none' : ''
         } ${isDragging ? 'opacity-40' : ''} ${
           isDragOver || selected ? 'ring-2 ring-[var(--accent-blue)] ring-offset-0' : ''
         } ${
-          isFlash
-            ? 'animate-in slide-in-from-top-4 fade-in duration-500 bg-[var(--accent-blue)]/15 border-[var(--accent-blue)]/40'
-            : carried && !isDeletedView
-              ? ''
-              : isDeletedView
-                ? 'bg-[var(--bg-card)] border-[var(--border)]'
-                : 'bg-[var(--bg-card)] border-[var(--border)] hover:bg-[var(--bg-hover)]'
+          flashKind === 'create'
+            ? 'flash-create animate-in slide-in-from-top-4 duration-500 border-[var(--accent-blue)]/40'
+            : flashKind === 'done'
+              ? 'flash-done border-[var(--accent-green)]/40'
+              : carried && !isDeletedView
+                ? ''
+                : isDeletedView
+                  ? 'bg-[var(--bg-card)] border-[var(--border)]'
+                  : 'bg-[var(--bg-card)] border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors'
         }`}
       >
         {/* 批量归类：选择模式下显示复选框；否则显示拖拽手柄 */}
