@@ -157,6 +157,33 @@ describe('runScoreWindowSetup', () => {
     expect(feishu.sendCardMessage).not.toHaveBeenCalled();
   });
 
+  it('同一人两份快照（ou_ / 员工 ID 双命名空间）→ 只生成 1 条草稿，ratee 规范化为 ou_，名字与 rater_name 兜底填充', async () => {
+    const { db, inserted } = makeDb({
+      snapshots: [
+        mkSnapshot({ ownerUserId: 'ou_alice_open', ownerName: null }),
+        mkSnapshot({ ownerUserId: 'emp_10001', ownerName: null }),
+      ],
+      orgRows: [
+        // 同一人两行：员工 ID 行 + ou_ 行，共享 open_id
+        { userId: 'emp_10001', openId: 'ou_alice_open', userName: '张三', managerUserId: 'ou_boss' },
+        { userId: 'ou_alice_open', openId: 'ou_alice_open', userName: '张三', managerUserId: 'ou_boss' },
+        { userId: 'ou_boss', openId: 'ou_boss', userName: 'Boss', managerUserId: null },
+      ],
+    });
+    const feishu = { sendCardMessage: vi.fn() };
+
+    const r = await runScoreWindowSetup({ month: '2026-06', now, sendCards: false, db: db as any, feishu });
+
+    expect(r.draftCount).toBe(1);
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({
+      rateeUserId: 'ou_alice_open',
+      rateeName: '张三',
+      raterUserId: 'ou_boss',
+      raterName: 'Boss',
+    });
+  });
+
   it('该月无 employee 快照时安全返回 0，不抛错', async () => {
     const { db, inserted } = makeDb({ snapshots: [], orgRows: [] });
     const feishu = { sendCardMessage: vi.fn() };

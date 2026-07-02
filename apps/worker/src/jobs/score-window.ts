@@ -88,6 +88,13 @@ function resolveCardTarget(raterUserId: string, orgLookup: Map<string, any>): st
   return null;
 }
 
+/** 行的 ou_ 规范句柄（openId 优先），无 ou_ 返回 null。 */
+function ouHandleOf(row: any): string | null {
+  if (row?.openId?.startsWith('ou_')) return row.openId;
+  if (row?.userId?.startsWith('ou_')) return row.userId;
+  return null;
+}
+
 export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<ScoreWindowResult> {
   const { month } = opts;
   const now = opts.now ?? new Date();
@@ -141,14 +148,25 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
   }
 
   const raterNotifyMap = new Map<string, { raterName: string; rateeList: string[] }>();
+  // 同一人的任务可能分散在 ou_ / 员工 ID 两套命名空间下产生多份快照——
+  // ratee 规范化为 org 行的 ou_ 句柄并在本轮去重，只生成一条草稿。
+  const seenRatees = new Set<string>();
 
   for (const snap of employeeSnapshots) {
     if (!snap.ownerUserId) continue;
-    const raterUserId: string = orgLookup.get(snap.ownerUserId)?.managerUserId ?? '';
+    const orgRow = orgLookup.get(snap.ownerUserId);
+    const raterUserId: string = orgRow?.managerUserId ?? '';
     if (!raterUserId) {
       result.skippedNoManager++;
       continue;
     }
+
+    const rateeCanonical = ouHandleOf(orgRow) ?? snap.ownerUserId;
+    if (seenRatees.has(rateeCanonical)) continue;
+    seenRatees.add(rateeCanonical);
+
+    const rateeName = snap.ownerName ?? orgRow?.userName ?? null;
+    const raterName = orgLookup.get(raterUserId)?.userName ?? null;
 
     if (!dryRun) {
       await db
@@ -156,10 +174,10 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
         .values({
           scoreUid: generateScoreUid(),
           scoreMonth: month,
-          rateeUserId: snap.ownerUserId,
-          rateeName: snap.ownerName ?? null,
+          rateeUserId: rateeCanonical,
+          rateeName,
           raterUserId,
-          raterName: null,
+          raterName,
           score: null,
           status: 'draft',
           snapshotRef: snap.snapshotUid,
@@ -174,11 +192,11 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
 
     if (!raterNotifyMap.has(raterUserId)) {
       raterNotifyMap.set(raterUserId, {
-        raterName: orgLookup.get(raterUserId)?.userName ?? raterUserId,
+        raterName: raterName ?? raterUserId,
         rateeList: [],
       });
     }
-    raterNotifyMap.get(raterUserId)!.rateeList.push(snap.ownerName ?? snap.ownerUserId);
+    raterNotifyMap.get(raterUserId)!.rateeList.push(rateeName ?? rateeCanonical);
   }
 
   if (sendCards && !dryRun) {

@@ -129,13 +129,20 @@ export async function runSyncOrgHierarchy(opts: OrgSyncOptions = {}): Promise<Or
     .from(task)
     .where(isNull(task.deletedAt));
 
-  const rowByHandle = new Map<string, any>();
+  // 同一人可能有多行（历史手工 ou_ 行 + OAuth 员工 ID 行共享 open_id）——
+  // 按句柄收集**全部**行，写入时逐行更新，避免另一行残留旧 manager。
+  const rowsByHandle = new Map<string, any[]>();
   for (const row of orgRows) {
     const h = ouHandle(row);
-    if (h) rowByHandle.set(h, row);
-    else result.noOpenId++;
+    if (h) {
+      const list = rowsByHandle.get(h) ?? [];
+      list.push(row);
+      rowsByHandle.set(h, list);
+    } else {
+      result.noOpenId++;
+    }
   }
-  const identitySet = new Set<string>(rowByHandle.keys());
+  const identitySet = new Set<string>(rowsByHandle.keys());
   for (const a of assigneeRows) {
     const id = a.assigneeUserId;
     if (id?.startsWith('ou_')) identitySet.add(id);
@@ -164,33 +171,35 @@ export async function runSyncOrgHierarchy(opts: OrgSyncOptions = {}): Promise<Or
     }
   }
 
-  // 3. 写入：已有行 update（manual 跳过），无行 insert
+  // 3. 写入：已有行逐行 update（manual 跳过），无行 insert
   for (const [ou, u] of fetched) {
-    const existing = rowByHandle.get(ou);
+    const existingRows = rowsByHandle.get(ou) ?? [];
     const leaderOu = u.leaderOpenId && u.leaderOpenId !== ou ? u.leaderOpenId : '';
     const managerName = leaderOu ? (fetched.get(leaderOu)?.name || null) : null;
 
-    if (existing) {
-      if (existing.managerSource === 'manual') {
-        result.skippedManual++;
-        continue;
+    if (existingRows.length > 0) {
+      for (const existing of existingRows) {
+        if (existing.managerSource === 'manual') {
+          result.skippedManual++;
+          continue;
+        }
+        if (!dryRun) {
+          await db
+            .update(orgCache)
+            .set({
+              openId: existing.openId ?? ou,
+              userName: existing.userName ?? u.name ?? null,
+              managerUserId: leaderOu || null,
+              managerName,
+              managerSource: 'feishu',
+              managerUpdatedAt: now,
+              managerUpdatedBy: 'system:sync',
+              updatedAt: now,
+            })
+            .where(eq(orgCache.id, existing.id));
+        }
+        result.updated++;
       }
-      if (!dryRun) {
-        await db
-          .update(orgCache)
-          .set({
-            openId: existing.openId ?? ou,
-            userName: existing.userName ?? u.name ?? null,
-            managerUserId: leaderOu || null,
-            managerName,
-            managerSource: 'feishu',
-            managerUpdatedAt: now,
-            managerUpdatedBy: 'system:sync',
-            updatedAt: now,
-          })
-          .where(eq(orgCache.id, existing.id));
-      }
-      result.updated++;
     } else {
       if (!dryRun) {
         await db

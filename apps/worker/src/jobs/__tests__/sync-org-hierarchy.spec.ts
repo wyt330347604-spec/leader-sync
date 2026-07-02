@@ -184,6 +184,27 @@ describe('runSyncOrgHierarchy', () => {
     expect(updates[0].vals).toMatchObject({ managerUserId: 'ou_outside_boss', managerName: 'Outside Boss' });
   });
 
+  it('同一人两行（员工 ID 行 + ou_ 行共享 open_id）→ 两行都更新 manager', async () => {
+    const { db, updates } = makeDb({
+      orgRows: [
+        // 生产实况：历史手工 SQL 造的 ou_ 行 + OAuth 登录造的员工 ID 行
+        { id: 1, userId: 'ou_alice', openId: 'ou_alice', userName: '张三', managerSource: 'feishu' },
+        { id: 2, userId: 'emp_zhang', openId: 'ou_alice', userName: '张三', managerSource: 'feishu' },
+      ],
+    });
+    const contact = makeContact({
+      ou_alice: { name: '张三', leaderOpenId: 'ou_boss' },
+      ou_boss: { name: 'Boss', leaderOpenId: '' },
+    });
+
+    const r = await runSyncOrgHierarchy({ db: db as any, contact, now });
+
+    // 张三两行都写 manager，另有 leader ou_boss 新建 1 行
+    const managerWrites = updates.filter((u) => u.vals.managerUserId === 'ou_boss');
+    expect(managerWrites).toHaveLength(2);
+    expect(r.updated).toBe(2);
+  });
+
   it('权限未开时抛 OrgSyncPermissionError（带飞书后台指引），不写库', async () => {
     const { db, updates } = makeDb({
       orgRows: [{ id: 1, userId: 'ou_alice', openId: 'ou_alice', userName: 'Alice', managerSource: 'feishu' }],
