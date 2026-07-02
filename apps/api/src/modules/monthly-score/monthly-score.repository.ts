@@ -2,12 +2,14 @@ import { Injectable, Inject } from '@nestjs/common';
 import { DATABASE_TOKEN } from '../../database.module';
 import type { Database } from '@leader-sync/db';
 import { monthlyScore, monthlySnapshot, project, incident, incidentUser, userRoleBinding } from '@leader-sync/db';
-import { eq, and, sql, lt, desc } from 'drizzle-orm';
+import { eq, and, sql, lt, desc, inArray } from 'drizzle-orm';
 
 export interface ScoreListFilter {
   month?: string;
-  raterUserId?: string;
-  rateeUserId?: string;
+  /** rater 身份候选（user_id/open_id 双命名空间，任一命中） */
+  raterUserIds?: string[];
+  /** ratee 身份候选（同上） */
+  rateeUserIds?: string[];
 }
 
 export interface SnapshotContext {
@@ -104,11 +106,11 @@ export class MonthlyScoreRepository {
     if (filter.month) {
       conditions.push(sql`${monthlyScore.scoreMonth} = ${filter.month}`);
     }
-    if (filter.raterUserId) {
-      conditions.push(sql`${monthlyScore.raterUserId} = ${filter.raterUserId}`);
+    if (filter.raterUserIds?.length) {
+      conditions.push(inArray(monthlyScore.raterUserId, filter.raterUserIds));
     }
-    if (filter.rateeUserId) {
-      conditions.push(sql`${monthlyScore.rateeUserId} = ${filter.rateeUserId}`);
+    if (filter.rateeUserIds?.length) {
+      conditions.push(inArray(monthlyScore.rateeUserId, filter.rateeUserIds));
     }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;

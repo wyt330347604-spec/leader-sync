@@ -184,6 +184,28 @@ describe('runScoreWindowSetup', () => {
     });
   });
 
+  it('score_exempt=true 的被评人不生成草稿（豁免计数）', async () => {
+    const { db, inserted } = makeDb({
+      snapshots: [
+        mkSnapshot({ ownerUserId: 'ou_alice' }),
+        mkSnapshot({ ownerUserId: 'ou_albern' }),
+      ],
+      orgRows: [
+        { userId: 'ou_alice', openId: 'ou_alice', userName: 'Alice', managerUserId: 'ou_boss', scoreExempt: false },
+        { userId: 'ou_albern', openId: 'ou_albern', userName: 'Albern', managerUserId: 'ou_boss', scoreExempt: true },
+        { userId: 'ou_boss', openId: 'ou_boss', userName: 'Boss', managerUserId: null },
+      ],
+    });
+    const feishu = { sendCardMessage: vi.fn() };
+
+    const r = await runScoreWindowSetup({ month: '2026-06', now, sendCards: false, db: db as any, feishu });
+
+    expect(r.draftCount).toBe(1);
+    expect(r.skippedExempt).toBe(1);
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].rateeUserId).toBe('ou_alice');
+  });
+
   it('该月无 employee 快照时安全返回 0，不抛错', async () => {
     const { db, inserted } = makeDb({ snapshots: [], orgRows: [] });
     const feishu = { sendCardMessage: vi.fn() };

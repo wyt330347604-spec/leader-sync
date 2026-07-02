@@ -431,24 +431,24 @@ describe('MonthlyScoreService', () => {
 
   // ── 15. listScores: leader sees only their ratee rows ─────────────────────
 
-  it('listScores passes raterUserId filter for leader role', async () => {
+  it('listScores passes rater 双候选 filter for leader role（JWT user_id + open_id）', async () => {
     repo.listByMonth.mockResolvedValue({ items: [], total: 0 });
 
-    await service.listScores('ou_leader', UserRole.LEADER, { month: '2026-04' }, 1, 20);
+    await service.listScores('emp_10001', UserRole.LEADER, { month: '2026-04' }, 1, 20, 'ou_leader');
 
     const listArg = repo.listByMonth.mock.calls[0][0];
-    expect(listArg.raterUserId).toBe('ou_leader');
-    expect(listArg.rateeUserId).toBeUndefined();
+    expect(listArg.raterUserIds).toEqual(['emp_10001', 'ou_leader']);
+    expect(listArg.rateeUserIds).toBeUndefined();
   });
 
-  it('listScores passes rateeUserId filter for employee role', async () => {
+  it('listScores passes ratee 双候选 filter for employee role；无 open_id 时单候选', async () => {
     repo.listByMonth.mockResolvedValue({ items: [], total: 0 });
 
     await service.listScores('ou_emp', UserRole.EMPLOYEE, { month: '2026-04' }, 1, 20);
 
     const listArg = repo.listByMonth.mock.calls[0][0];
-    expect(listArg.rateeUserId).toBe('ou_emp');
-    expect(listArg.raterUserId).toBeUndefined();
+    expect(listArg.rateeUserIds).toEqual(['ou_emp']);
+    expect(listArg.raterUserIds).toBeUndefined();
   });
 
   it('listScores passes no user filter for boss/pmo (sees all)', async () => {

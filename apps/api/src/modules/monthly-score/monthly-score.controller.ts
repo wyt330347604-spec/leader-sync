@@ -33,6 +33,7 @@ export class MonthlyScoreController {
       { month },
       page ? parseInt(page, 10) : 1,
       pageSize ? parseInt(pageSize, 10) : 20,
+      user.open_id,
     );
   }
 
@@ -42,7 +43,7 @@ export class MonthlyScoreController {
     @CurrentUser() user: CurrentUserPayload,
     @Param('score_uid') scoreUid: string,
   ) {
-    return this.scoreService.getScore(scoreUid, user.user_id, user.role);
+    return this.scoreService.getScore(scoreUid, user.user_id, user.role, user.open_id);
   }
 
   // ── PATCH /scores/:score_uid/score ─────────────────────────────────────────
@@ -52,7 +53,7 @@ export class MonthlyScoreController {
     @Param('score_uid') scoreUid: string,
     @Body() dto: UpdateScoreDto,
   ) {
-    return this.scoreService.submitScore(scoreUid, user.user_id, dto);
+    return this.scoreService.submitScore(scoreUid, user.user_id, dto, user.open_id);
   }
 
   // ── POST /scores/:score_uid/challenge ──────────────────────────────────────
@@ -62,7 +63,7 @@ export class MonthlyScoreController {
     @Param('score_uid') scoreUid: string,
     @Body() dto: ChallengeScoreDto,
   ) {
-    return this.scoreService.challengeScore(scoreUid, user.user_id, dto);
+    return this.scoreService.challengeScore(scoreUid, user.user_id, dto, user.open_id);
   }
 
   // ── POST /scores/:score_uid/resolve ───────────────────────────────────────
@@ -72,7 +73,7 @@ export class MonthlyScoreController {
     @Param('score_uid') scoreUid: string,
     @Body() dto: UpdateScoreDto,
   ) {
-    return this.scoreService.resolveChallenge(scoreUid, user.user_id, dto);
+    return this.scoreService.resolveChallenge(scoreUid, user.user_id, dto, user.open_id);
   }
 
   // ── POST /scores/:score_uid/lock ───────────────────────────────────────────
@@ -90,6 +91,6 @@ export class MonthlyScoreController {
     @CurrentUser() user: CurrentUserPayload,
     @Param('score_uid') scoreUid: string,
   ) {
-    return this.scoreService.getContext(scoreUid, user.user_id, user.role);
+    return this.scoreService.getContext(scoreUid, user.user_id, user.role, user.open_id);
   }
 }

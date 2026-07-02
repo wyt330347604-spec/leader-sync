@@ -190,3 +190,9 @@
 | `managerSource` | `org_cache.manager_source` | `varchar(16)` enum | 是(默认 feishu) | manager 写入来源：`feishu`/`manual` | 系统 |
 | `managerUpdatedAt` | `org_cache.manager_updated_at` | `timestamptz` | 否 | manager 最后变更时间（审计） | 系统 |
 | `managerUpdatedBy` | `org_cache.manager_updated_by` | `varchar(128)` | 否 | 变更操作人（`system:sync` 或用户 user_id） | 系统 |
+
+org_cache 补充（2026-07-02，migration 0016）：
+
+| 字段名 (TS) | 数据库列 | 类型 | 必填 | 含义 | 来源 |
+|---|---|---|---|---|---|
+| `scoreExempt` | `org_cache.score_exempt` | `boolean` | 是(默认 false) | 绩效豁免：true=不参与月度绩效（score-window 不生成其打分草稿）。当前豁免：Albern@China/陈明/李星 | 手动 SQL/后续组织架构页 |

@@ -25,14 +25,27 @@ const VIEW_ALL_ROLES = new Set<string>([UserRole.PMO, UserRole.BOSS, UserRole.AD
 /** Source statuses from which PMO/Boss can lock directly. */
 const LOCKABLE_STATUSES = new Set<ScoreStatus>(['scored', 'pending_lock']);
 
+/**
+ * 身份候选：JWT 的 user_id（OAuth 员工 ID）与 open_id（ou_）是两套命名空间，
+ * 而打分记录的 rater/ratee 统一存 ou_ —— 所有身份比对必须双候选任一命中。
+ */
+function idCandidates(userId: string, openId?: string | null): string[] {
+  return [...new Set([userId, openId].filter((x): x is string => Boolean(x)))];
+}
+
+function isSameUser(recordId: string, userId: string, openId?: string | null): boolean {
+  return recordId === userId || (Boolean(openId) && recordId === openId);
+}
+
 /** 是否有权查看该分：被评人(ratee)、评分人(rater) 或 PMO/Boss/Admin。 */
 function canViewScore(
   s: { rateeUserId: string; raterUserId: string },
   userId: string,
   role: string,
+  openId?: string | null,
 ): boolean {
   if (VIEW_ALL_ROLES.has(role)) return true;
-  return s.rateeUserId === userId || s.raterUserId === userId;
+  return isSameUser(s.rateeUserId, userId, openId) || isSameUser(s.raterUserId, userId, openId);
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -51,15 +64,16 @@ export class MonthlyScoreService {
     filter: { month?: string },
     page: number,
     pageSize: number,
+    viewerOpenId?: string | null,
   ): Promise<PaginatedData<unknown>> {
     const repoFilter: ScoreListFilter = {
       month: filter.month,
     };
 
     if (viewerRole === UserRole.LEADER) {
-      repoFilter.raterUserId = viewerUserId;
+      repoFilter.raterUserIds = idCandidates(viewerUserId, viewerOpenId);
     } else if (viewerRole === UserRole.EMPLOYEE) {
-      repoFilter.rateeUserId = viewerUserId;
+      repoFilter.rateeUserIds = idCandidates(viewerUserId, viewerOpenId);
     }
     // PMO / Boss / Admin: no filter → see all
 
@@ -69,7 +83,7 @@ export class MonthlyScoreService {
 
   // ── GET ONE ───────────────────────────────────────────────────────────────
 
-  async getScore(scoreUid: string, viewerUserId: string, viewerRole: string) {
+  async getScore(scoreUid: string, viewerUserId: string, viewerRole: string, viewerOpenId?: string | null) {
     const found = await this.repo.findByUid(scoreUid);
     if (!found) {
       throw new BusinessException(
@@ -79,7 +93,7 @@ export class MonthlyScoreService {
       );
     }
     // 行级安全：仅 被评人/评分人/PMO·Boss·Admin 可读，与 list 口径一致。
-    if (!canViewScore(found, viewerUserId, viewerRole)) {
+    if (!canViewScore(found, viewerUserId, viewerRole, viewerOpenId)) {
       throw new BusinessException(
         ErrorCode.UNAUTHORIZED,
         'No permission to view this score',
@@ -95,6 +109,7 @@ export class MonthlyScoreService {
     scoreUid: string,
     requestorUserId: string,
     dto: UpdateScoreDto,
+    requestorOpenId?: string | null,
   ) {
     const found = await this.requireScore(scoreUid);
 
@@ -111,7 +126,7 @@ export class MonthlyScoreService {
     }
 
     // Permission: only the rater can score
-    if (found.raterUserId !== requestorUserId) {
+    if (!isSameUser(found.raterUserId, requestorUserId, requestorOpenId)) {
       throw new BusinessException(
         ErrorCode.UNAUTHORIZED,
         'Only the rater (direct leader) can submit this score',
@@ -145,6 +160,7 @@ export class MonthlyScoreService {
     scoreUid: string,
     requestorUserId: string,
     dto: ChallengeScoreDto,
+    requestorOpenId?: string | null,
   ) {
     const found = await this.requireScore(scoreUid);
 
@@ -167,7 +183,7 @@ export class MonthlyScoreService {
     }
 
     // 权限：仅被评人(ratee)可申诉自己的分。
-    if (found.rateeUserId !== requestorUserId) {
+    if (!isSameUser(found.rateeUserId, requestorUserId, requestorOpenId)) {
       throw new BusinessException(
         ErrorCode.UNAUTHORIZED,
         'Only the ratee can challenge this score',
@@ -201,6 +217,7 @@ export class MonthlyScoreService {
     scoreUid: string,
     requestorUserId: string,
     dto: UpdateScoreDto,
+    requestorOpenId?: string | null,
   ) {
     const found = await this.requireScore(scoreUid);
 
@@ -216,7 +233,7 @@ export class MonthlyScoreService {
     }
 
     // Permission: only the rater can resolve
-    if (found.raterUserId !== requestorUserId) {
+    if (!isSameUser(found.raterUserId, requestorUserId, requestorOpenId)) {
       throw new BusinessException(
         ErrorCode.UNAUTHORIZED,
         'Only the rater (direct leader) can resolve this challenge',
@@ -293,6 +310,7 @@ export class MonthlyScoreService {
     scoreUid: string,
     requestorUserId: string,
     requestorRole: string,
+    requestorOpenId?: string | null,
   ): Promise<ScoreContext> {
     const ctx = await this.repo.getContext(scoreUid);
     if (!ctx) {
@@ -303,7 +321,7 @@ export class MonthlyScoreService {
       );
     }
     // 行级安全：仅 被评人/评分人/PMO·Boss·Admin 可读上下文。
-    if (!canViewScore(ctx.score, requestorUserId, requestorRole)) {
+    if (!canViewScore(ctx.score, requestorUserId, requestorRole, requestorOpenId)) {
       throw new BusinessException(
         ErrorCode.UNAUTHORIZED,
         'No permission to view this score context',

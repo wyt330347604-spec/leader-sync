@@ -58,6 +58,8 @@ export interface ScoreWindowResult {
   draftCount: number;
   /** 因 org_cache 无 manager 而跳过的员工数 */
   skippedNoManager: number;
+  /** 因 score_exempt=true（不参与绩效）而跳过的员工数 */
+  skippedExempt: number;
   cardsSent: number;
   dryRun: boolean;
 }
@@ -122,6 +124,7 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
     snapshotCount: employeeSnapshots.length,
     draftCount: 0,
     skippedNoManager: 0,
+    skippedExempt: 0,
     cardsSent: 0,
     dryRun,
   };
@@ -155,6 +158,10 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
   for (const snap of employeeSnapshots) {
     if (!snap.ownerUserId) continue;
     const orgRow = orgLookup.get(snap.ownerUserId);
+    if (orgRow?.scoreExempt) {
+      result.skippedExempt++;
+      continue;
+    }
     const raterUserId: string = orgRow?.managerUserId ?? '';
     if (!raterUserId) {
       result.skippedNoManager++;

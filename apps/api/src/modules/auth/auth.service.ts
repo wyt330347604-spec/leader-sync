@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { DATABASE_TOKEN } from '../../database.module';
 import type { Database } from '@leader-sync/db';
 import { orgCache, userRoleBinding } from '@leader-sync/db';
-import { eq } from 'drizzle-orm';
+import { eq, inArray, or } from 'drizzle-orm';
 import { FeishuAuthService } from './feishu-auth.service';
 
 export interface JwtPayload {
@@ -49,10 +49,16 @@ export class AuthService {
       });
 
     // Get role (default to employee)
+    // 角色绑定统一用 ou_ open_id 维护；OAuth 的 user_id 是员工 ID —— 双命名空间任一命中
     const roles = await this.db
       .select()
       .from(userRoleBinding)
-      .where(eq(userRoleBinding.userId, feishuUser.user_id));
+      .where(
+        or(
+          eq(userRoleBinding.userId, feishuUser.user_id),
+          eq(userRoleBinding.userId, feishuUser.open_id),
+        ),
+      );
     const role = roles[0]?.role || 'employee';
 
     const payload: JwtPayload = {
@@ -89,10 +95,11 @@ export class AuthService {
 
     if (!users[0]) return null;
 
+    const roleCandidates = [userId, users[0].openId].filter((x): x is string => Boolean(x));
     const roles = await this.db
       .select()
       .from(userRoleBinding)
-      .where(eq(userRoleBinding.userId, userId));
+      .where(inArray(userRoleBinding.userId, roleCandidates));
 
     return {
       user_id: users[0].userId,

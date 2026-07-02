@@ -1,5 +1,6 @@
 import {
   bigserial,
+  boolean,
   pgTable,
   timestamp,
   varchar,
@@ -19,6 +20,8 @@ export const orgCache = pgTable('org_cache', {
   managerSource: varchar('manager_source', { length: 16 }).notNull().default('feishu'),
   managerUpdatedAt: timestamp('manager_updated_at', { withTimezone: true }),
   managerUpdatedBy: varchar('manager_updated_by', { length: 128 }),
+  // 绩效豁免：true = 不参与月度绩效（不生成打分草稿）。migration 0016
+  scoreExempt: boolean('score_exempt').notNull().default(false),
   syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
   // 职级字段：格式 T4.0–T8.3，NULL 表示该员工尚未分配职级
   // 由应用层正则 /^T[4-8]\.[0-3]$/ 校验，DB 层不加 CHECK 约束
