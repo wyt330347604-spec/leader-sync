@@ -117,7 +117,9 @@
 | 端点 | 员工 | Leader | 老板 | PMO | Admin | 说明 |
 |---|---|---|---|---|---|---|
 | `GET /api/v1/org/tree` | ✅ | ✅ | ✅ | ✅ | ✅ | 组织树只读，任意登录用户 |
-| `PATCH /api/v1/org/users/:user_id/manager` | ❌ | ❌ | ✅ | ✅ | ✅ | 拖拽调整上级（写 manager_source='manual'，防环校验） |
-| `POST /api/v1/org/users/:user_id/manager/reset` | ❌ | ❌ | ✅ | ✅ | ✅ | 恢复飞书默认（下次通讯录同步刷新） |
+| `PATCH /api/v1/org/users/:user_id/manager` | ❌ | ❌ | ❌ | ❌ | ❌ | **白名单制（2026-07-02 决策）：仅 Harvey/杨平（user_id/open_id 匹配，不走角色）**。拖拽调整上级（写 manager_source='manual'，防环校验） |
+| `POST /api/v1/org/users/:user_id/manager/reset` | ❌ | ❌ | ❌ | ❌ | ❌ | 同上白名单。恢复飞书默认（下次通讯录同步刷新） |
 
 上下级数据来源：飞书通讯录每日 07:00 同步（`sync-org-hierarchy` worker job）；`manual` 行同步不覆盖。该关系是月度绩效打分 rater 的唯一来源（月结 Step 6）。
+
+组织架构编辑白名单为过渡方案；规划中的**标签体系**（BOSS/HR/PMO 同级最高 > CORE > LEADER，一人多标签、按最高标签生效）落地后由标签接管，见 spec `2026-07-02-monthly-score-org-sync.md` 附录。

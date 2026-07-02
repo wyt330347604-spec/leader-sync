@@ -2,11 +2,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, GripVertical, RotateCcw } from 'lucide-react';
 import { useOrgTree, setManager, resetManagerToFeishu, type OrgTreeUser } from '@/hooks/use-org-tree';
-import { useMe } from '@/hooks/use-me';
 import { getAvatar } from '@/lib/avatar';
-
-// 可编辑组织架构的角色（与后端 org.service 口径一致）
-const EDIT_ROLES = new Set(['boss', 'pmo', 'admin']);
 
 interface OrgNode {
   user: OrgTreeUser;
@@ -57,8 +53,8 @@ function subtreeKeys(node: OrgNode): Set<string> {
 
 export default function OrgPage() {
   const { data, error, isLoading, mutate } = useOrgTree();
-  const { data: me } = useMe();
-  const canEdit = EDIT_ROLES.has(((me as any)?.role as string) ?? 'employee');
+  // 编辑权限由服务端白名单判定（Harvey/杨平），随 tree 返回
+  const canEdit = data?.can_edit ?? false;
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // 原生 DnD 事件不等 React 重渲染：拖拽负载/禁投集合放 ref（同步可读），state 只管视觉

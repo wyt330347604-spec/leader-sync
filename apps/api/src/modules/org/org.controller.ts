@@ -11,16 +11,16 @@ export class OrgController {
 
   /**
    * GET /api/v1/org/tree
-   * 组织树数据（全员 + 上下级 + 来源）。任意登录用户可读。
+   * 组织树数据（全员 + 上下级 + 来源 + can_edit）。任意登录用户可读。
    */
   @Get('tree')
-  getTree() {
-    return this.orgService.getTree();
+  getTree(@CurrentUser() user: CurrentUserPayload) {
+    return this.orgService.getTree({ userId: user.user_id, openId: user.open_id });
   }
 
   /**
    * PATCH /api/v1/org/users/:user_id/manager
-   * 人工调整直属上级（拖拽落定）。boss/pmo/admin。
+   * 人工调整直属上级（拖拽落定）。仅白名单（Harvey/杨平）。
    */
   @Patch('users/:user_id/manager')
   setManager(
@@ -28,15 +28,19 @@ export class OrgController {
     @Param('user_id') targetUserId: string,
     @Body() dto: SetManagerDto,
   ) {
-    return this.orgService.setManager(user.user_id, user.role, targetUserId, dto.manager_user_id ?? null);
+    return this.orgService.setManager(
+      { userId: user.user_id, openId: user.open_id },
+      targetUserId,
+      dto.manager_user_id ?? null,
+    );
   }
 
   /**
    * POST /api/v1/org/users/:user_id/manager/reset
-   * 恢复飞书默认（source 翻回 feishu，下次通讯录同步刷新）。boss/pmo/admin。
+   * 恢复飞书默认（source 翻回 feishu，下次通讯录同步刷新）。仅白名单（Harvey/杨平）。
    */
   @Post('users/:user_id/manager/reset')
   resetManager(@CurrentUser() user: CurrentUserPayload, @Param('user_id') targetUserId: string) {
-    return this.orgService.resetManagerToFeishu(user.user_id, user.role, targetUserId);
+    return this.orgService.resetManagerToFeishu({ userId: user.user_id, openId: user.open_id }, targetUserId);
   }
 }

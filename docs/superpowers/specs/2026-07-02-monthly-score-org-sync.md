@@ -59,10 +59,30 @@
 | 通讯录权限申请 | 需 Harvey 飞书后台开 `contact:contact.base:readonly` | ⏳ 等 Harvey（代码先行，权限开后即可跑） |
 | 6 月草稿生成后是否立刻发打分卡片 | 默认**不发**，脚本留 --send-cards | ⏳ 等 Harvey 确认 |
 | score-escalation 是否启用 | 随整体收敛启用（无申诉时 no-op） | ✅ 已定 |
-| 组织架构图编辑权限 | boss/pmo/admin 可编辑，其他人只读 | ✅ 默认，可调 |
+| 组织架构图编辑权限 | ~~boss/pmo/admin~~ → **白名单：仅 Harvey/杨平**（用户决策 2026-07-02，服务端 ORG_STRUCTURE_ADMINS + tree 返回 can_edit；后期标签体系 BOSS/HR 接管） | ✅ 已定 |
 | 打分 rater 口径 | 单一来源 org_cache.manager_user_id（manual 优先于 feishu 由写入侧保证） | ✅ 已定 |
 
 ## 文档联动
 - `docs/02-data/field-dictionary.md`：org_cache 三个新字段
 - `docs/02-data/enum-dictionary.md`：manager_source
 - `docs/05-permissions/permission-matrix.md`：/org 三端点
+
+## 附录：权限标签体系设计稿（2026-07-02 用户口述，待实现）
+
+**需求**：用「标签」替代/统一现有 role 概念。一人可挂多个标签，**按身上最高标签执行权限**（如 BOSS 同时是 CORE，按 BOSS 算）。
+
+| 标签 | 级别 | 说明 |
+|---|---|---|
+| `BOSS` / `HR` / `PMO` | 100（同级最高） | 全量可见可管：全员绩效、全员概览、组织架构调整、锁分等 |
+| `CORE` | 50 | 核心骨干；具体权限边界**待与 Harvey 确认**（如跨团队只读？） |
+| `LEADER` | 30 | 自己团队：给直接下属打分、看下属绩效/任务 |
+| （无标签） | 0 | 普通员工：只看自己的 |
+
+**落地方案（建议）**：
+- 新表 `user_tag(user_id, tag, created_by, created_at)`，一人多行；`effectiveLevel(userId) = max(tag.level)`。
+- JWT 登录时注入 `tags` + `level`（替代现 `role` 字段，或并存过渡）；**改标签需重新登录生效**（与现 role 相同的 30d JWT 约束，如需即时生效要加服务端校验）。
+- 存量校验点迁移映射：`VIEW_ALL_ROLES/LOCK_ALLOWED_ROLES/COMPANY_VIEW_ROLES(boss/pmo/admin)` → `level>=100`；monthly-score 列表 leader 分支 → `LEADER 标签 + rater=自己`；组织架构编辑白名单 → `BOSS/HR` 标签（届时撤销硬编码白名单）。
+- 标签管理 UI 建议挂在 /org 组织架构页（人卡片上打标签），管理权限 = level 100。
+- **前置事实**：生产 `user_role_binding` 目前为空表（全员 employee），标签体系上线时一并初始化；在那之前如需让 Leader 在 /scores 看到下属草稿，用临时 role 绑定 SQL（见 2026-07-02 会话记录）。
+
+**待确认**：①CORE 的具体权限清单 ②HR 是否与 PMO 完全等同（还是仅绩效域）③标签变更是否需要即时生效（决定是否做服务端每请求校验）。

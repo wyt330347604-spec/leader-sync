@@ -15,6 +15,8 @@ export interface OrgTreeUser {
 export interface OrgTreeData {
   readonly users: readonly OrgTreeUser[];
   readonly last_feishu_sync_at: string | null;
+  /** 服务端按白名单判定（Harvey/杨平），前端仅做 UI 显隐，强校验在服务端 */
+  readonly can_edit: boolean;
 }
 
 export function useOrgTree() {

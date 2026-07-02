@@ -1,10 +1,25 @@
 import { Injectable, HttpStatus } from '@nestjs/common';
 import { BusinessException } from '../../common/exceptions/business.exception';
 import { OrgRepository } from './org.repository';
-import { ErrorCode, UserRole } from '@leader-sync/shared-types';
+import { ErrorCode } from '@leader-sync/shared-types';
 
-// 可调整组织架构的角色（与 grade 写权限口径一致）
-const WRITE_ALLOWED_ROLES = new Set<string>([UserRole.BOSS, UserRole.PMO, UserRole.ADMIN]);
+// 组织架构调整白名单（用户决策 2026-07-02：暂仅 Harvey 与 HR 杨平，不走角色；
+// 后期由标签体系（BOSS/HR/PMO > CORE > Leader，最高权限生效）接管，见 spec）
+const ORG_STRUCTURE_ADMINS = new Set<string>([
+  'ou_1c419560953e219d5876918a2b934dfb', // Harvey/王永涛
+  'ou_5a06e17c2ec88a72a2ef4ce040b3d77d', // 杨平（HR）
+  // dev fixture（仅 NODE_ENV=development 的 dev-login 可签发）
+  'ou_dev_harvey',
+]);
+
+export interface OrgRequester {
+  userId: string;
+  openId?: string | null;
+}
+
+function canEditOrg(requester: OrgRequester): boolean {
+  return ORG_STRUCTURE_ADMINS.has(requester.openId ?? '') || ORG_STRUCTURE_ADMINS.has(requester.userId);
+}
 
 export interface OrgTreeNode {
   user_id: string;
@@ -36,8 +51,10 @@ function buildLookup(rows: any[]): Map<string, any> {
 export class OrgService {
   constructor(private readonly orgRepository: OrgRepository) {}
 
-  /** 组织树数据（全员平铺，前端按 manager 关系组树）。任意登录用户可读。 */
-  async getTree(): Promise<{ users: OrgTreeNode[]; last_feishu_sync_at: string | null }> {
+  /** 组织树数据（全员平铺，前端按 manager 关系组树）。任意登录用户可读；can_edit 按白名单。 */
+  async getTree(
+    requester: OrgRequester,
+  ): Promise<{ users: OrgTreeNode[]; last_feishu_sync_at: string | null; can_edit: boolean }> {
     const rows = await this.orgRepository.listAll();
 
     let lastSync: Date | null = null;
@@ -56,20 +73,23 @@ export class OrgService {
       };
     });
 
-    return { users, last_feishu_sync_at: lastSync ? (lastSync as Date).toISOString() : null };
+    return {
+      users,
+      last_feishu_sync_at: lastSync ? (lastSync as Date).toISOString() : null,
+      can_edit: canEditOrg(requester),
+    };
   }
 
   /**
-   * 人工调整直属上级（组织架构图拖拽）。boss/pmo/admin。
+   * 人工调整直属上级（组织架构图拖拽）。仅白名单（Harvey/杨平）。
    * 写 manager_source='manual'：通讯录同步不再覆盖，直到「恢复飞书默认」。
    */
   async setManager(
-    requesterUserId: string,
-    requesterRole: string,
+    requester: OrgRequester,
     targetUserId: string,
     newManagerId: string | null,
   ): Promise<{ user_id: string; manager_user_id: string | null; manager_source: string }> {
-    this.assertWriteRole(requesterRole);
+    this.assertOrgAdmin(requester);
 
     const rows = await this.orgRepository.listAll();
     const lookup = buildLookup(rows);
@@ -111,7 +131,7 @@ export class OrgService {
       managerName: managerRow?.userName ?? null,
       managerSource: 'manual',
       managerUpdatedAt: now,
-      managerUpdatedBy: requesterUserId,
+      managerUpdatedBy: requester.userId,
     });
 
     return { user_id: target.userId, manager_user_id: managerHandle, manager_source: 'manual' };
@@ -122,11 +142,10 @@ export class OrgService {
    * 下一次通讯录同步（每日 07:00 或手动脚本）会用飞书真实上级刷新。
    */
   async resetManagerToFeishu(
-    requesterUserId: string,
-    requesterRole: string,
+    requester: OrgRequester,
     targetUserId: string,
   ): Promise<{ user_id: string; manager_source: string }> {
-    this.assertWriteRole(requesterRole);
+    this.assertOrgAdmin(requester);
 
     const rows = await this.orgRepository.listAll();
     const target = buildLookup(rows).get(targetUserId);
@@ -138,15 +157,15 @@ export class OrgService {
       );
     }
 
-    await this.orgRepository.setManagerSource(target.id, 'feishu', new Date(), requesterUserId);
+    await this.orgRepository.setManagerSource(target.id, 'feishu', new Date(), requester.userId);
     return { user_id: target.userId, manager_source: 'feishu' };
   }
 
-  private assertWriteRole(role: string): void {
-    if (!WRITE_ALLOWED_ROLES.has(role)) {
+  private assertOrgAdmin(requester: OrgRequester): void {
+    if (!canEditOrg(requester)) {
       throw new BusinessException(
         ErrorCode.UNAUTHORIZED,
-        '仅 Boss/PMO/Admin 可调整组织架构',
+        '仅组织架构管理员（Harvey / 杨平）可调整汇报线',
         HttpStatus.FORBIDDEN,
       );
     }

@@ -61,9 +61,12 @@ const defaultContact: ContactDeps = {
         params: { user_id_type: 'open_id', department_id_type: 'open_department_id' },
       });
     } catch (err) {
-      const msg = (err as Error).message ?? String(err);
-      if (PERMISSION_ERROR_PATTERN.test(msg)) throw new OrgSyncPermissionError(msg);
-      console.warn(`  [sync-org] getUser(${openId}) failed:`, msg);
+      // lark SDK 把飞书错误包成裸 AxiosError（message 只有 status），
+      // 真正的 code/msg 在 response.data —— 权限错误必须从这里识别（实测 99991672 → HTTP 400）
+      const body = (err as any)?.response?.data;
+      const detail = body ? `code=${body.code} msg=${body.msg}` : ((err as Error).message ?? String(err));
+      if (PERMISSION_ERROR_PATTERN.test(detail)) throw new OrgSyncPermissionError(detail);
+      console.warn(`  [sync-org] getUser(${openId}) failed:`, detail);
       return null;
     }
     if (res?.code !== 0) {
