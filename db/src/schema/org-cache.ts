@@ -14,6 +14,11 @@ export const orgCache = pgTable('org_cache', {
   deptName: varchar('dept_name', { length: 128 }),
   managerUserId: varchar('manager_user_id', { length: 128 }),
   managerName: varchar('manager_name', { length: 128 }),
+  // manager 来源：'feishu'=通讯录同步 | 'manual'=组织架构图人工调整（同步不覆盖）
+  // migration 0015；消费方只读 manager_user_id，source 仅供写入侧仲裁
+  managerSource: varchar('manager_source', { length: 16 }).notNull().default('feishu'),
+  managerUpdatedAt: timestamp('manager_updated_at', { withTimezone: true }),
+  managerUpdatedBy: varchar('manager_updated_by', { length: 128 }),
   syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
   // 职级字段：格式 T4.0–T8.3，NULL 表示该员工尚未分配职级
   // 由应用层正则 /^T[4-8]\.[0-3]$/ 校验，DB 层不加 CHECK 约束

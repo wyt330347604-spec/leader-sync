@@ -7,7 +7,7 @@ describe('IncidentSeverityBadge', () => {
     render(<IncidentSeverityBadge severity="P0" />);
     const badge = screen.getByText('P0');
     expect(badge).toBeInTheDocument();
-    expect(badge.className).toContain('text-[#ef4444]');
+    expect(badge.className).toContain('text-[var(--accent-red)]');
   });
 
   it('renders P1 with orange color class', () => {
@@ -28,14 +28,14 @@ describe('IncidentSeverityBadge', () => {
     render(<IncidentSeverityBadge severity="P3" />);
     const badge = screen.getByText('P3');
     expect(badge).toBeInTheDocument();
-    expect(badge.className).toContain('text-[#3b82f6]');
+    expect(badge.className).toContain('text-[var(--accent-blue)]');
   });
 
   it('renders unknown severity with fallback gray style', () => {
     render(<IncidentSeverityBadge severity="P99" />);
     const badge = screen.getByText('P99');
     expect(badge).toBeInTheDocument();
-    expect(badge.className).toContain('text-[#5a5a6e]');
+    expect(badge.className).toContain('text-[var(--text-muted)]');
   });
 
   it('renders with rounded-full border styling', () => {

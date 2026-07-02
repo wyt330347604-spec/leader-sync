@@ -178,3 +178,15 @@
 | `updatedAt` | `task_user_order.updated_at` | `timestamptz` | 是 | 最后排序时间 | 系统 |
 
 唯一约束 `uniq_task_user_order_user_task (user_id, task_uid)` 作为 upsert 依据。写入端点：`PUT /api/v1/me/tasks/order { task_uids[] }`。
+
+## org_cache 表 — 2026-07 新增 manager 来源/审计字段
+
+上下级关系（打分 rater 的唯一来源）。`manager_user_id` 是唯一有效值（effective manager），消费方（月结 Step 6 / score-window）只读该字段；`manager_source` 仅供写入侧仲裁：飞书通讯录同步**跳过** `manual` 行，组织架构图人工调整写 `manual`。Migration `0015_org_manager_source.sql`。Spec: `docs/superpowers/specs/2026-07-02-monthly-score-org-sync.md`。
+
+| 字段名 (TS) | 数据库列 | 类型 | 必填 | 含义 | 来源 |
+|---|---|---|---|---|---|
+| `managerUserId` | `org_cache.manager_user_id` | `varchar(128)` | 否 | 直属上级（打分 rater），统一存 `ou_` open_id | 通讯录同步 / 组织架构图 |
+| `managerName` | `org_cache.manager_name` | `varchar(128)` | 否 | 上级显示名（冗余展示用） | 同上 |
+| `managerSource` | `org_cache.manager_source` | `varchar(16)` enum | 是(默认 feishu) | manager 写入来源：`feishu`/`manual` | 系统 |
+| `managerUpdatedAt` | `org_cache.manager_updated_at` | `timestamptz` | 否 | manager 最后变更时间（审计） | 系统 |
+| `managerUpdatedBy` | `org_cache.manager_updated_by` | `varchar(128)` | 否 | 变更操作人（`system:sync` 或用户 user_id） | 系统 |

@@ -33,6 +33,8 @@ export function TopNav() {
       : { href: '/me/incidents', label: '我的记录' },
     // Scores: all users see scores (role-based filtering on the backend)
     { href: '/scores', label: '月度评分' },
+    // Org chart: readable by all; boss/pmo/admin can drag-adjust reporting lines
+    { href: '/org', label: '组织架构' },
   ];
 
   return (

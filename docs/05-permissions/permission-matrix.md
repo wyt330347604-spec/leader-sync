@@ -111,3 +111,13 @@
 - 当前登录用户是否为负责人直属上级
 - 当前登录用户是否为任务发起人/指派人
 - 任务是否被老板关注
+
+## 7. 组织架构（/org，2026-07 新增）
+
+| 端点 | 员工 | Leader | 老板 | PMO | Admin | 说明 |
+|---|---|---|---|---|---|---|
+| `GET /api/v1/org/tree` | ✅ | ✅ | ✅ | ✅ | ✅ | 组织树只读，任意登录用户 |
+| `PATCH /api/v1/org/users/:user_id/manager` | ❌ | ❌ | ✅ | ✅ | ✅ | 拖拽调整上级（写 manager_source='manual'，防环校验） |
+| `POST /api/v1/org/users/:user_id/manager/reset` | ❌ | ❌ | ✅ | ✅ | ✅ | 恢复飞书默认（下次通讯录同步刷新） |
+
+上下级数据来源：飞书通讯录每日 07:00 同步（`sync-org-hierarchy` worker job）；`manual` 行同步不覆盖。该关系是月度绩效打分 rater 的唯一来源（月结 Step 6）。

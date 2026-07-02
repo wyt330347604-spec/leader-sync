@@ -247,86 +247,21 @@ export async function runMonthlyClose(opts: MonthlyCloseOptions = {}): Promise<M
 
   // --- Step 6: 创建 monthly_score 草稿 + 推送「打分窗口开启」通知 ---
   // #2: 依赖 Step 3 写入的 employee 快照；快照失败则跳过并告警，避免静默生成 0 条打分。
+  // 逻辑抽到 score-window.ts（可单独补跑：scripts/run-score-window-once.ts）。
   if (!dryRun && !skipNotifications) {
     if (!snapshotOk) {
       console.warn('  [Step 6] Skipped: snapshot generation failed, scoring window NOT opened for', lastMonth);
     } else {
       try {
-        const { monthlyScore } = await import('@leader-sync/db');
-        const { generateScoreUid } = await import('../lib/uid');
-        const { buildScoreWindowCard } = await import('../services/message-builder');
-
-        const deadlineDate = new Date(now);
-        deadlineDate.setDate(deadlineDate.getDate() + 7);
-        const deadlineStr = deadlineDate.toISOString().slice(0, 10);
-
-        const employeeSnapshots = await db
-          .select()
-          .from(monthlySnapshot)
-          .where(
-            sql`${monthlySnapshot.snapshotMonth} = ${lastMonth}
-              AND ${monthlySnapshot.roleScope} = 'employee'
-              AND ${monthlySnapshot.isLatest} = true
-              AND ${monthlySnapshot.ownerUserId} IS NOT NULL`,
-          );
-
-        // rater 信息：先复用已批量拉取的 orgById，缺失的 rater 再批量补一次。
-        const raterIds = new Set<string>();
-        for (const snap of employeeSnapshots) {
-          if (!snap.ownerUserId) continue;
-          const org = orgById.get(snap.ownerUserId);
-          const raterUserId: string = (org as any)?.managerUserId ?? (org as any)?.manager_user_id ?? '';
-          if (raterUserId && !orgById.has(raterUserId)) raterIds.add(raterUserId);
+        const { runScoreWindowSetup } = await import('./score-window');
+        const r = await runScoreWindowSetup({ month: lastMonth, now, sendCards: true, db, feishu });
+        console.log(
+          `  [Step 6] Score drafts for ${r.draftCount}/${r.snapshotCount} employees ` +
+            `(no-manager skipped: ${r.skippedNoManager}); cards sent to ${r.cardsSent} leaders`,
+        );
+        if (r.skippedNoManager > 0) {
+          console.warn(`  [Step 6] ${r.skippedNoManager} 名员工在 org_cache 无 manager，未生成打分草稿`);
         }
-        if (raterIds.size > 0) {
-          const raterRows = await db.select().from(orgCache).where(inArray(orgCache.userId, [...raterIds]));
-          for (const r of raterRows) orgById.set(r.userId, r);
-        }
-
-        const raterNotifyMap = new Map<string, { raterUserId: string; raterName: string; rateeList: string[] }>();
-        for (const snap of employeeSnapshots) {
-          if (!snap.ownerUserId) continue;
-          const org = orgById.get(snap.ownerUserId);
-          const raterUserId: string = (org as any)?.managerUserId ?? (org as any)?.manager_user_id ?? '';
-          if (!raterUserId) continue;
-
-          await db
-            .insert(monthlyScore)
-            .values({
-              scoreUid: generateScoreUid(),
-              scoreMonth: lastMonth,
-              rateeUserId: snap.ownerUserId,
-              rateeName: snap.ownerName ?? null,
-              raterUserId,
-              raterName: null,
-              score: null,
-              status: 'draft',
-              snapshotRef: snap.snapshotUid,
-              version: 1,
-              createdBy: 'system',
-              createdAt: now,
-              updatedAt: now,
-            })
-            .onConflictDoNothing();
-
-          if (!raterNotifyMap.has(raterUserId)) {
-            raterNotifyMap.set(raterUserId, {
-              raterUserId,
-              raterName: orgById.get(raterUserId)?.userName ?? raterUserId,
-              rateeList: [],
-            });
-          }
-          raterNotifyMap.get(raterUserId)!.rateeList.push(snap.ownerName ?? snap.ownerUserId);
-        }
-
-        let cardsSent = 0;
-        for (const { raterUserId, raterName, rateeList } of raterNotifyMap.values()) {
-          if (!raterUserId.startsWith('ou_')) continue;
-          const card = buildScoreWindowCard(raterName, lastMonth, rateeList.length, deadlineStr);
-          await feishu.sendCardMessage(raterUserId, card);
-          cardsSent++;
-        }
-        console.log(`  [Step 6] Score drafts for ${employeeSnapshots.length} employees; cards sent to ${cardsSent} leaders`);
       } catch (err) {
         console.warn('  [Step 6] Score window setup failed (non-blocking):', (err as Error).message);
       }

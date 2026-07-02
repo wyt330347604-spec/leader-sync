@@ -17,6 +17,7 @@ import { MonthlyScoreModule } from './modules/monthly-score/monthly-score.module
 import { AiModule } from './modules/ai/ai.module';
 import { FeishuBotModule } from './modules/feishu-bot/feishu-bot.module';
 import { RequirementModule } from './modules/requirement/requirement.module';
+import { OrgModule } from './modules/org/org.module';
 import { DatabaseModule } from './database.module';
 
 @Module({
@@ -39,6 +40,7 @@ import { DatabaseModule } from './database.module';
     AiModule,
     FeishuBotModule,
     RequirementModule,
+    OrgModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: TraceIdInterceptor },

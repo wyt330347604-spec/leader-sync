@@ -111,3 +111,12 @@
 - `深圳`
 
 集团板块的项目（如"公司建设"）可以不填 region。
+
+## manager_source（上下级关系来源）
+
+`org_cache.manager_source`，migration 0015。写入侧仲裁：通讯录同步跳过 `manual` 行。
+
+| 值 | 含义 |
+|---|---|
+| `feishu` | 飞书通讯录同步写入（默认） |
+| `manual` | 组织架构图人工拖拽调整（同步不覆盖；「恢复飞书默认」改回 feishu 并立即回填） |
