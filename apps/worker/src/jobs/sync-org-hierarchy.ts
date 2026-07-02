@@ -50,6 +50,16 @@ export interface ContactUser {
 export interface ContactDeps {
   /** 按 open_id 查用户；查不到（离职等）返回 null；权限错误抛 OrgSyncPermissionError */
   getUser(openId: string): Promise<ContactUser | null>;
+  /** 全量枚举通讯录（根部门递归 + 各部门成员，去重）；权限错误抛 OrgSyncPermissionError */
+  listAllUsers(): Promise<ContactUser[]>;
+}
+
+/** 从 lark SDK 异常/非零响应中提取错误详情；权限类直接抛 OrgSyncPermissionError */
+function extractFeishuError(err: unknown): string {
+  const body = (err as any)?.response?.data;
+  const detail = body ? `code=${body.code} msg=${body.msg}` : ((err as Error).message ?? String(err));
+  if (PERMISSION_ERROR_PATTERN.test(detail)) throw new OrgSyncPermissionError(detail);
+  return detail;
 }
 
 const defaultContact: ContactDeps = {
@@ -63,10 +73,7 @@ const defaultContact: ContactDeps = {
     } catch (err) {
       // lark SDK 把飞书错误包成裸 AxiosError（message 只有 status），
       // 真正的 code/msg 在 response.data —— 权限错误必须从这里识别（实测 99991672 → HTTP 400）
-      const body = (err as any)?.response?.data;
-      const detail = body ? `code=${body.code} msg=${body.msg}` : ((err as Error).message ?? String(err));
-      if (PERMISSION_ERROR_PATTERN.test(detail)) throw new OrgSyncPermissionError(detail);
-      console.warn(`  [sync-org] getUser(${openId}) failed:`, detail);
+      console.warn(`  [sync-org] getUser(${openId}) failed:`, extractFeishuError(err));
       return null;
     }
     if (res?.code !== 0) {
@@ -79,6 +86,62 @@ const defaultContact: ContactDeps = {
     if (!u) return null;
     return { openId: u.open_id ?? openId, name: u.name ?? '', leaderOpenId: u.leader_user_id ?? '' };
   },
+
+  // 全量：根部门递归拿所有部门 → 逐部门拉成员（分页）→ 按 open_id 去重。
+  // 实测覆盖比 user.get 更全（个别用户 user.get 报 41050，但部门枚举可见）。
+  async listAllUsers(): Promise<ContactUser[]> {
+    const users = new Map<string, ContactUser>();
+    try {
+      const deptIds: string[] = ['0'];
+      let pageToken: string | undefined;
+      do {
+        const res: any = await feishuClient.contact.department.children({
+          path: { department_id: '0' },
+          params: {
+            fetch_child: true,
+            page_size: 50,
+            department_id_type: 'open_department_id',
+            user_id_type: 'open_id',
+            ...(pageToken ? { page_token: pageToken } : {}),
+          },
+        });
+        if (res?.code !== 0) throw new Error(`departments code=${res?.code} msg=${res?.msg}`);
+        for (const d of res?.data?.items ?? []) deptIds.push(d.open_department_id);
+        pageToken = res?.data?.has_more ? res?.data?.page_token : undefined;
+      } while (pageToken);
+
+      for (const deptId of deptIds) {
+        let pt: string | undefined;
+        do {
+          const res: any = await feishuClient.contact.user.findByDepartment({
+            params: {
+              department_id: deptId,
+              page_size: 50,
+              user_id_type: 'open_id',
+              department_id_type: 'open_department_id',
+              ...(pt ? { page_token: pt } : {}),
+            },
+          });
+          if (res?.code !== 0) throw new Error(`findByDepartment(${deptId}) code=${res?.code} msg=${res?.msg}`);
+          for (const u of res?.data?.items ?? []) {
+            if (!u?.open_id) continue;
+            users.set(u.open_id, {
+              openId: u.open_id,
+              name: u.name ?? '',
+              leaderOpenId: u.leader_user_id ?? '',
+            });
+          }
+          pt = res?.data?.has_more ? res?.data?.page_token : undefined;
+        } while (pt);
+      }
+    } catch (err) {
+      if (err instanceof OrgSyncPermissionError) throw err;
+      throw PERMISSION_ERROR_PATTERN.test(String((err as any)?.response?.data?.code ?? '') + ((err as Error).message ?? ''))
+        ? new OrgSyncPermissionError((err as Error).message)
+        : err;
+    }
+    return [...users.values()];
+  },
 };
 
 export interface OrgSyncOptions {
@@ -89,7 +152,9 @@ export interface OrgSyncOptions {
 }
 
 export interface OrgSyncResult {
-  /** 参与同步的身份数（org_cache ∪ 任务负责人，去重后） */
+  /** 通讯录全量枚举到的人数 */
+  directoryCount: number;
+  /** 系统内已知身份数（org_cache ∪ 任务负责人，去重后） */
   scanned: number;
   updated: number;
   created: number;
@@ -113,6 +178,7 @@ export async function runSyncOrgHierarchy(opts: OrgSyncOptions = {}): Promise<Or
   const contact = opts.contact ?? defaultContact;
 
   const result: OrgSyncResult = {
+    directoryCount: 0,
     scanned: 0,
     updated: 0,
     created: 0,
@@ -148,14 +214,30 @@ export async function runSyncOrgHierarchy(opts: OrgSyncOptions = {}): Promise<Or
     if (id?.startsWith('ou_')) identitySet.add(id);
   }
   result.scanned = identitySet.size;
-  if (identitySet.size === 0) return result;
 
-  // 2. worklist 拉通讯录：identity 全集 + 沿 leader 链向上发现的新用户
-  //    （leader 也入库——score-window 解析 rater 姓名/发卡 open_id 需要其 org_cache 行）。
-  //    权限错误直接上抛，不做部分写入；查不到的（离职等）跳过。
+  // 2a. 全量通讯录（部门递归枚举）——所有在职员工都入库，不只系统已知的人。
+  //     权限错误直接上抛，不做部分写入。
   const fetched = new Map<string, ContactUser>();
-  const queue = [...identitySet];
-  const seen = new Set(queue);
+  for (const u of await contact.listAllUsers()) fetched.set(u.openId, u);
+  result.directoryCount = fetched.size;
+
+  // 2b. 系统内已知但不在通讯录枚举里的身份（离职残留等）+ 缺失的 leader，
+  //     用单查 worklist 兜底；查不到的（离职等）跳过并计数。
+  const queue: string[] = [];
+  const seen = new Set<string>(fetched.keys());
+  for (const id of identitySet) {
+    if (!seen.has(id)) {
+      seen.add(id);
+      queue.push(id);
+    }
+  }
+  for (const u of fetched.values()) {
+    const leaderOu = u.leaderOpenId && u.leaderOpenId !== u.openId ? u.leaderOpenId : '';
+    if (leaderOu && !seen.has(leaderOu)) {
+      seen.add(leaderOu);
+      queue.push(leaderOu);
+    }
+  }
   while (queue.length > 0) {
     const ou = queue.shift()!;
     const u = await contact.getUser(ou);
@@ -222,7 +304,7 @@ export async function runSyncOrgHierarchy(opts: OrgSyncOptions = {}): Promise<Or
   }
 
   console.log(
-    `  [sync-org] scanned=${result.scanned} updated=${result.updated} created=${result.created} ` +
+    `  [sync-org] directory=${result.directoryCount} scanned=${result.scanned} updated=${result.updated} created=${result.created} ` +
       `manual-skipped=${result.skippedManual} not-found=${result.notFound} no-open-id=${result.noOpenId}` +
       `${dryRun ? ' [DRY-RUN]' : ''}`,
   );

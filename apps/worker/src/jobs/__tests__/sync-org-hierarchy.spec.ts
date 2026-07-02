@@ -55,6 +55,9 @@ function makeDb(opts: { orgRows: any[]; taskAssignees?: string[] }) {
 /** contact mock：directory = open_id → { name, leaderOpenId }，无此人返回 null */
 function makeContact(directory: Record<string, { name: string; leaderOpenId: string }>) {
   return {
+    listAllUsers: vi.fn(async () =>
+      Object.entries(directory).map(([openId, u]) => ({ openId, name: u.name, leaderOpenId: u.leaderOpenId })),
+    ),
     getUser: vi.fn(async (openId: string) => {
       const u = directory[openId];
       if (!u) return null;
@@ -205,11 +208,29 @@ describe('runSyncOrgHierarchy', () => {
     expect(r.updated).toBe(2);
   });
 
+  it('通讯录全量：从未登录且无任务的目录用户也新建入库（含 leader）', async () => {
+    const { db, inserted } = makeDb({ orgRows: [] });
+    const contact = makeContact({
+      ou_never_seen: { name: '新同事', leaderOpenId: 'ou_boss' },
+      ou_boss: { name: 'Boss', leaderOpenId: '' },
+    });
+
+    const r = await runSyncOrgHierarchy({ db: db as any, contact, now });
+
+    expect(r.directoryCount).toBe(2);
+    expect(r.created).toBe(2);
+    const row = inserted.find((v) => v.userId === 'ou_never_seen');
+    expect(row).toMatchObject({ userName: '新同事', managerUserId: 'ou_boss', managerName: 'Boss' });
+  });
+
   it('权限未开时抛 OrgSyncPermissionError（带飞书后台指引），不写库', async () => {
     const { db, updates } = makeDb({
       orgRows: [{ id: 1, userId: 'ou_alice', openId: 'ou_alice', userName: 'Alice', managerSource: 'feishu' }],
     });
     const contact = {
+      listAllUsers: vi.fn(async () => {
+        throw new OrgSyncPermissionError('99991672 no permission');
+      }),
       getUser: vi.fn(async () => {
         throw new OrgSyncPermissionError('99991672 no permission');
       }),
