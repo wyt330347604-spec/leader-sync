@@ -29,24 +29,43 @@ export class AuthService {
     const userAccessToken = await this.feishuAuth.getUserAccessToken(code);
     const feishuUser = await this.feishuAuth.getUserInfo(userAccessToken);
 
-    // Upsert org_cache
-    await this.db
-      .insert(orgCache)
-      .values({
-        userId: feishuUser.user_id,
-        openId: feishuUser.open_id,
-        userName: feishuUser.name,
-        deptId: feishuUser.department_ids?.[0] || null,
-      })
-      .onConflictDoUpdate({
-        target: orgCache.userId,
-        set: {
+    // Upsert org_cache —— 同一人可能已有 ou_ 键的行（通讯录同步 / 历史手工创建）。
+    // 必须先按 open_id / user_id 匹配既有行并逐行刷新；匹配不到才插入。
+    // 旧实现按员工 ID onConflict(userId) 盲插，会给同一人造出第二行——
+    // 这是全系统 user_id/open_id 双命名空间问题的根源（2026-07-03 修复）。
+    const existing = await this.db
+      .select()
+      .from(orgCache)
+      .where(
+        or(
+          eq(orgCache.openId, feishuUser.open_id),
+          eq(orgCache.userId, feishuUser.user_id),
+          eq(orgCache.userId, feishuUser.open_id),
+        ),
+      );
+    if (existing.length > 0) {
+      for (const row of existing) {
+        await this.db
+          .update(orgCache)
+          .set({
+            openId: feishuUser.open_id,
+            userName: feishuUser.name,
+            deptId: feishuUser.department_ids?.[0] || null,
+            syncedAt: new Date(),
+          })
+          .where(eq(orgCache.id, row.id));
+      }
+    } else {
+      await this.db
+        .insert(orgCache)
+        .values({
+          userId: feishuUser.user_id,
           openId: feishuUser.open_id,
           userName: feishuUser.name,
           deptId: feishuUser.department_ids?.[0] || null,
-          syncedAt: new Date(),
-        },
-      });
+        })
+        .onConflictDoNothing();
+    }
 
     // Get role (default to employee)
     // 角色绑定统一用 ou_ open_id 维护；OAuth 的 user_id 是员工 ID —— 双命名空间任一命中
@@ -88,10 +107,11 @@ export class AuthService {
   }
 
   async getMe(userId: string): Promise<JwtPayload | null> {
+    // 双命名空间：调用方可能传员工 ID 或 ou_ open_id，任一命中
     const users = await this.db
       .select()
       .from(orgCache)
-      .where(eq(orgCache.userId, userId));
+      .where(or(eq(orgCache.userId, userId), eq(orgCache.openId, userId)));
 
     if (!users[0]) return null;
 

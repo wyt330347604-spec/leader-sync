@@ -27,12 +27,15 @@ function createMockDb() {
   const chainable = {
     values: vi.fn().mockReturnThis(),
     onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+    onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockResolvedValue([]),
+    set: vi.fn().mockReturnThis(),
   };
   return {
     insert: vi.fn().mockReturnValue(chainable),
     select: vi.fn().mockReturnValue(chainable),
+    update: vi.fn().mockReturnValue(chainable),
     _chainable: chainable,
   };
 }
@@ -88,11 +91,16 @@ describe('AuthService', () => {
     it('should use existing role from DB when available', async () => {
       const insertChain = {
         values: vi.fn().mockReturnThis(),
-        onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
       };
       mockDb.insert.mockReturnValue(insertChain as any);
 
-      const selectChain = {
+      // 新流程有两次 select：①org_cache 既有行匹配（返回空 → 走 insert）②角色查询
+      const orgSelect = {
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue([]),
+      };
+      const roleSelect = {
         from: vi.fn().mockReturnThis(),
         where: vi
           .fn()
@@ -100,7 +108,9 @@ describe('AuthService', () => {
             { userId: 'u_abc123', role: 'manager', createdAt: new Date() },
           ]),
       };
-      mockDb.select.mockReturnValue(selectChain as any);
+      mockDb.select
+        .mockReturnValueOnce(orgSelect as any)
+        .mockReturnValueOnce(roleSelect as any);
 
       const result = await authService.loginWithCode('feishu-auth-code');
 

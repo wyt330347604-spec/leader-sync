@@ -13,6 +13,22 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // 安全响应头。CSP 暂未加（Next 内联脚本需 nonce，配错会白屏，单列为后续项）；
+  // 先补确定安全、无副作用的几项：HSTS 防降级、SAMEORIGIN 防点击劫持、nosniff、referrer。
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -1,0 +1,17 @@
+[Unit]
+Description=Leader-Sync API (NestJS, port 3001)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/leader-sync
+ExecStart=/usr/bin/node /opt/leader-sync/apps/api/dist/main.js
+Restart=always
+RestartSec=3
+KillMode=control-group
+StandardOutput=journal
+StandardError=journal
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

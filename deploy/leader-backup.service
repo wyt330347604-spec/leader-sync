@@ -1,0 +1,7 @@
+[Unit]
+Description=Leader-Sync daily DB backup
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/leader-sync/deploy/backup-db.sh

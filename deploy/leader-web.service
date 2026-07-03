@@ -1,0 +1,17 @@
+[Unit]
+Description=Leader-Sync Web (Next.js, port 3000)
+After=network-online.target leader-api.service
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/leader-sync/apps/web
+ExecStart=/opt/leader-sync/apps/web/node_modules/.bin/next start --port 3000
+Restart=always
+RestartSec=3
+KillMode=control-group
+StandardOutput=journal
+StandardError=journal
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

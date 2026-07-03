@@ -1,0 +1,6 @@
+[Unit]
+Description=Leader-Sync health check (alerts via Feishu)
+
+[Service]
+Type=oneshot
+ExecStart=/opt/leader-sync/deploy/healthcheck.sh
