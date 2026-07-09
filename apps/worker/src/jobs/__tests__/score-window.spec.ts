@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { runScoreWindowSetup } from '../score-window';
-import { monthlySnapshot, orgCache } from '@leader-sync/db';
+import { monthlySnapshot, orgCache, scoreTemplate, perfRole } from '@leader-sync/db';
 
 // ---- helpers（与 monthly-close.spec 同款 thenable 代理 mock）---------------
 
@@ -32,12 +32,22 @@ function mkSnapshot(overrides: Record<string, any> = {}): any {
   };
 }
 
-function makeDb(opts: { snapshots: any[]; orgRows: any[] }) {
+function makeDb(opts: { snapshots: any[]; orgRows: any[]; templates?: any[]; perfRoles?: any[] }) {
   const inserted: any[] = [];
   const db = {
     select: () => ({
       from: (tbl: any) =>
-        thenable(tbl === monthlySnapshot ? opts.snapshots : tbl === orgCache ? opts.orgRows : []),
+        thenable(
+          tbl === monthlySnapshot
+            ? opts.snapshots
+            : tbl === orgCache
+              ? opts.orgRows
+              : tbl === scoreTemplate
+                ? opts.templates ?? []
+                : tbl === perfRole
+                  ? opts.perfRoles ?? []
+                  : [],
+        ),
     }),
     insert: (_tbl: any) => ({
       values: (v: any) => {
@@ -48,6 +58,12 @@ function makeDb(opts: { snapshots: any[]; orgRows: any[] }) {
   };
   return { db, inserted };
 }
+
+/** 两个 active 月度模板（stamping 用）。 */
+const MONTHLY_TEMPLATES = [
+  { templateUid: 'spt_monthly_employee', code: 'monthly_employee', active: true },
+  { templateUid: 'spt_monthly_leader', code: 'monthly_leader', active: true },
+];
 
 const now = new Date('2026-07-02T04:00:00.000Z');
 
@@ -215,5 +231,45 @@ describe('runScoreWindowSetup', () => {
     expect(r.snapshotCount).toBe(0);
     expect(r.draftCount).toBe(0);
     expect(inserted).toHaveLength(0);
+  });
+
+  // ── V1.4：开窗盖章 template_uid（按被评人 perf_role.is_leader）───────────────
+  it('perf_role.is_leader → 盖 monthly_leader 模板；无 perf_role 行 → 视为员工盖 monthly_employee', async () => {
+    const { db, inserted } = makeDb({
+      snapshots: [
+        mkSnapshot({ ownerUserId: 'ou_alice' }), // leader
+        mkSnapshot({ ownerUserId: 'ou_bob' }),   // 无 perf_role 行 → 员工
+      ],
+      orgRows: [
+        { userId: 'ou_alice', openId: 'ou_alice', userName: 'Alice', managerUserId: 'ou_boss' },
+        { userId: 'ou_bob', openId: 'ou_bob', userName: 'Bob', managerUserId: 'ou_boss' },
+        { userId: 'ou_boss', openId: 'ou_boss', userName: 'Boss', managerUserId: null },
+      ],
+      templates: MONTHLY_TEMPLATES,
+      perfRoles: [{ userId: 'ou_alice', openId: 'ou_alice', isLeader: true, isManagement: false }],
+    });
+    const feishu = { sendCardMessage: vi.fn() };
+
+    const r = await runScoreWindowSetup({ month: '2026-06', now, sendCards: false, db: db as any, feishu });
+
+    expect(r.draftCount).toBe(2);
+    const alice = inserted.find((i) => i.rateeUserId === 'ou_alice');
+    const bob = inserted.find((i) => i.rateeUserId === 'ou_bob');
+    expect(alice.templateUid).toBe('spt_monthly_leader');
+    expect(bob.templateUid).toBe('spt_monthly_employee');
+  });
+
+  it('无模板（未 seed）时 template_uid 兜底为 null，不抛错', async () => {
+    const { db, inserted } = makeDb({
+      snapshots: [mkSnapshot({ ownerUserId: 'ou_alice' })],
+      orgRows: [{ userId: 'ou_alice', openId: 'ou_alice', userName: 'Alice', managerUserId: 'ou_boss' }],
+      // templates 缺省 = []
+    });
+    const feishu = { sendCardMessage: vi.fn() };
+
+    const r = await runScoreWindowSetup({ month: '2026-06', now, sendCards: false, db: db as any, feishu });
+
+    expect(r.draftCount).toBe(1);
+    expect(inserted[0].templateUid).toBeNull();
   });
 });

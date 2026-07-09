@@ -18,8 +18,8 @@
  */
 
 import { createDb, type Database } from '@leader-sync/db';
-import { monthlySnapshot, monthlyScore, orgCache } from '@leader-sync/db';
-import { inArray, or, sql } from 'drizzle-orm';
+import { monthlySnapshot, monthlyScore, orgCache, scoreTemplate, perfRole } from '@leader-sync/db';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { config } from '../config';
 import { feishuApi } from '../services/feishu-api';
 import { generateScoreUid } from '../lib/uid';
@@ -150,6 +150,62 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
     }
   }
 
+  // ── V1.4 开窗盖章：按被评人 perf_role.is_leader 决定 template_uid ──────────────
+  // 加载两个 active 月度模板（未 seed 时兜底 null）。
+  const monthlyTemplates = await db
+    .select()
+    .from(scoreTemplate)
+    .where(
+      and(
+        inArray(scoreTemplate.code, ['monthly_employee', 'monthly_leader']),
+        eq(scoreTemplate.active, true),
+      ),
+    );
+  const templateUidByCode = new Map<string, string>();
+  for (const t of monthlyTemplates) templateUidByCode.set(t.code, t.templateUid);
+  const employeeTemplateUid = templateUidByCode.get('monthly_employee') ?? null;
+  const leaderTemplateUid = templateUidByCode.get('monthly_leader') ?? null;
+
+  // 加载被评人 perf_role（双命名空间）；is_leader 者用 leader 版模板，无行视为员工。
+  const rateeCandidateIds = new Set<string>();
+  for (const snap of employeeSnapshots) {
+    if (!snap.ownerUserId) continue;
+    rateeCandidateIds.add(snap.ownerUserId);
+    const org = orgLookup.get(snap.ownerUserId);
+    const ou = ouHandleOf(org);
+    if (ou) rateeCandidateIds.add(ou);
+    if (org?.userId) rateeCandidateIds.add(org.userId);
+    if (org?.openId) rateeCandidateIds.add(org.openId);
+  }
+  const leaderIds = new Set<string>();
+  if (rateeCandidateIds.size > 0) {
+    const prRows = await db
+      .select()
+      .from(perfRole)
+      .where(
+        or(
+          inArray(perfRole.userId, [...rateeCandidateIds]),
+          inArray(perfRole.openId, [...rateeCandidateIds]),
+        ),
+      );
+    for (const pr of prRows) {
+      if (pr.isLeader) {
+        if (pr.userId) leaderIds.add(pr.userId);
+        if (pr.openId) leaderIds.add(pr.openId);
+      }
+    }
+  }
+
+  /** 该被评人的月度模板：is_leader → leader 版，否则员工版（含无 perf_role 行）。 */
+  const templateUidFor = (rateeCanonical: string, ownerUserId: string, orgRow: any): string | null => {
+    const isLeader =
+      leaderIds.has(rateeCanonical) ||
+      leaderIds.has(ownerUserId) ||
+      Boolean(orgRow?.userId && leaderIds.has(orgRow.userId)) ||
+      Boolean(orgRow?.openId && leaderIds.has(orgRow.openId));
+    return isLeader ? leaderTemplateUid : employeeTemplateUid;
+  };
+
   const raterNotifyMap = new Map<string, { raterName: string; rateeList: string[] }>();
   // 同一人的任务可能分散在 ou_ / 员工 ID 两套命名空间下产生多份快照——
   // ratee 规范化为 org 行的 ou_ 句柄并在本轮去重，只生成一条草稿。
@@ -186,6 +242,8 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
           raterUserId,
           raterName,
           score: null,
+          // V1.4：开窗按 perf_role.is_leader 盖章员工版/leader 版模板
+          templateUid: templateUidFor(rateeCanonical, snap.ownerUserId, orgRow),
           status: 'draft',
           snapshotRef: snap.snapshotUid,
           version: 1,

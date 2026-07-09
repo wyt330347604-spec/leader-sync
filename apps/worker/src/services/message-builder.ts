@@ -151,6 +151,127 @@ export function buildScoreWindowCard(
 }
 
 /**
+ * 季度评分 · 开窗给被评人的「待自评」卡片。
+ * spec 2026-07-08 performance-review-module §7：开窗催办；按钮跳自评打分页。
+ */
+export function buildQuarterSelfWindowCard(
+  rateeName: string,
+  quarter: string,
+  selfDeadlineDate: string,
+  selfSheetUid: string,
+): object {
+  return {
+    config: { wide_screen_mode: true },
+    header: {
+      title: { tag: 'plain_text', content: `【季度考核·开窗】${quarter} 自评待完成` },
+      template: 'violet',
+    },
+    elements: [
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: `**${rateeName}**，${quarter} 季度考核已开窗，请先完成 **自评**（自评提交后解锁同事/直属评价）。请在 **${selfDeadlineDate}** 前完成。`,
+        },
+      },
+      { tag: 'hr' },
+      {
+        tag: 'action',
+        actions: [{
+          tag: 'button',
+          text: { tag: 'plain_text', content: '前往自评' },
+          type: 'primary',
+          url: `${config.appBaseUrl}/quarter/sheet/${selfSheetUid}`,
+        }],
+      },
+    ],
+  };
+}
+
+/**
+ * 季度评分 · 截止 T-2d 催办卡片（发当前环节仍有未完成 sheet 的人）。
+ * spec §7：截止催办。
+ */
+export function buildQuarterDeadlineCard(
+  userName: string,
+  quarter: string,
+  pendingCount: number,
+  deadlineDate: string,
+): object {
+  return {
+    config: { wide_screen_mode: true },
+    header: {
+      title: { tag: 'plain_text', content: `【季度考核·截止提醒】${quarter}` },
+      template: 'red',
+    },
+    elements: [
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: `**${userName}**，你还有 **${pendingCount}** 项季度评分未完成，截止 **${deadlineDate}**（还剩不到 2 天），请尽快提交。`,
+        },
+      },
+      { tag: 'hr' },
+      {
+        tag: 'action',
+        actions: [{
+          tag: 'button',
+          text: { tag: 'plain_text', content: '前往打分' },
+          type: 'danger',
+          url: `${config.appBaseUrl}/quarter`,
+        }],
+      },
+    ],
+  };
+}
+
+/**
+ * 季度评分 · 评分会前一天给管理层的个人清单卡片。
+ * spec §7：评分会前一天给管理层发个人清单卡；按钮跳评分会看板。
+ */
+export function buildPanelEveCard(
+  managerName: string,
+  quarter: string,
+  panelDate: string,
+  rateeNames: string[],
+): object {
+  const elements: any[] = [
+    {
+      tag: 'div',
+      text: {
+        tag: 'lark_md',
+        content: `**${managerName}**，${quarter} 评分会将于 **${panelDate}** 召开，你需过目 **${rateeNames.length}** 位被评人：`,
+      },
+    },
+  ];
+  for (const name of rateeNames.slice(0, 20)) {
+    elements.push({ tag: 'div', text: { tag: 'lark_md', content: `- ${name}` } });
+  }
+  if (rateeNames.length > 20) {
+    elements.push({ tag: 'div', text: { tag: 'lark_md', content: `...还有 ${rateeNames.length - 20} 位` } });
+  }
+  elements.push({ tag: 'hr' });
+  elements.push({
+    tag: 'action',
+    actions: [{
+      tag: 'button',
+      text: { tag: 'plain_text', content: '打开评分会看板' },
+      type: 'primary',
+      url: `${config.appBaseUrl}/quarter/panel`,
+    }],
+  });
+  return {
+    config: { wide_screen_mode: true },
+    header: {
+      title: { tag: 'plain_text', content: `【季度考核·评分会】${quarter} 明日召开` },
+      template: 'violet',
+    },
+    elements,
+  };
+}
+
+/**
  * Feishu card for escalation notification when a challenge exceeds 48h without response.
  * Spec §5.2: PMO + CC ratee
  */
