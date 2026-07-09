@@ -33,6 +33,10 @@ export function TopNav() {
       : { href: '/me/incidents', label: '我的记录' },
     // Scores: all users see scores (role-based filtering on the backend)
     { href: '/scores', label: '月度评分' },
+    // Quarter review: all users see their to-dos; managers see cycle admin (backend-gated)
+    { href: '/quarter', label: '季度考核' },
+    // My performance: personal monthly/quarter/half-year scores + promotion eligibility
+    { href: '/me/performance', label: '我的绩效' },
     // Org chart: readable by all; boss/pmo/admin can drag-adjust reporting lines
     { href: '/org', label: '组织架构' },
   ];

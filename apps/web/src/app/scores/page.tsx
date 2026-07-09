@@ -32,17 +32,58 @@ const SCORE_STATUS_CONFIG: Record<string, { label: string; className: string }> 
   locked: { label: '已锁定', className: 'text-[var(--accent-green)] bg-[var(--accent-green)]/10 border-[var(--accent-green)]/20' },
 };
 
+// 后端返回 drizzle 原始行（camelCase）；历史前端用 snake，双读兜底。
 interface ScoreItem {
-  score_uid: string;
-  score_month: string;
-  ratee_user_id: string;
-  ratee_name: string;
-  rater_user_id: string;
-  rater_name: string;
-  score: number | null;
+  score_uid?: string;
+  scoreUid?: string;
+  ratee_name?: string;
+  rateeName?: string;
+  rater_name?: string;
+  raterName?: string;
+  score: number | string | null; // 旧单值 0–1
   status: string;
-  challenged_at: string | null;
-  locked_at: string | null;
+  // V1.4
+  template_uid?: string | null;
+  templateUid?: string | null;
+  total_score?: number | string | null;
+  totalScore?: number | string | null;
+  grade?: string | null;
+}
+
+const GRADE_TEXT: Record<string, string> = {
+  S: 'text-[#a855f7]',
+  A: 'text-[var(--accent-green)]',
+  B: 'text-[var(--accent-blue)]',
+  C: 'text-[#f59e0b]',
+  D: 'text-[var(--accent-red)]',
+};
+
+function uidOf(i: ScoreItem): string {
+  return i.score_uid ?? i.scoreUid ?? '';
+}
+
+/** 分数列展示：有 template_uid 的 V1.4 行显示 总分+评级；旧行显示 0–1 系数。 */
+function ScoreCell({ item }: { item: ScoreItem }) {
+  const isV14 = Boolean(item.template_uid ?? item.templateUid);
+  if (isV14) {
+    const total = item.total_score ?? item.totalScore;
+    if (total == null || total === '') {
+      return <span className="text-xs text-[var(--text-muted)]">待打分</span>;
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <span className="tabular-nums font-bold text-[var(--text-primary)]">{total}</span>
+        {item.grade && (
+          <span className={`text-xs font-bold ${GRADE_TEXT[item.grade] ?? ''}`}>{item.grade}</span>
+        )}
+      </span>
+    );
+  }
+  return item.score != null ? (
+    <span className="tabular-nums font-bold text-[var(--text-primary)]">{item.score}</span>
+  ) : (
+    <span className="text-xs text-[var(--text-muted)]">-</span>
+  );
 }
 
 interface ScoreListData {
@@ -123,25 +164,20 @@ function ScoresContent() {
 
               {data.items.map((item, idx) => {
                 const statusCfg = SCORE_STATUS_CONFIG[item.status] ?? SCORE_STATUS_CONFIG.draft;
+                const uid = uidOf(item);
                 return (
                   <div
-                    key={item.score_uid}
+                    key={uid}
                     className={`grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-4 ${
                       idx < data.items.length - 1 ? 'border-b border-[var(--border)]' : ''
                     } hover:bg-[var(--bg-hover)] transition-colors`}
                   >
                     <div>
-                      <p className="font-medium text-[var(--text-primary)]">{item.ratee_name}</p>
-                      <p className="text-xs text-[var(--text-muted)]">打分人: {item.rater_name}</p>
+                      <p className="font-medium text-[var(--text-primary)]">{item.ratee_name ?? item.rateeName}</p>
+                      <p className="text-xs text-[var(--text-muted)]">打分人: {item.rater_name ?? item.raterName}</p>
                     </div>
                     <div className="text-right">
-                      {item.score != null ? (
-                        <span className="tabular-nums font-bold text-[var(--text-primary)]">
-                          {item.score}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-[var(--text-muted)]">-</span>
-                      )}
+                      <ScoreCell item={item} />
                     </div>
                     <div className="text-right">
                       <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${statusCfg.className}`}>
@@ -150,7 +186,7 @@ function ScoresContent() {
                     </div>
                     <div className="text-right">
                       <Link
-                        href={`/scores/${item.score_uid}`}
+                        href={`/scores/${uid}`}
                         className="text-xs text-[var(--accent-blue)] hover:underline transition-colors"
                       >
                         查看
