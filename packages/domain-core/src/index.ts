@@ -1,3 +1,65 @@
 export { canTransition, validateTransition, InvalidTransitionError, MissingStallReasonError } from './task-state-machine';
 export type { TransitionContext } from './task-state-machine';
 export { generateTaskUid, generateLogUid, generateSnapshotUid } from './task-uid';
+export {
+  monthlyTotal,
+  monthlyGrade,
+  quarterlyDimScore,
+  softSum,
+  mgmtAverage,
+  mergeSoft,
+  quarterlyTotal,
+  quarterlyGrade,
+  halfYearTotal,
+  completeMonthsInQuarter,
+  enrolledInQuarter,
+  validatePeerAssignment,
+  promotionEligible,
+  InvalidRawScoreError,
+  InvalidQuarterFormatError,
+  InvalidHalfFormatError,
+} from './perf-scoring';
+export type {
+  Grade,
+  MonthlyDimension,
+  MonthlyTotalResult,
+  QuarterlyItem,
+  MgmtSheet,
+  MergeSoftInput,
+  SoftWeights,
+  MergeSoftResult,
+  HalfYearFormula,
+  HalfYearResult,
+  PeerAssignmentRecord,
+  PeerAssignmentValidation,
+  PromotionHistoryRecord,
+  PromotionEligibility,
+} from './perf-scoring';
+export {
+  quarterBounds,
+  quarterForDate,
+  previousQuarter,
+  endedQuarterOn,
+  halfForQuarter,
+  quartersForHalf,
+  planQuarterTasks,
+  assembleQuarterMembers,
+  DEFAULT_STAGE_OFFSETS,
+} from './quarter-planning';
+export { addWorkingDays } from './working-days';
+export type {
+  QuarterBounds,
+  HalfQuarters,
+  QuarterMemberInput,
+  StageDeadlineOffsets,
+  QuarterSheetRole,
+  PlanWarning,
+  PlannedSheet,
+  PlannedStageDeadlines,
+  PlannedTask,
+  PlanQuarterInput,
+  RawOrgRow,
+  RawPerfRoleRow,
+  RawPeerRow,
+  AssembleQuarterInput,
+} from './quarter-planning';

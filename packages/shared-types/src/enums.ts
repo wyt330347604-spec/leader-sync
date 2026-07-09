@@ -131,6 +131,8 @@ export const UserRole = {
   BOSS: 'boss',
   PMO: 'pmo',
   ADMIN: 'admin',
+  // 绩效模块申诉受理人（建议绑杨平）。仅角色类型/常量，权限逻辑另行接入。
+  HR: 'hr',
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
