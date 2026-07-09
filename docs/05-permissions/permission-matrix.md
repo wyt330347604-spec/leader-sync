@@ -123,3 +123,63 @@
 上下级数据来源：飞书通讯录每日 07:00 同步（`sync-org-hierarchy` worker job）；`manual` 行同步不覆盖。该关系是月度绩效打分 rater 的唯一来源（月结 Step 6）。
 
 组织架构编辑白名单为过渡方案；规划中的**标签体系**（BOSS/HR/PMO 同级最高 > CORE > LEADER，一人多标签、按最高标签生效）落地后由标签接管，见 spec `2026-07-02-monthly-score-org-sync.md` 附录。
+
+## 8. 月度绩效评分（/scores，V1.4 —— 2026-07-08）
+
+月度打分的行级可见性与写入权限（服务端 `apps/api/src/modules/monthly-score/monthly-score.service.ts` 强制校验）：
+
+| 动作 | 被评人(ratee) | 评分人(rater=直属) | perf_role.is_leader / is_management | PMO/Boss/Admin | 说明 |
+|---|---|---|---|---|---|
+| 查看某人月度分（list / detail / context / template） | ✅(自己) | ✅(自己打的) | ✅**(任意行)** | ✅(全量) | **V1.4 放宽**：`perf_role.is_leader` 或 `is_management` 可读全员月度分 |
+| 提交/修改多维系数（PATCH `/score`、resolve 再评） | ❌ | ✅ | ❌(仅可看) | ❌ | 仅直属 rater；红线勾选须填说明 |
+| 发起质疑（challenge） | ✅ | ❌ | ❌ | ❌ | 仅被评人本人（scored 且未锁定） |
+| 最终锁定（lock） | ❌ | ❌ | ❌ | ✅ | 仅 PMO/Boss/Admin（RBAC 角色） |
+
+> **可见性放宽落地说明**：`perf_role` 是飞书群同步得来的绩效身份（`is_leader` = leader 群成员、`is_management` = 管理层群成员），**与 RBAC 角色（admin/pmo/boss/hr/leader/employee）两套不混**。放宽仅作用于「查看」：`canView` 先判直接可见（ratee/rater/PMO·Boss·Admin），未命中再查 `perf_role`，`is_leader || is_management` 放行任意行；列表页同理（这类旁观者不加 user 过滤，看全员）。写入（打分/质疑/锁定）不放宽。回归用例见 `monthly-score.service.spec.ts`「可见性放宽」describe。
+>
+> **红线通知**：多维打分勾选红线（强制 D）时，服务端用 `FeishuMessengerService` 给 `user_role_binding` 中 role ∈ (`boss`,`hr`) 的绑定用户发文本通知；发送失败只 warn 不阻塞打分结果。
+
+## 9. 季度评分会 / 合成 / 公示 / 申诉（/quarter，P3 —— 2026-07-09）
+
+服务端强制校验（`apps/api/src/modules/quarter/quarter-result.service.ts`）。「管理层」= `perf_role.is_management`（飞书群同步身份，与 RBAC 两套不混）；其余为 RBAC 角色。
+
+| 动作 | 本人(ratee) | 直属(manager) | 管理层(is_management) | hr | pmo | boss | admin | 说明 |
+|---|---|---|---|---|---|---|---|---|
+| 看评分会看板（panel） | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | 非管理层/非上述 RBAC → 403 |
+| 合成结果（compute / 批量） | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | 任务须 scored；已公示结果不可重算（400） |
+| 评分会改分（PATCH results，留痕） | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | reason 必填；published 后 403 |
+| 公示出分（publish） | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | 无 draft 结果 → 400；申诉期 +3 工作日 |
+| 看本人结果（my-result / result 详情） | ✅(公示后) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 本人未公示 → 403；直属/管理角色可看草稿 |
+| 提交申诉（appeal） | ✅(公示后·期限内) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | 仅本人；过期 400；重复 open 400 |
+| 处理申诉（PATCH appeals） | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | resolution 必填；已处理再处理 400 |
+| 申诉列表（GET appeals） | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | hr/admin |
+
+> **落地说明**：`canPanel = RBAC∈{admin,pmo,boss,hr} ∪ is_management`；`canRevise = RBAC∈{admin,boss} ∪ is_management`；`publish = RBAC∈{admin,boss,hr}`；`处理/列表申诉 = RBAC∈{admin,hr}`。**公示 / 申诉通知**：`publish` 给每个被评人、`appeal` 提交给 hr 角色绑定用户发飞书文本卡片（`QuarterNotifierService` → `FeishuMessengerService`），失败 warn 不阻塞。回归用例见 `quarter-result.service.spec.ts`。
+
+## 10. 季度半年合成 / 定级定岗联动 / 导出（/quarter，P4a —— 2026-07-09）
+
+服务端强制校验（`quarter-result.service.ts`）。行级读权限中「直属」指 `org_cache.manager_user_id === 当前用户`。
+
+| 动作 | 本人(ratee) | 直属(manager) | 管理层(is_management) | hr | pmo | boss | admin | 说明 |
+|---|---|---|---|---|---|---|---|---|
+| 合成半年成绩（POST half-year/compute） | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | admin/boss/hr；非法 half → 400 |
+| 看半年成绩（GET half-year，给 ratee_user_id） | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | 本人/直属/管理角色（admin,pmo,boss,hr）可读 |
+| 看半年成绩（GET half-year，不给 ratee → 全部） | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | 仅管理角色 |
+| 定级定岗资格（GET promotion-eligibility） | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | 本人/直属/管理角色 |
+| 回填职级快照（POST cycles/:uid/backfill-grade-snapshot） | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | admin/boss/hr；无 grade_history 跳过 + warn |
+| 导出结果 CSV（GET cycles/:uid/export.csv） | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | admin/hr/pmo/boss；UTF-8 BOM + `text/csv` |
+
+> **落地说明**：`半年合成 / 回填快照 = RBAC∈{admin,boss,hr}`；`导出 CSV = RBAC∈{admin,hr,pmo,boss}`；`看半年成绩（指定 ratee）/ 定级资格 = 本人 ∪ 直属 ∪ RBAC∈{admin,pmo,boss,hr}`；不给 ratee 的半年列表仅管理角色。回归用例见 `quarter-result.service.spec.ts`（computeHalfYear / getHalfYear / getPromotionEligibility / backfillGradeSnapshot / exportCycleCsv）。
+
+## 11. 我的绩效 / 半年目标提案（P4b —— 2026-07-09）
+
+| 动作 | 本人(ratee) | 直属(manager) | 管理层 | hr | pmo | boss | admin | 说明 |
+|---|---|---|---|---|---|---|---|---|
+| 我的绩效聚合（GET /me/performance） | ✅ | — | — | — | — | — | — | 仅本人（返回自己的月度/季度/半年/资格） |
+| 设定/改目标（POST goals · PUT goals/:uid） | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | 直属或 admin；PUT 写 revision |
+| 发起目标调整建议（POST goals/:uid/propose） | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **仅被评人本人**；已有 pending → 400 |
+| 确认/驳回提案（PATCH goals/:uid/confirm） | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | 仅直属/admin；accept 应用+写 revision，reject 留痕 |
+| 看目标/调整记录（GET goals · goals/:uid/revisions） | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | 本人/直属/管理角色 |
+| 导出月度综合系数 CSV（GET monthly/export.csv） | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | admin/hr/pmo/boss；UTF-8 BOM |
+
+> **落地说明**：目标提案流是「本人发起 → 直属确认留痕」的两段式（§10.4 决策）；`propose` 仅本人、`confirm` 仅直属/admin，服务端 `assertGoalProposer`/`assertGoalWriter` 强制。回归用例见 `quarter.service.spec.ts`（proposeGoalChange / confirmGoalProposal）。前端 `/me/goals` 默认自评视图（可 propose），`?ratee=` 供直属视图（可 set/confirm），角色由后端 guard 兜底。

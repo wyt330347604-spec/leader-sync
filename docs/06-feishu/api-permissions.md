@@ -126,3 +126,31 @@
 - 权限新增后通常需要重新发布
 - 企业管理员审批可能影响上线节奏
 - 日历事件能力要单独关注用户授权范围
+
+## 8. 绩效模块群同步与部门树（2026-07-08 新增）
+
+绩效板块（spec `docs/superpowers/specs/2026-07-08-performance-review-module.md` §2）新增对飞书群成员与组织架构部门树的读取需求。
+
+### 8.1 新增权限
+- **`im:chat:readonly`**（读取群成员）：`GET /open-apis/im/v1/chats/{chat_id}/members`，用于把「管理层群 / leader 群」成员同步为 `perf_role` 打分身份。
+- 组织架构部门树（`contact.department.children`）与用户 `join_time` 读取，复用现有通讯录只读权限（`contact:contact.base:readonly` 等，生产应用已开）。
+
+### 8.2 机器人入群要求
+应用机器人必须被拉入以下两个群，群成员接口方能读到成员：
+
+- 管理层群：`oc_ba5a3862c93e8c932cf1e68a3a2f14f5` → `perf_role.is_management`
+- leader 群：`oc_1181b79589e1dffa8b484857e8d75984` → `perf_role.is_leader`
+
+（chat id 非机密，作 worker 默认值，可用环境变量 `PERF_MGMT_CHAT_ID` / `PERF_LEADER_CHAT_ID` 覆盖。）
+
+### 8.3 凭证策略（方案 A 优先 / B 兜底）
+- **A（推荐）**：生产应用加 `im:chat:readonly` + 机器人入两群，worker 用现有生产凭证（`FEISHU_APP_ID` / `FEISHU_APP_SECRET`）一套搞定。
+- **B（兜底）**：worker 配第二组凭证 `FEISHU_SYNC_APP_ID` + `FEISHU_SYNC_APP_SECRET`（文档应用），仅群成员接口改用它并自管 tenant_access_token；其余同步不受影响。
+
+### 8.4 新增定时任务（worker cron）
+| job | 时间 | 作用 |
+|---|---|---|
+| `sync-departments` | 每日 07:05 | 递归 upsert `feishu_department` 部门树 + 写 `org_cache.joined_at` |
+| `sync-perf-roles` | 每日 07:10 | 拉两个群成员，全量对账写 `perf_role`（org 07:00 同步之后） |
+
+两 job 均支持 dry-run；手动补跑脚本 `apps/worker/src/scripts/run-sync-perf-roles-once.ts`。群成员/部门接口须在生产凭证下实跑验收。
