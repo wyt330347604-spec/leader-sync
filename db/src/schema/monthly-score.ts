@@ -1,8 +1,10 @@
 import {
   bigserial,
+  boolean,
   decimal,
   index,
   integer,
+  numeric,
   pgTable,
   text,
   timestamp,
@@ -33,7 +35,22 @@ export const monthlyScore = pgTable(
     raterName: varchar('rater_name', { length: 128 }),                 // 冗余快照
 
     // 0.0-1.0 小数制；null = 未打分（draft 状态）
+    // V1.4 起冻结为历史只读（Harvey 已批 §10.5）：无 template_uid 的旧行仍用此列，
+    // 有 template_uid 的新行改用 total_score/composite/grade + monthly_score_detail。
     score: decimal('score', { precision: 3, scale: 1 }),
+
+    // ── V1.4 多维系数制（migration 0018）──────────────────────────────────────
+    // 开窗时按被评人 perf_role.is_leader 盖章（monthly_leader / monthly_employee 的 active 模板）；
+    // null = 旧行（单系数历史），前端渲染单值只读、后端拒绝多维提交。
+    templateUid: varchar('template_uid', { length: 64 }),
+    // 派生汇总（服务端用 domain-core 计算后回写）：total=Σ(系数×权重) 可 >100；composite=total/100。
+    totalScore: numeric('total_score', { precision: 5, scale: 1 }),
+    composite: numeric('composite', { precision: 4, scale: 2 }),
+    // 自动评级：S>100 / A 90–100 / B 80–89 / C 70–79 / D<70；红线强制 D。
+    grade: varchar('grade', { length: 2 }),
+    // 红线一票否决：true → 强制 D + 必填说明 + 通知 boss/hr。
+    redLine: boolean('red_line').notNull().default(false),
+    redLineNote: text('red_line_note'),
 
     // 状态机状态：draft / scored / challenged / pending_lock / locked
     status: varchar('status', { length: 32 }).notNull().default('draft'),
@@ -67,5 +84,33 @@ export const monthlyScore = pgTable(
     index('idx_ms_ratee_user_id').on(table.rateeUserId),
     index('idx_ms_rater_user_id').on(table.raterUserId),
     index('idx_ms_status').on(table.status),
+    index('idx_ms_template_uid').on(table.templateUid),
+  ],
+);
+
+// monthly_score_detail — 月度 V1.4 每维度明细
+// 对应 migration 0018_monthly_v14.sql
+//
+// 一条打分行（monthly_score）在 V1.4 下按模板维度拆成多条明细：
+//   员工 2 维（工作量15/交付85），leader 3 维（团队量10/团队交付70/领导力20）。
+// weight 打分时快照（防模板规则后改影响历史）；weighted = coefficient × weight。
+// 软引用 monthly_score.score_uid，无 DB 外键。
+export const monthlyScoreDetail = pgTable(
+  'monthly_score_detail',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    detailUid: varchar('detail_uid', { length: 64 }).notNull(),  // 业务主键 msd_<...>
+    scoreUid: varchar('score_uid', { length: 64 }).notNull(),    // 软引用 monthly_score.score_uid
+    dimensionCode: varchar('dimension_code', { length: 32 }).notNull(),
+    dimensionName: varchar('dimension_name', { length: 128 }),   // 维度名快照（展示用）
+    weight: numeric('weight', { precision: 5, scale: 2 }).notNull(),        // 权重快照
+    coefficient: numeric('coefficient', { precision: 4, scale: 2 }).notNull(), // 手写系数
+    weighted: numeric('weighted', { precision: 6, scale: 2 }).notNull(),    // = coefficient × weight
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('uniq_msd_detail_uid').on(table.detailUid),
+    // (score_uid, dimension_code) 唯一：一行每维度一条；score_uid 最左前缀兼作查明细索引。
+    uniqueIndex('uniq_msd_score_dimension').on(table.scoreUid, table.dimensionCode),
   ],
 );

@@ -8,8 +8,9 @@
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "seed": "tsx seed/index.ts",
+    "seed:perf": "tsx seed/perf-templates.ts",
     "studio": "drizzle-kit studio",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

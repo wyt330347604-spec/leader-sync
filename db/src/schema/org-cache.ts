@@ -22,6 +22,9 @@ export const orgCache = pgTable('org_cache', {
   managerUpdatedBy: varchar('manager_updated_by', { length: 128 }),
   // 绩效豁免：true = 不参与月度绩效（不生成打分草稿）。migration 0016
   scoreExempt: boolean('score_exempt').notNull().default(false),
+  // 入职日期：飞书通讯录 join_time 同步；拉不到时为 null，由 HR 手补。migration 0017
+  // 用途：季度新人规则（周期内 ≥2 完整月才参评）。sync-engine 不写此字段。
+  joinedAt: timestamp('joined_at', { withTimezone: true }),
   syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
   // 职级字段：格式 T4.0–T8.3，NULL 表示该员工尚未分配职级
   // 由应用层正则 /^T[4-8]\.[0-3]$/ 校验，DB 层不加 CHECK 约束
