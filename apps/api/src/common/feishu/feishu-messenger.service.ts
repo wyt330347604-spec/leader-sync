@@ -46,17 +46,32 @@ export class FeishuMessengerService {
 
   /** 发送文本消息到某用户（open_id）。返回是否送达。 */
   async sendTextToUser(openId: string, text: string): Promise<boolean> {
+    return this.send(openId, 'text', JSON.stringify({ text }), 'sendTextToUser');
+  }
+
+  /**
+   * 发送交互卡片（interactive）到某用户（open_id）。返回是否送达。
+   * 卡片结构由调用方构造（见 quarter-cards.ts），与 worker sendCardMessage 一致。
+   * 失败仅告警返回 false，绝不抛出（沿用通知失败不阻塞业务的契约）。
+   */
+  async sendCardToUser(openId: string, card: object): Promise<boolean> {
+    return this.send(openId, 'interactive', JSON.stringify(card), 'sendCardToUser');
+  }
+
+  /** 统一下发实现：取 token → POST im/v1/messages。失败告警返回 false，不抛。 */
+  private async send(
+    openId: string,
+    msgType: 'text' | 'interactive',
+    content: string,
+    label: string,
+  ): Promise<boolean> {
     try {
       const token = await this.getAppAccessToken();
       if (!token) return false;
       const res = await fetch('https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          receive_id: openId,
-          msg_type: 'text',
-          content: JSON.stringify({ text }),
-        }),
+        body: JSON.stringify({ receive_id: openId, msg_type: msgType, content }),
       });
       const data = (await res.json()) as { code: number; msg: string };
       if (data.code !== 0) {
@@ -65,7 +80,7 @@ export class FeishuMessengerService {
       }
       return true;
     } catch (err) {
-      this.logger.warn(`sendTextToUser failed for ${openId}: ` + (err as Error).message);
+      this.logger.warn(`${label} failed for ${openId}: ` + (err as Error).message);
       return false;
     }
   }

@@ -1,8 +1,32 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { DATABASE_TOKEN } from '../../database.module';
 import type { Database } from '@leader-sync/db';
-import { monthlyScore, monthlySnapshot, project, incident, incidentUser, userRoleBinding } from '@leader-sync/db';
-import { eq, and, sql, lt, desc, inArray } from 'drizzle-orm';
+import {
+  monthlyScore,
+  monthlyScoreDetail,
+  monthlySnapshot,
+  project,
+  incident,
+  incidentUser,
+  userRoleBinding,
+  scoreTemplate,
+  scoreDimension,
+  perfRole,
+  orgCache,
+} from '@leader-sync/db';
+import { eq, and, or, sql, desc, inArray, asc } from 'drizzle-orm';
+
+/** 打分行适用的模板 + 维度（V1.4 前端表单 / 服务端校验用）。 */
+export interface TemplateWithDimensions {
+  template: typeof scoreTemplate.$inferSelect;
+  dimensions: (typeof scoreDimension.$inferSelect)[];
+}
+
+/** 绩效打分身份（可见性放宽用）。 */
+export interface PerfRoleFlags {
+  isLeader: boolean;
+  isManagement: boolean;
+}
 
 export interface ScoreListFilter {
   month?: string;
@@ -46,6 +70,8 @@ export interface ScoreContext {
   prevScore: PrevScoreRef | null;
   incidents: IncidentRef[];
   picProjects: PicProject[];
+  /** V1.4 多维明细（旧单值行为空数组）；前端展示 / 修改分数时回填。 */
+  details: (typeof monthlyScoreDetail.$inferSelect)[];
 }
 
 @Injectable()
@@ -249,7 +275,10 @@ export class MonthlyScoreRepository {
       picProjects = [];
     }
 
-    return { score: scoreRow, snapshot, prevScore, incidents, picProjects };
+    // V1.4 多维明细（旧单值行为空数组）
+    const details = await this.findDetailsByScoreUid(scoreUid);
+
+    return { score: scoreRow, snapshot, prevScore, incidents, picProjects, details };
   }
 
   async findPrevScore(
@@ -274,5 +303,91 @@ export class MonthlyScoreRepository {
       .select({ role: userRoleBinding.role })
       .from(userRoleBinding)
       .where(eq(userRoleBinding.userId, userId));
+  }
+
+  // ── V1.4 多维系数制 ─────────────────────────────────────────────────────────
+
+  /** 打分行适用的模板 + 维度（按 sort 升序）；模板不存在返回 null。 */
+  async findTemplateWithDimensions(templateUid: string): Promise<TemplateWithDimensions | null> {
+    const [tpl] = await this.db
+      .select()
+      .from(scoreTemplate)
+      .where(eq(scoreTemplate.templateUid, templateUid));
+    if (!tpl) return null;
+    const dimensions = await this.db
+      .select()
+      .from(scoreDimension)
+      .where(eq(scoreDimension.templateUid, templateUid))
+      .orderBy(asc(scoreDimension.sort));
+    return { template: tpl, dimensions };
+  }
+
+  /** 绩效打分身份（user_id / open_id 双候选任一命中）；无行返回 null。 */
+  async findPerfRole(candidates: string[]): Promise<PerfRoleFlags | null> {
+    if (candidates.length === 0) return null;
+    const [row] = await this.db
+      .select({ isLeader: perfRole.isLeader, isManagement: perfRole.isManagement })
+      .from(perfRole)
+      .where(or(inArray(perfRole.userId, candidates), inArray(perfRole.openId, candidates)))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /**
+   * V1.4 打分事务：OCC 更新主行汇总字段 + 全量替换明细行。
+   * 版本不匹配（并发）→ 主行 0 行更新 → 返回 null（无副作用，事务内未删改明细）。
+   */
+  async submitDetailedScore(
+    scoreUid: string,
+    version: number,
+    mainValues: Partial<typeof monthlyScore.$inferInsert>,
+    detailRows: (typeof monthlyScoreDetail.$inferInsert)[],
+  ): Promise<typeof monthlyScore.$inferSelect | null> {
+    return this.db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(monthlyScore)
+        .set({ ...mainValues, version: sql`${monthlyScore.version} + 1`, updatedAt: new Date() })
+        .where(and(eq(monthlyScore.scoreUid, scoreUid), eq(monthlyScore.version, version)))
+        .returning();
+      if (!updated) return null; // OCC 失败：不动明细，事务提交（无变更）
+      // 明细全量替换：先删旧再插新（唯一索引 score_uid+dimension_code 防重）
+      await tx.delete(monthlyScoreDetail).where(eq(monthlyScoreDetail.scoreUid, scoreUid));
+      if (detailRows.length > 0) {
+        await tx.insert(monthlyScoreDetail).values(detailRows);
+      }
+      return updated;
+    });
+  }
+
+  /** 某打分行的明细（按 sort/维度顺序）。 */
+  async findDetailsByScoreUid(scoreUid: string): Promise<(typeof monthlyScoreDetail.$inferSelect)[]> {
+    return this.db
+      .select()
+      .from(monthlyScoreDetail)
+      .where(eq(monthlyScoreDetail.scoreUid, scoreUid))
+      .orderBy(asc(monthlyScoreDetail.id));
+  }
+
+  /**
+   * 红线通知收件人：boss + hr 角色绑定用户，解析出可发送的 ou_ open_id。
+   * user_role_binding.user_id 可能已是 ou_，也可能是员工 ID → join org_cache 兜底。
+   */
+  async findRedLineRecipients(): Promise<string[]> {
+    const bindings = await this.db
+      .select({ userId: userRoleBinding.userId })
+      .from(userRoleBinding)
+      .where(inArray(userRoleBinding.role, ['boss', 'hr']));
+    if (bindings.length === 0) return [];
+    const ids = [...new Set(bindings.map((b) => b.userId))];
+
+    const orgRows = await this.db
+      .select({ userId: orgCache.userId, openId: orgCache.openId })
+      .from(orgCache)
+      .where(or(inArray(orgCache.userId, ids), inArray(orgCache.openId, ids)));
+
+    const openIds = new Set<string>();
+    for (const id of ids) if (id.startsWith('ou_')) openIds.add(id);
+    for (const r of orgRows) if (r.openId?.startsWith('ou_')) openIds.add(r.openId);
+    return [...openIds];
   }
 }

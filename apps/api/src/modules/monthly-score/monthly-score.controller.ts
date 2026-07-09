@@ -46,6 +46,15 @@ export class MonthlyScoreController {
     return this.scoreService.getScore(scoreUid, user.user_id, user.role, user.open_id);
   }
 
+  // ── GET /scores/:score_uid/template （V1.4 打分表单模板；旧行返回 null）──────
+  @Get(':score_uid/template')
+  getTemplate(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('score_uid') scoreUid: string,
+  ) {
+    return this.scoreService.getTemplate(scoreUid, user.user_id, user.role, user.open_id);
+  }
+
   // ── PATCH /scores/:score_uid/score ─────────────────────────────────────────
   @Patch(':score_uid/score')
   submitScore(

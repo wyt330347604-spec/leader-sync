@@ -14,6 +14,7 @@ import { NotificationPreferenceModule } from './modules/notification-preference/
 import { IncidentModule } from './modules/incident/incident.module';
 import { GradeModule } from './modules/grade/grade.module';
 import { MonthlyScoreModule } from './modules/monthly-score/monthly-score.module';
+import { QuarterModule } from './modules/quarter/quarter.module';
 import { AiModule } from './modules/ai/ai.module';
 import { FeishuBotModule } from './modules/feishu-bot/feishu-bot.module';
 import { RequirementModule } from './modules/requirement/requirement.module';
@@ -37,6 +38,7 @@ import { DatabaseModule } from './database.module';
     IncidentModule,
     GradeModule,
     MonthlyScoreModule,
+    QuarterModule,
     AiModule,
     FeishuBotModule,
     RequirementModule,
