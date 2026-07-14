@@ -1,11 +1,28 @@
 import { test, expect } from '@playwright/test';
-import { devLogin, setTheme, visit } from './helpers';
+import { devLogin, setTheme, visit, API_URL } from './helpers';
 
-// P3 评分会 + 合成/公示/申诉 截图审计（依赖 dev 库 2026-Q2：alice 结果 draft、bob 结果 published）。
+// P3 评分会 + 合成/公示/申诉 截图审计（依赖 dev 库 2026-Q2）。
+// 「改分弹窗」需要一条 draft 结果才有「改分」按钮（公示后禁改）；beforeAll 通过
+// compute 王五(carol) 的 scored 任务确定性地生成一条 draft（幂等，不动 alice/bob 的已公示结果）。
 const OUT = 'screenshots/quarter-p3-audit';
 const CYCLE = 'qc_4OuApRWKaqK-';
 const ALICE_RESULT = 'qr_o8ZC9HYC-Tvw';
 const BOB_RESULT = 'qr_shBzdc4s5Bji';
+const CAROL_DRAFT_TASK = 'qt_XOx8Y45mbpON'; // 王五：scored 未公示，compute 出 draft 供改分演示
+
+test.beforeAll(async () => {
+  const login = await fetch(`${API_URL}/api/v1/auth/dev-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: 'ou_dev_harvey' }),
+  });
+  const token = (await login.json())?.data?.token;
+  await fetch(`${API_URL}/api/v1/quarter/tasks/${CAROL_DRAFT_TASK}/result/compute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: `token=${token}` },
+    body: '{}',
+  });
+});
 
 test('panel 全貌（管理层看板）', async ({ context, page }) => {
   await devLogin(context, 'ou_dev_harvey');
