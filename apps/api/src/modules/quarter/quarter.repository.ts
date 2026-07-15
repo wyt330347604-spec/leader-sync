@@ -78,6 +78,16 @@ export class QuarterRepository {
     return row ?? (await this.findCycleByQuarter(values.quarter));
   }
 
+  /** 召集评分会：cycle status scoring → panel，写 panel_at。返回更新后行（无则 null）。 */
+  async setCyclePanel(cycleUid: string, panelAt: Date) {
+    const [row] = await this.db
+      .update(quarterCycle)
+      .set({ status: 'panel', panelAt })
+      .where(eq(quarterCycle.cycleUid, cycleUid))
+      .returning();
+    return row ?? null;
+  }
+
   /** 某周期各 stage × enrolled 计数（进度统计）。 */
   async stageCounts(cycleUid: string): Promise<StageCountRow[]> {
     const rows = await this.db

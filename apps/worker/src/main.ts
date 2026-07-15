@@ -13,6 +13,7 @@ import { runOpenQuarterWindow } from './jobs/open-quarter-window';
 import { runAdvanceSelfTimeout } from './jobs/advance-self-timeout';
 import { runAdvancePeerTimeout } from './jobs/advance-peer-timeout';
 import { runQuarterDeadlineReminder } from './jobs/quarter-deadline-reminder';
+import { runConvenePanelCheck } from './jobs/convene-panel-check';
 // feishu-bot: message handler (not a cron). handleFeishuBotMessage() is called
 // by the NestJS API's feishu-bot webhook controller, not registered here as a cron.
 // Import is retained to ensure the module is bundled and types are available.
@@ -73,6 +74,12 @@ registerJob('advance-peer-timeout', '10 9 * * *', async () => {
 // Quarter deadline reminder: daily 09:15 —— 当前环节截止 T-2d 内给未完成 sheet 的人发催办卡。
 registerJob('quarter-deadline-reminder', '15 9 * * *', async () => {
   await runQuarterDeadlineReminder();
+});
+
+// Convene panel check: daily 09:20 —— scoring 周期全部 enrolled 任务 scored → 转 panel + 发管理层召集卡。
+// 触发条件保守（全 scored 才召集），时间/阈值口径待全面测试后收口。
+registerJob('convene-panel-check', '20 9 * * *', async () => {
+  await runConvenePanelCheck();
 });
 
 // 评分会前一天给管理层发个人清单卡（buildPanelEveCard）：触发时机依赖 quarter_cycle.panel_at

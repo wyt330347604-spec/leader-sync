@@ -52,6 +52,7 @@ function createMockRepo(): Record<keyof QuarterRepository, ReturnType<typeof vi.
     applyGoalProposal: vi.fn(),
     clearGoalProposal: vi.fn(),
     listGoalRevisions: vi.fn(),
+    setCyclePanel: vi.fn(),
   } as unknown as Record<keyof QuarterRepository, ReturnType<typeof vi.fn>>;
 }
 
@@ -114,7 +115,10 @@ describe('QuarterService', () => {
   let repo: ReturnType<typeof createMockRepo>;
   let service: QuarterService;
 
-  const notifier = { notifyPeerAssigned: vi.fn().mockResolvedValue(true) };
+  const notifier = {
+    notifyPeerAssigned: vi.fn().mockResolvedValue(true),
+    notifyPanelReminder: vi.fn().mockResolvedValue(true),
+  };
 
   beforeEach(() => {
     repo = createMockRepo();
@@ -577,6 +581,90 @@ describe('QuarterService', () => {
       await expect(
         service.confirmGoalProposal('qg_1', { userId: 'ou_other', role: UserRole.LEADER, openId: 'ou_other' }, { accept: true }),
       ).rejects.toMatchObject({ businessCode: ErrorCode.UNAUTHORIZED });
+    });
+  });
+
+  // ── 评分会召集（convenePanel）─────────────────────────────────────────────
+  describe('convenePanel', () => {
+    const admin = { userId: 'ou_admin', role: UserRole.ADMIN, openId: 'ou_admin' };
+    const scoringCycle = { cycleUid: 'qc_c', quarter: '2026-Q3', status: 'scoring', panelAt: null };
+    const mgmtRows = [
+      { userId: 'ou_pan', openId: 'ou_pan' }, // 可解析 open_id
+      { userId: 'ou_zhang', openId: null }, // openId 空但 userId 是 ou_ → 兜底
+      { userId: 'internal_no_ou', openId: null }, // 解析不到 → warn 跳过
+    ];
+    const orgRows = [
+      { userId: 'ou_pan', openId: 'ou_pan', userName: '潘安' },
+      { userId: 'ou_zhang', openId: 'ou_zhang', userName: '张诗珧' },
+    ];
+
+    function primeScoring() {
+      repo.findCycleByUid.mockResolvedValue(scoringCycle);
+      repo.setCyclePanel.mockResolvedValue({ ...scoringCycle, status: 'panel', panelAt: new Date() });
+      repo.listTasksByCycle.mockResolvedValue([
+        { taskUid: 'qt_a', enrolled: true, mgmtRequired: true, stage: 'scored' },
+        { taskUid: 'qt_b', enrolled: true, mgmtRequired: false, stage: 'scored' },
+        { taskUid: 'qt_c', enrolled: false, mgmtRequired: true, stage: 'scored' },
+      ]);
+      repo.listManagementRoleRows.mockResolvedValue(mgmtRows);
+      repo.listAllOrgRows.mockResolvedValue(orgRows);
+    }
+
+    it('非 admin/boss/hr → FORBIDDEN，不改状态', async () => {
+      await expect(
+        service.convenePanel('qc_c', { userId: 'ou_lead', role: UserRole.LEADER, openId: 'ou_lead' }),
+      ).rejects.toMatchObject({ businessCode: ErrorCode.UNAUTHORIZED, status: HttpStatus.FORBIDDEN });
+      expect(repo.setCyclePanel).not.toHaveBeenCalled();
+    });
+
+    it('周期不存在 → NOT_FOUND', async () => {
+      repo.findCycleByUid.mockResolvedValue(null);
+      await expect(service.convenePanel('qc_x', admin)).rejects.toMatchObject({ status: HttpStatus.NOT_FOUND });
+    });
+
+    it('scoring → 置 panel + panel_at，给可解析的管理层各发一张召集卡（含待评人数）', async () => {
+      primeScoring();
+      const res = await service.convenePanel('qc_c', admin);
+      expect(res.convened).toBe(true);
+      expect(res.status).toBe('panel');
+      expect(repo.setCyclePanel).toHaveBeenCalledWith('qc_c', expect.any(Date));
+      // 待评人数 = enrolled 且 mgmtRequired 的任务数 = 1（qt_a）
+      expect(res.pendingCount).toBe(1);
+      // 3 名管理层，1 名解析不到 open_id → 只发 2 张
+      expect(notifier.notifyPanelReminder).toHaveBeenCalledTimes(2);
+      expect(res.notified).toBe(2);
+      const info = notifier.notifyPanelReminder.mock.calls[0][1];
+      expect(info).toMatchObject({ quarter: '2026-Q3', cycleUid: 'qc_c', pendingCount: 1 });
+    });
+
+    it('已是 panel → 幂等跳过，不再改状态/发卡', async () => {
+      repo.findCycleByUid.mockResolvedValue({ ...scoringCycle, status: 'panel', panelAt: new Date() });
+      const res = await service.convenePanel('qc_c', admin);
+      expect(res.convened).toBe(false);
+      expect(repo.setCyclePanel).not.toHaveBeenCalled();
+      expect(notifier.notifyPanelReminder).not.toHaveBeenCalled();
+    });
+
+    it('已 published → 幂等跳过', async () => {
+      repo.findCycleByUid.mockResolvedValue({ ...scoringCycle, status: 'published' });
+      const res = await service.convenePanel('qc_c', admin);
+      expect(res.convened).toBe(false);
+      expect(repo.setCyclePanel).not.toHaveBeenCalled();
+    });
+
+    it('尚在 goal_check（未开窗打分）→ INVALID_PARAMS', async () => {
+      repo.findCycleByUid.mockResolvedValue({ ...scoringCycle, status: 'goal_check' });
+      await expect(service.convenePanel('qc_c', admin)).rejects.toMatchObject({ businessCode: ErrorCode.INVALID_PARAMS });
+      expect(repo.setCyclePanel).not.toHaveBeenCalled();
+    });
+
+    it('通知抛错不阻塞召集（仍 convened=true）', async () => {
+      primeScoring();
+      notifier.notifyPanelReminder.mockRejectedValue(new Error('feishu down'));
+      const res = await service.convenePanel('qc_c', admin);
+      expect(res.convened).toBe(true);
+      expect(repo.setCyclePanel).toHaveBeenCalled();
+      expect(res.notified).toBe(0);
     });
   });
 });

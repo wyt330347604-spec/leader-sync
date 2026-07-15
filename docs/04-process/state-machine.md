@@ -163,6 +163,21 @@ stateDiagram-v2
 - `advance-self-timeout`（09:05）：`pending_self` 且过 `stage_deadlines.self` → `self_skipped=true` + `stage=pending_peer_manager`，自评 sheet 保持 draft 不删。
 - `advance-peer-timeout`（09:10，硬化3）：`pending_peer_manager`、`peer_skipped=false` 且过 `stage_deadlines.peer_manager`、同事 sheet 未提交 → `peer_skipped=true`；重算 stage（非 mgmt 且直属已完成 → `scored`，否则维持 `pending_peer_manager` 等直属）。未指定同事 / 同事已提交 → 跳过不放行。
 
+### 8.1 周期状态机（quarter_cycle.status —— 2026-07-15，评分会召集）
+
+`goal_check → scoring → panel → published → closed`。开窗建 cycle 即 `scoring`（§5）；公示 `publish` 置 `published`（§9）。**新增 `scoring → panel`（召集评分会）**：
+
+```mermaid
+stateDiagram-v2
+    scoring --> panel: 召集评分会（写 panel_at + 发管理层召集卡）
+    panel --> published: 公示出分（publish）
+```
+
+- **召集触发**：① 手动 `POST /quarter/cycles/:uid/convene-panel`（admin/boss/hr，随时可召集）；② worker 自动 job `convene-panel-check`（每日 09:20）扫描 `scoring` 周期，当其**全部 enrolled 任务 stage=scored**（且至少一条参评任务，保守口径）时自动召集。两者同口径（API `QuarterService.convenePanel` / worker glue，跨进程各落一份）。
+- **副作用**：`status=panel`、`panel_at=now`，给全部 `perf_role.is_management` 成员发召集卡（`open_id` 解析不到 warn 跳过；发送失败 warn 不阻塞）。
+- **幂等**：已 `panel/published/closed` → 跳过不改状态不发卡；仍在 `goal_check`（未开窗打分）→ 手动端点 400。
+- 说明：`panel` 是评分会看板/合成/改分的进行态；合成 `compute` 与公示 `publish` 不强制要求先经 `panel`（当前 `compute` 只门控 `task.stage=scored`），召集主要用于**通知管理层集合 + 记录 panel_at**。触发时间/阈值口径待全面测试后收口。
+
 ## 9. 季度合成结果生命周期（quarter_result.status —— 2026-07-09，P3）
 
 `quarter_task.stage=scored` 后，管理角色触发合成（`POST /quarter/tasks/:uid/result/compute` 或批量），从已提交 sheet 取数 → `mergeSoft`/`quarterlyTotal`/`quarterlyGrade` 写一条 `quarter_result`（draft，一任务一条幂等 upsert）。逻辑见 `apps/api/src/modules/quarter/quarter-result.service.ts`。

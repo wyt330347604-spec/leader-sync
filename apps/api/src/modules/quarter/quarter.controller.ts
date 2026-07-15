@@ -52,6 +52,12 @@ export class QuarterController {
     return this.service.getCycle(cycleUid, requestor(user));
   }
 
+  // 召集评分会：scoring → panel + panel_at，给管理层发召集卡（admin/boss/hr）。
+  @Post('cycles/:cycle_uid/convene-panel')
+  convenePanel(@CurrentUser() user: CurrentUserPayload, @Param('cycle_uid') cycleUid: string) {
+    return this.service.convenePanel(cycleUid, requestor(user));
+  }
+
   // ── 我的待办 ─────────────────────────────────────────────────────────────
   @Get('my-tasks')
   myTasks(@CurrentUser() user: CurrentUserPayload) {

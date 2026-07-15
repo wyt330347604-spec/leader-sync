@@ -7,7 +7,12 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { FeishuMessengerService } from '../../common/feishu/feishu-messenger.service';
-import { buildPublishCard, buildAppealCard, buildPeerAssignedCard } from './quarter-cards';
+import {
+  buildPublishCard,
+  buildAppealCard,
+  buildPeerAssignedCard,
+  buildPanelReminderCard,
+} from './quarter-cards';
 
 export interface PublishedNotifyInfo {
   rateeName: string | null;
@@ -29,6 +34,13 @@ export interface PeerAssignedNotifyInfo {
   rateeName: string | null;
   quarter: string | null;
   sheetUid: string;
+}
+
+export interface PanelReminderNotifyInfo {
+  managerName: string | null;
+  quarter: string | null;
+  cycleUid: string;
+  pendingCount: number;
 }
 
 @Injectable()
@@ -63,5 +75,11 @@ export class QuarterNotifierService {
   async notifyPeerAssigned(openId: string | null, info: PeerAssignedNotifyInfo): Promise<boolean> {
     if (!openId) return false;
     return this.messenger.sendCardToUser(openId, buildPeerAssignedCard(this.webBase, info));
+  }
+
+  /** 评分会召集通知单个管理层成员（卡片：待评人数 + 进评分会看板按钮）。返回是否送达。 */
+  async notifyPanelReminder(openId: string | null, info: PanelReminderNotifyInfo): Promise<boolean> {
+    if (!openId) return false;
+    return this.messenger.sendCardToUser(openId, buildPanelReminderCard(this.webBase, info));
   }
 }

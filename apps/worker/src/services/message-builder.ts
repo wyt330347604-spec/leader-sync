@@ -272,6 +272,45 @@ export function buildPanelEveCard(
 }
 
 /**
+ * 季度评分 · 评分会召集卡片（worker 自动 job convene-panel-check 触发时发给管理层）。
+ * 与 API 侧 quarter-cards.ts buildPanelReminderCard 同语义（跨进程各落一份，与 open-quarter-window
+ * / buildQuarterSelfWindowCard 模式一致）。按钮跳评分会看板（带 cycle）。
+ */
+export function buildPanelConveneCard(
+  managerName: string,
+  quarter: string,
+  cycleUid: string,
+  pendingCount: number,
+): object {
+  return {
+    config: { wide_screen_mode: true },
+    header: {
+      title: { tag: 'plain_text', content: `【季度考核·评分会召集】${quarter}` },
+      template: 'violet',
+    },
+    elements: [
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: `**${managerName}**，${quarter} 季度评分会已召集，请进入评分会看板参与集体评分。本周期需管理层评分 **${pendingCount}** 位被评人。`,
+        },
+      },
+      { tag: 'hr' },
+      {
+        tag: 'action',
+        actions: [{
+          tag: 'button',
+          text: { tag: 'plain_text', content: '打开评分会看板' },
+          type: 'primary',
+          url: `${config.appBaseUrl}/quarter/panel?cycle=${cycleUid}`,
+        }],
+      },
+    ],
+  };
+}
+
+/**
  * Feishu card for escalation notification when a challenge exceeds 48h without response.
  * Spec §5.2: PMO + CC ratee
  */

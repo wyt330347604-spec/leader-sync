@@ -198,8 +198,9 @@ Query：
 - `POST /api/v1/quarter/tasks/{task_uid}/result/compute`：单任务合成，body `{ red_line?, red_line_note? }`（默认 false，省略保留既有值）。任务须 `scored`；已 published 结果 → 400。返回 `quarter_result` 行。
 - `POST /api/v1/quarter/cycles/{cycle_uid}/results/compute`：批量合成 cycle 内全部 scored 任务（跳过已公示）。返回 `{ computed, scoredTotal, skippedPublished, results }`。
 
-### 8ter.2 评分会看板
+### 8ter.2 评分会看板 / 召集
 - `GET /api/v1/quarter/cycles/{cycle_uid}/panel`（管理层/boss/admin/hr/pmo）：`{ cycle, summary{enrolledCount,scoredCount,computedCount,publishedCount}, distribution{gradeCounts,buckets}, rows[三方分解+result], managerAverages[各直属打分均值], sList, dList }`。
+- `POST /api/v1/quarter/cycles/{cycle_uid}/convene-panel`（admin/boss/hr）：召集评分会。cycle `scoring → panel` 并写 `panel_at=now`，给全部 `perf_role.is_management` 成员发召集卡（`open_id` 解析不到 warn 跳过；发送失败 warn 不阻塞）。返回 `{ convened, status, panelAt?, pendingCount?, managementCount, notified }`。已 `panel/published/closed` → 幂等 `{ convened:false }`；仍在 `goal_check`（未开窗打分）→ 400。与 worker 自动 job `convene-panel-check`（全 enrolled 任务 scored 时触发）同口径。
 
 ### 8ter.3 改分 / 公示
 - `PATCH /api/v1/quarter/results/{result_uid}`（管理层/boss/admin）：`{ field: goal_score|soft_merged|total|grade, after, reason }`。goal_score/soft_merged 重算 total/grade；total/grade 仅记录。写 `quarter_result_revision`。published 后 → 403。

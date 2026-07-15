@@ -82,6 +82,24 @@ export interface PeerAssignedCardInfo {
   sheetUid: string;
 }
 
+export interface PanelReminderCardInfo {
+  managerName: string | null;
+  quarter: string | null;
+  cycleUid: string;
+  pendingCount: number;
+}
+
+/** 评分会召集 → 管理层成员：周期 + 待评人数 + 按钮进评分会看板。 */
+export function buildPanelReminderCard(base: string, info: PanelReminderCardInfo): FeishuCard {
+  const elements: unknown[] = [
+    md(`**${info.managerName ?? ''}** 你好，${info.quarter ?? ''} 季度评分会已召集，请进入评分会看板参与集体评分。`),
+    md(`本周期需管理层评分的被评人 **${info.pendingCount}** 位。`),
+    { tag: 'hr' },
+    button('进入评分会看板', `${base}/quarter/panel?cycle=${info.cycleUid}`),
+  ];
+  return card(`【季度考核·评分会召集】${info.quarter ?? ''}`, elements);
+}
+
 /** 同事被指定告知 → 被指定人：为谁打分 + 按钮跳打分页。 */
 export function buildPeerAssignedCard(base: string, info: PeerAssignedCardInfo): FeishuCard {
   const elements: unknown[] = [

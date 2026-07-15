@@ -86,4 +86,27 @@ describe('QuarterNotifierService（卡片下发）', () => {
       await expect(svc.notifyPeerAssigned('ou_peer', INFO)).resolves.toBe(false);
     });
   });
+
+  describe('notifyPanelReminder', () => {
+    const INFO = { managerName: '潘安', quarter: '2026-Q3', cycleUid: 'qc_p', pendingCount: 5 };
+
+    it('无 openId → false，不发送', async () => {
+      const ok = await svc.notifyPanelReminder(null, INFO);
+      expect(ok).toBe(false);
+      expect(messenger.sendCardToUser).not.toHaveBeenCalled();
+    });
+
+    it('发卡片给管理层成员，按钮跳评分会看板', async () => {
+      const ok = await svc.notifyPanelReminder('ou_mgmt', INFO);
+      expect(ok).toBe(true);
+      const [openId, card] = messenger.sendCardToUser.mock.calls[0];
+      expect(openId).toBe('ou_mgmt');
+      expect(JSON.stringify(card)).toContain('/quarter/panel?cycle=qc_p');
+    });
+
+    it('发送失败 → false，不抛', async () => {
+      messenger.sendCardToUser.mockResolvedValueOnce(false);
+      await expect(svc.notifyPanelReminder('ou_mgmt', INFO)).resolves.toBe(false);
+    });
+  });
 });

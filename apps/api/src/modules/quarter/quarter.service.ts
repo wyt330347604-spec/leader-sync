@@ -50,6 +50,8 @@ export interface ManagerContext {
 // 管理角色（RBAC）：可开周期、看全部、读任意 sheet。
 const MANAGE_ROLES = new Set<string>([UserRole.ADMIN, UserRole.PMO, UserRole.BOSS, UserRole.HR]);
 const CYCLE_OPEN_ROLES = MANAGE_ROLES;
+// 召集评分会：admin/boss/hr（与公示同权限档）。
+const CONVENE_ROLES = new Set<string>([UserRole.ADMIN, UserRole.BOSS, UserRole.HR]);
 const PEER_ASSIGN_ROLES = new Set<string>([UserRole.ADMIN, UserRole.HR]);
 const MGMT_FLAG_ROLES = new Set<string>([UserRole.ADMIN, UserRole.BOSS]);
 const GOAL_ROLES = new Set<string>([UserRole.ADMIN]);
@@ -70,6 +72,13 @@ function canonicalUserId(row: { userId: string; openId: string | null }): string
   if (row.openId && row.openId.startsWith('ou_')) return row.openId;
   if (row.userId && row.userId.startsWith('ou_')) return row.userId;
   return row.userId;
+}
+
+/** 取一行的 ou_ 句柄（openId 优先，否则 userId），都不是 ou_ 则 null。用于通知收件人解析。 */
+function ouHandle(row: { userId?: string | null; openId?: string | null }): string | null {
+  if (row.openId && row.openId.startsWith('ou_')) return row.openId;
+  if (row.userId && row.userId.startsWith('ou_')) return row.userId;
+  return null;
 }
 
 function forbidden(msg: string): never {
@@ -251,6 +260,98 @@ export class QuarterService {
       forbidden('无权查看该周期');
     }
     return { cycle, canManage: false };
+  }
+
+  // ═══════════════════════ 评分会召集（scoring → panel）═══════════════════════
+
+  /**
+   * 召集评分会（manual 端点与 worker 自动 job 共用同一口径）：
+   * cycle status scoring → panel、写 panel_at=now；给全部 is_management 成员发召集卡。
+   * 幂等：已 panel/published/closed → 跳过不改状态、不发卡。goal_check（未开窗）→ 400。
+   * 通知失败 warn 不阻塞（沿用通知不冒泡契约）。
+   */
+  async convenePanel(cycleUid: string, user: Requestor) {
+    if (!CONVENE_ROLES.has(user.role)) forbidden('仅 admin/boss/hr 可召集评分会');
+    const cycle = await this.repo.findCycleByUid(cycleUid);
+    if (!cycle) notFound('周期不存在');
+
+    if (cycle.status === 'panel' || cycle.status === 'published' || cycle.status === 'closed') {
+      return {
+        convened: false,
+        status: cycle.status,
+        managementCount: 0,
+        notified: 0,
+        reason: '周期已召集或已公示，幂等跳过',
+      };
+    }
+    if (cycle.status !== 'scoring') {
+      badRequest('周期尚未进入打分阶段（scoring），无法召集评分会');
+    }
+
+    const now = new Date();
+    const updated = await this.repo.setCyclePanel(cycleUid, now);
+    const notify = await this.notifyManagementPanel(cycle, cycleUid);
+    return {
+      convened: true,
+      status: 'panel',
+      panelAt: now,
+      pendingCount: notify.pendingCount,
+      managementCount: notify.total,
+      notified: notify.sent,
+      cycle: updated,
+    };
+  }
+
+  /** 给全部 is_management 成员发评分会召集卡（open_id 解析不到 warn 跳过；发送失败 warn 不阻塞）。 */
+  private async notifyManagementPanel(
+    cycle: { quarter: string | null },
+    cycleUid: string,
+  ): Promise<{ sent: number; total: number; pendingCount: number }> {
+    const [tasks, mgmtRows, orgRows] = await Promise.all([
+      this.repo.listTasksByCycle(cycleUid),
+      this.repo.listManagementRoleRows(),
+      this.repo.listAllOrgRows(),
+    ]);
+    // 待评人数 = 需管理层评分（enrolled 且 mgmt_required）的被评人数。
+    const pendingCount = (tasks as any[]).filter((t) => t.enrolled && t.mgmtRequired).length;
+
+    const nameByAnyId = new Map<string, string | null>();
+    const openByAnyId = new Map<string, string | null>();
+    for (const r of orgRows as any[]) {
+      const ou = ouHandle(r);
+      if (r.userId) {
+        nameByAnyId.set(r.userId, r.userName ?? null);
+        openByAnyId.set(r.userId, ou);
+      }
+      if (r.openId) {
+        if (!nameByAnyId.has(r.openId)) nameByAnyId.set(r.openId, r.userName ?? null);
+        if (!openByAnyId.has(r.openId)) openByAnyId.set(r.openId, ou);
+      }
+    }
+
+    let sent = 0;
+    let total = 0;
+    for (const m of mgmtRows as any[]) {
+      total += 1;
+      const openId = ouHandle(m) ?? openByAnyId.get(m.userId) ?? null;
+      if (!openId) {
+        this.logger.warn(`评分会召集通知跳过：管理层成员 ${m.userId} 解析不到 open_id`);
+        continue;
+      }
+      const managerName = nameByAnyId.get(m.userId) ?? (m.openId ? nameByAnyId.get(m.openId) ?? null : null);
+      try {
+        const ok = await this.notifier.notifyPanelReminder(openId, {
+          managerName,
+          quarter: cycle.quarter,
+          cycleUid,
+          pendingCount,
+        });
+        if (ok) sent += 1;
+      } catch (err) {
+        this.logger.warn(`评分会召集通知失败 ${m.userId}: ${(err as Error).message}`);
+      }
+    }
+    return { sent, total, pendingCount };
   }
 
   private summarizeStages(counts: { stage: string; enrolled: boolean; count: number }[]) {

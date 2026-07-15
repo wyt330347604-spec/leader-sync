@@ -39,6 +39,7 @@
     "tiny-pinyin": "^1.3.2"
   },
   "devDependencies": {
+    "@leader-sync/db": "workspace:*",
     "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4.0.0",
     "@testing-library/jest-dom": "^6.9.1",

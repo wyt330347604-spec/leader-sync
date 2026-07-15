@@ -145,6 +145,7 @@
 
 | 动作 | 本人(ratee) | 直属(manager) | 管理层(is_management) | hr | pmo | boss | admin | 说明 |
 |---|---|---|---|---|---|---|---|---|
+| 召集评分会（convene-panel） | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | scoring→panel + panel_at + 发管理层召集卡；已 panel/published 幂等跳过；goal_check→400。worker `convene-panel-check` 全 scored 时自动同口径 |
 | 看评分会看板（panel） | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | 非管理层/非上述 RBAC → 403 |
 | 合成结果（compute / 批量） | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | 任务须 scored；已公示结果不可重算（400） |
 | 评分会改分（PATCH results，留痕） | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | reason 必填；published 后 403 |
@@ -154,7 +155,7 @@
 | 处理申诉（PATCH appeals） | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | resolution 必填；已处理再处理 400 |
 | 申诉列表（GET appeals） | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | hr/admin |
 
-> **落地说明**：`canPanel = RBAC∈{admin,pmo,boss,hr} ∪ is_management`；`canRevise = RBAC∈{admin,boss} ∪ is_management`；`publish = RBAC∈{admin,boss,hr}`；`处理/列表申诉 = RBAC∈{admin,hr}`。**公示 / 申诉通知**：`publish` 给每个被评人、`appeal` 提交给 hr 角色绑定用户发飞书文本卡片（`QuarterNotifierService` → `FeishuMessengerService`），失败 warn 不阻塞。回归用例见 `quarter-result.service.spec.ts`。
+> **落地说明**：`convenePanel = RBAC∈{admin,boss,hr}`（`QuarterService.convenePanel`）；`canPanel = RBAC∈{admin,pmo,boss,hr} ∪ is_management`；`canRevise = RBAC∈{admin,boss} ∪ is_management`；`publish = RBAC∈{admin,boss,hr}`；`处理/列表申诉 = RBAC∈{admin,hr}`。**公示 / 申诉通知**：`publish` 给每个被评人、`appeal` 提交给 hr 角色绑定用户发飞书文本卡片（`QuarterNotifierService` → `FeishuMessengerService`），失败 warn 不阻塞。回归用例见 `quarter-result.service.spec.ts`。
 
 ## 10. 季度半年合成 / 定级定岗联动 / 导出（/quarter，P4a —— 2026-07-09）
 

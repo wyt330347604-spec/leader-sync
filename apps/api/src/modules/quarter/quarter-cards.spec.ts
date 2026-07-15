@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { buildPublishCard, buildAppealCard, buildPeerAssignedCard } from './quarter-cards';
+import {
+  buildPublishCard,
+  buildAppealCard,
+  buildPeerAssignedCard,
+  buildPanelReminderCard,
+} from './quarter-cards';
 
 const BASE = 'https://app.example.com';
 
@@ -72,6 +77,29 @@ describe('quarter-cards', () => {
       const text = collectText(card).join('\n');
       expect(text).toContain('张三');
       expect(collectButtonUrls(card)).toContain(`${BASE}/quarter/sheet/qs_xyz`);
+    });
+  });
+
+  describe('buildPanelReminderCard（评分会召集 → 管理层）', () => {
+    const card: any = buildPanelReminderCard(BASE, {
+      managerName: '潘安',
+      quarter: '2026-Q3',
+      cycleUid: 'qc_panel',
+      pendingCount: 7,
+    });
+    it('header violet + 含管理层姓名/季度/待评人数', () => {
+      expect(card.header.template).toBe('violet');
+      const text = collectText(card).join('\n');
+      expect(text).toContain('潘安');
+      expect(text).toContain('2026-Q3');
+      expect(text).toContain('7');
+    });
+    it('按钮跳评分会看板 /quarter/panel?cycle=:uid', () => {
+      expect(collectButtonUrls(card)).toContain(`${BASE}/quarter/panel?cycle=qc_panel`);
+    });
+    it('管理层姓名缺失也不崩', () => {
+      const c: any = buildPanelReminderCard(BASE, { managerName: null, quarter: '2026-Q3', cycleUid: 'qc_x', pendingCount: 0 });
+      expect(collectButtonUrls(c)).toContain(`${BASE}/quarter/panel?cycle=qc_x`);
     });
   });
 });
