@@ -256,7 +256,7 @@ export async function runMonthlyClose(opts: MonthlyCloseOptions = {}): Promise<M
         const { runScoreWindowSetup } = await import('./score-window');
         const r = await runScoreWindowSetup({ month: lastMonth, now, sendCards: true, db, feishu });
         console.log(
-          `  [Step 6] Score drafts for ${r.draftCount}/${r.snapshotCount} employees ` +
+          `  [Step 6] Score drafts for ${r.draftCount}/${r.rosterCount} employees ` +
             `(no-manager skipped: ${r.skippedNoManager}); cards sent to ${r.cardsSent} leaders`,
         );
         if (r.skippedNoManager > 0) {

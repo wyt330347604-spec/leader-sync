@@ -192,8 +192,20 @@ function ProgressBar({ progress }: { progress: CycleProgress }) {
   );
 }
 
+/** 可开的季度选项：当前季度往前 3 个到往后 1 个，最近在前（季度结束后才开窗，故以近期为主）。 */
+function quarterOptions(): string[] {
+  const now = new Date();
+  const base = now.getFullYear() * 4 + Math.floor(now.getMonth() / 3);
+  const out: string[] = [];
+  for (let i = 1; i >= -3; i--) {
+    const idx = base + i;
+    out.push(`${Math.floor(idx / 4)}-Q${(idx % 4) + 1}`);
+  }
+  return out;
+}
+
 function AdminCycleSection({ data, mutateCycles }: { data: CyclesData; mutateCycles: () => void }) {
-  const [quarterInput, setQuarterInput] = useState('');
+  const [quarter, setQuarter] = useState('');
   const [opening, setOpening] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -202,19 +214,23 @@ function AdminCycleSection({ data, mutateCycles }: { data: CyclesData; mutateCyc
     (url: string) => apiFetch<CycleDetail>(url),
   );
 
+  // 已开过的季度不再列出（开窗幂等，避免重复选）。
+  const existingQuarters = new Set(data.items.map((c) => c.quarter));
+  const options = quarterOptions().filter((q) => !existingQuarters.has(q));
+
   async function handleOpen() {
-    if (!/^\d{4}-Q[1-4]$/.test(quarterInput)) {
-      toast.error('季度格式应为 2026-Q3');
+    if (!quarter) {
+      toast.error('请选择季度');
       return;
     }
     setOpening(true);
     try {
       const res = await apiFetch<{ taskCount: number }>(`/api/v1/quarter/cycles`, {
         method: 'POST',
-        body: JSON.stringify({ quarter: quarterInput }),
+        body: JSON.stringify({ quarter }),
       });
-      toast.success(`已开周期 ${quarterInput}，生成 ${res.taskCount} 项考核任务`);
-      setQuarterInput('');
+      toast.success(`已开周期 ${quarter}，生成 ${res.taskCount} 项考核任务`);
+      setQuarter('');
       mutateCycles();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : '开周期失败');
@@ -229,20 +245,28 @@ function AdminCycleSection({ data, mutateCycles }: { data: CyclesData; mutateCyc
 
       {/* 开周期 */}
       <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-4">
-        <input
-          value={quarterInput}
-          onChange={(e) => setQuarterInput(e.target.value)}
-          placeholder="2026-Q3"
-          className="w-40 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-blue)] focus:outline-none"
-        />
+        <select
+          value={quarter}
+          onChange={(e) => setQuarter(e.target.value)}
+          className="w-44 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-blue)] focus:outline-none"
+        >
+          <option value="">选择季度…</option>
+          {options.map((q) => (
+            <option key={q} value={q}>
+              {q}
+            </option>
+          ))}
+        </select>
         <button
           onClick={handleOpen}
-          disabled={opening}
+          disabled={opening || !quarter}
           className="rounded-xl bg-[var(--accent-blue)] px-4 py-2 text-sm font-medium text-white transition-all hover:bg-[var(--accent-blue)]/90 disabled:opacity-50"
         >
           开周期
         </button>
-        <span className="text-xs text-[var(--text-muted)]">季度结束后开窗；生成全员考核任务与打分表（幂等）</span>
+        <span className="text-xs text-[var(--text-muted)]">
+          {options.length ? '季度结束后开窗；生成全员考核任务与打分表（幂等）' : '近期季度均已开窗'}
+        </span>
       </div>
 
       {/* 周期列表 */}

@@ -68,7 +68,7 @@ const MONTHLY_TEMPLATES = [
 const now = new Date('2026-07-02T04:00:00.000Z');
 
 describe('runScoreWindowSetup', () => {
-  it('为每个有 manager 的 employee 快照生成草稿；无 manager 的跳过并计数', async () => {
+  it('花名册口径：为每个有 manager 的在册员工生成草稿；无 manager 的（含顶层）跳过并计数', async () => {
     const { db, inserted } = makeDb({
       snapshots: [
         mkSnapshot({ ownerUserId: 'ou_alice', ownerName: 'Alice' }),
@@ -84,9 +84,10 @@ describe('runScoreWindowSetup', () => {
 
     const r = await runScoreWindowSetup({ month: '2026-06', now, sendCards: false, db: db as any, feishu });
 
-    expect(r.snapshotCount).toBe(2);
+    expect(r.rosterCount).toBe(3);
     expect(r.draftCount).toBe(1);
-    expect(r.skippedNoManager).toBe(1);
+    // bob(mgr=null) + boss(mgr=null) 两人无直属 → 跳过
+    expect(r.skippedNoManager).toBe(2);
     expect(inserted).toHaveLength(1);
     expect(inserted[0]).toMatchObject({
       scoreMonth: '2026-06',
@@ -222,13 +223,13 @@ describe('runScoreWindowSetup', () => {
     expect(inserted[0].rateeUserId).toBe('ou_alice');
   });
 
-  it('该月无 employee 快照时安全返回 0，不抛错', async () => {
+  it('花名册为空时安全返回 0，不抛错', async () => {
     const { db, inserted } = makeDb({ snapshots: [], orgRows: [] });
     const feishu = { sendCardMessage: vi.fn() };
 
     const r = await runScoreWindowSetup({ month: '2026-06', now, sendCards: true, db: db as any, feishu });
 
-    expect(r.snapshotCount).toBe(0);
+    expect(r.rosterCount).toBe(0);
     expect(r.draftCount).toBe(0);
     expect(inserted).toHaveLength(0);
   });

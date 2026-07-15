@@ -1,9 +1,10 @@
 /**
  * score-window.ts
  *
- * 打分窗口开启：为指定月份的每个 employee 快照生成 monthly_score 草稿
- * （rater = 该员工 org_cache.manager_user_id），并可选给各 rater 发飞书
- * 「打分窗口开启」卡片。
+ * 打分窗口开启：**花名册口径（2026-07-15 决策）**——为全体在册员工（org_cache
+ * 有直属 manager、非 score_exempt）生成 monthly_score 草稿（rater = 该员工
+ * org_cache.manager_user_id），不再依赖"上月有任务"的 employee 快照；任务快照
+ * 仅作可选上下文（有则挂 snapshot_ref）。可选给各 rater 发飞书「打分窗口开启」卡片。
  *
  * 从 monthly-close Step 6 抽出为独立可测函数：
  *   - monthly-close 月结时委托调用（保持原行为：发卡片）
@@ -12,9 +13,9 @@
  * 幂等：monthly_score 有 (score_month, ratee_user_id) 唯一索引 +
  * onConflictDoNothing，重复执行不产生重复草稿。
  *
- * ID 命名空间：org 查找表按 user_id 和 open_id 双 key 建立 —— 快照
- * ownerUserId（来自任务负责人，生产 97.5% 为 ou_ open_id）与 org_cache.user_id
- * （OAuth 登录写入，可能是员工 user_id）属不同命名空间，任一均可命中。
+ * ID 命名空间：org 查找表按 user_id 和 open_id 双 key 建立 —— org_cache.user_id
+ * （OAuth 登录写入，可能是员工 user_id）与 open_id（ou_）属不同命名空间，rater
+ * 解析与去重均按 ou_ 规范句柄处理。
  */
 
 import { createDb, type Database } from '@leader-sync/db';
@@ -39,7 +40,7 @@ interface FeishuDeps {
 }
 
 export interface ScoreWindowOptions {
-  /** 'YYYY-MM'，该月的 employee 快照必须已生成（月结 Step 3） */
+  /** 'YYYY-MM'，为该月生成花名册月度草稿（不要求快照已生成） */
   month: string;
   /** 逻辑当前时间（打分截止 = now + 7 天）。默认 new Date()。 */
   now?: Date;
@@ -53,7 +54,8 @@ export interface ScoreWindowOptions {
 
 export interface ScoreWindowResult {
   month: string;
-  snapshotCount: number;
+  /** 花名册口径：org_cache 在册人数（遍历基数） */
+  rosterCount: number;
   /** 尝试生成的草稿数（onConflictDoNothing，已存在的不重插） */
   draftCount: number;
   /** 因 org_cache 无 manager 而跳过的员工数 */
@@ -109,6 +111,11 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
   deadlineDate.setDate(deadlineDate.getDate() + SCORE_DEADLINE_DAYS);
   const deadlineStr = deadlineDate.toISOString().slice(0, 10);
 
+  // ── 花名册口径（2026-07-15 决策）：为全体在册员工（org_cache 有直属、非 score_exempt）生成月度打分草稿 ──
+  // 不再依赖"上月有任务"的 employee 快照；任务快照仅作可选上下文（有则挂 snapshot_ref）。
+  const orgRows = await db.select().from(orgCache);
+
+  // 可选上下文：该月 employee 快照 owner → snapshotUid（有则挂，无则 null）
   const employeeSnapshots = await db
     .select()
     .from(monthlySnapshot)
@@ -118,40 +125,26 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
         AND ${monthlySnapshot.isLatest} = true
         AND ${monthlySnapshot.ownerUserId} IS NOT NULL`,
     );
+  const snapshotByOwner = new Map<string, string>();
+  for (const s of employeeSnapshots as any[]) {
+    if (s.ownerUserId) snapshotByOwner.set(s.ownerUserId, s.snapshotUid);
+  }
 
   const result: ScoreWindowResult = {
     month,
-    snapshotCount: employeeSnapshots.length,
+    rosterCount: orgRows.length,
     draftCount: 0,
     skippedNoManager: 0,
     skippedExempt: 0,
     cardsSent: 0,
     dryRun,
   };
-  if (employeeSnapshots.length === 0) return result;
+  if (orgRows.length === 0) return result;
 
-  // 第一轮：按快照 owner 拉 org 行（双命名空间）
-  const ownerIds = [
-    ...new Set(employeeSnapshots.map((s: any) => s.ownerUserId).filter((id: any): id is string => Boolean(id))),
-  ];
-  const orgLookup = buildOrgLookup(await loadOrgRows(db, ownerIds));
+  // orgLookup 含全体在册（既是花名册也是 rater/发卡目标解析源）。
+  const orgLookup = buildOrgLookup(orgRows);
 
-  // 第二轮：补拉缺失的 rater 行（发卡目标解析 + rater 名字用）
-  const missingRaterIds = new Set<string>();
-  for (const snap of employeeSnapshots) {
-    if (!snap.ownerUserId) continue;
-    const raterUserId: string = orgLookup.get(snap.ownerUserId)?.managerUserId ?? '';
-    if (raterUserId && !orgLookup.has(raterUserId)) missingRaterIds.add(raterUserId);
-  }
-  if (missingRaterIds.size > 0) {
-    for (const r of await loadOrgRows(db, [...missingRaterIds])) {
-      if (r.userId && !orgLookup.has(r.userId)) orgLookup.set(r.userId, r);
-      if (r.openId && !orgLookup.has(r.openId)) orgLookup.set(r.openId, r);
-    }
-  }
-
-  // ── V1.4 开窗盖章：按被评人 perf_role.is_leader 决定 template_uid ──────────────
-  // 加载两个 active 月度模板（未 seed 时兜底 null）。
+  // ── V1.4 开窗盖章：按被评人 perf_role.is_leader 决定 template_uid（未 seed 时兜底 null）──
   const monthlyTemplates = await db
     .select()
     .from(scoreTemplate)
@@ -166,16 +159,11 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
   const employeeTemplateUid = templateUidByCode.get('monthly_employee') ?? null;
   const leaderTemplateUid = templateUidByCode.get('monthly_leader') ?? null;
 
-  // 加载被评人 perf_role（双命名空间）；is_leader 者用 leader 版模板，无行视为员工。
+  // 全体在册的 perf_role（双命名空间）→ is_leader 集合。
   const rateeCandidateIds = new Set<string>();
-  for (const snap of employeeSnapshots) {
-    if (!snap.ownerUserId) continue;
-    rateeCandidateIds.add(snap.ownerUserId);
-    const org = orgLookup.get(snap.ownerUserId);
-    const ou = ouHandleOf(org);
-    if (ou) rateeCandidateIds.add(ou);
-    if (org?.userId) rateeCandidateIds.add(org.userId);
-    if (org?.openId) rateeCandidateIds.add(org.openId);
+  for (const r of orgRows) {
+    if (r.userId) rateeCandidateIds.add(r.userId);
+    if (r.openId) rateeCandidateIds.add(r.openId);
   }
   const leaderIds = new Set<string>();
   if (rateeCandidateIds.size > 0) {
@@ -197,39 +185,35 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
   }
 
   /** 该被评人的月度模板：is_leader → leader 版，否则员工版（含无 perf_role 行）。 */
-  const templateUidFor = (rateeCanonical: string, ownerUserId: string, orgRow: any): string | null => {
+  const templateUidFor = (orgRow: any): string | null => {
     const isLeader =
-      leaderIds.has(rateeCanonical) ||
-      leaderIds.has(ownerUserId) ||
       Boolean(orgRow?.userId && leaderIds.has(orgRow.userId)) ||
       Boolean(orgRow?.openId && leaderIds.has(orgRow.openId));
     return isLeader ? leaderTemplateUid : employeeTemplateUid;
   };
 
   const raterNotifyMap = new Map<string, { raterName: string; rateeList: string[] }>();
-  // 同一人的任务可能分散在 ou_ / 员工 ID 两套命名空间下产生多份快照——
   // ratee 规范化为 org 行的 ou_ 句柄并在本轮去重，只生成一条草稿。
   const seenRatees = new Set<string>();
 
-  for (const snap of employeeSnapshots) {
-    if (!snap.ownerUserId) continue;
-    const orgRow = orgLookup.get(snap.ownerUserId);
-    if (orgRow?.scoreExempt) {
+  for (const orgRow of orgRows) {
+    if (orgRow.scoreExempt) {
       result.skippedExempt++;
       continue;
     }
-    const raterUserId: string = orgRow?.managerUserId ?? '';
+    const raterUserId: string = orgRow.managerUserId ?? '';
     if (!raterUserId) {
       result.skippedNoManager++;
       continue;
     }
-
-    const rateeCanonical = ouHandleOf(orgRow) ?? snap.ownerUserId;
-    if (seenRatees.has(rateeCanonical)) continue;
+    const rateeCanonical = ouHandleOf(orgRow) ?? orgRow.userId;
+    if (!rateeCanonical || seenRatees.has(rateeCanonical)) continue;
     seenRatees.add(rateeCanonical);
 
-    const rateeName = snap.ownerName ?? orgRow?.userName ?? null;
+    const rateeName = orgRow.userName ?? null;
     const raterName = orgLookup.get(raterUserId)?.userName ?? null;
+    const snapshotRef =
+      snapshotByOwner.get(orgRow.userId) ?? snapshotByOwner.get(orgRow.openId ?? '') ?? null;
 
     if (!dryRun) {
       await db
@@ -243,9 +227,9 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
           raterName,
           score: null,
           // V1.4：开窗按 perf_role.is_leader 盖章员工版/leader 版模板
-          templateUid: templateUidFor(rateeCanonical, snap.ownerUserId, orgRow),
+          templateUid: templateUidFor(orgRow),
           status: 'draft',
-          snapshotRef: snap.snapshotUid,
+          snapshotRef,
           version: 1,
           createdBy: 'system',
           createdAt: now,
