@@ -21,6 +21,9 @@ import { eq, isNull } from 'drizzle-orm';
 import { config } from '../config';
 import { feishuClient } from '../services/feishu-api';
 
+/** 安全阀：本次通讯录枚举数不足在册行数此比例 → 判定飞书 API 故障，跳过离职判定 */
+const LEAVE_SAFETY_MIN_RATIO = 0.5;
+
 let _defaultDb: Database | null = null;
 function defaultDb(): Database {
   if (!_defaultDb) _defaultDb = createDb(config.databaseUrl);
@@ -161,6 +164,12 @@ export interface OrgSyncResult {
   skippedManual: number;
   notFound: number;
   noOpenId: number;
+  /** 本次新标离职的行数 */
+  markedLeft: number;
+  /** 本次自愈复职（清 left_at）的行数 */
+  revived: number;
+  /** 安全阀触发（枚举数过低，跳过离职判定） */
+  safetyValveTriggered: boolean;
   dryRun: boolean;
 }
 
@@ -185,6 +194,9 @@ export async function runSyncOrgHierarchy(opts: OrgSyncOptions = {}): Promise<Or
     skippedManual: 0,
     notFound: 0,
     noOpenId: 0,
+    markedLeft: 0,
+    revived: 0,
+    safetyValveTriggered: false,
     dryRun,
   };
 
@@ -303,9 +315,34 @@ export async function runSyncOrgHierarchy(opts: OrgSyncOptions = {}): Promise<Or
     }
   }
 
+  // 4. 离职判定：fetched 即本次通讯录枚举到的在职集合，做差集。
+  //    安全阀：枚举数不足在册可解析行数一半 → 判定飞书 API 故障，跳过标记，防误判全员离职。
+  const activeHandles = new Set<string>(fetched.keys());
+  const resolvable = orgRows.filter((r) => ouHandle(r) !== null);
+  const resolvableActive = resolvable.filter((r) => r.leftAt == null);
+  if (fetched.size < resolvableActive.length * LEAVE_SAFETY_MIN_RATIO) {
+    result.safetyValveTriggered = true;
+    console.warn(
+      `  [sync-org] SAFETY VALVE: directory=${fetched.size} < ${LEAVE_SAFETY_MIN_RATIO} * active=${resolvableActive.length} → 跳过离职判定`,
+    );
+  } else {
+    for (const row of resolvable) {
+      const h = ouHandle(row)!;
+      const isActive = activeHandles.has(h);
+      if (isActive && row.leftAt != null) {
+        if (!dryRun) await db.update(orgCache).set({ leftAt: null, updatedAt: now }).where(eq(orgCache.id, row.id));
+        result.revived++;
+      } else if (!isActive && row.leftAt == null) {
+        if (!dryRun) await db.update(orgCache).set({ leftAt: now, updatedAt: now }).where(eq(orgCache.id, row.id));
+        result.markedLeft++;
+      }
+    }
+  }
+
   console.log(
     `  [sync-org] directory=${result.directoryCount} scanned=${result.scanned} updated=${result.updated} created=${result.created} ` +
-      `manual-skipped=${result.skippedManual} not-found=${result.notFound} no-open-id=${result.noOpenId}` +
+      `manual-skipped=${result.skippedManual} not-found=${result.notFound} no-open-id=${result.noOpenId} ` +
+      `marked-left=${result.markedLeft} revived=${result.revived} safety-valve=${result.safetyValveTriggered}` +
       `${dryRun ? ' [DRY-RUN]' : ''}`,
   );
   return result;

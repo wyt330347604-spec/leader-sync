@@ -145,7 +145,7 @@ describe('runSyncOrgHierarchy', () => {
     });
   });
 
-  it('飞书查不到的用户（离职等）跳过并计数，不中断整体', async () => {
+  it('飞书查不到的用户（离职等）：计入 notFound 且自动标离职', async () => {
     const { db, updates } = makeDb({
       orgRows: [
         { id: 1, userId: 'ou_alice', openId: 'ou_alice', userName: 'Alice', managerSource: 'feishu' },
@@ -157,8 +157,10 @@ describe('runSyncOrgHierarchy', () => {
     const r = await runSyncOrgHierarchy({ db: db as any, contact, now });
 
     expect(r.notFound).toBe(1);
-    expect(r.updated).toBe(1);
-    expect(updates).toHaveLength(1);
+    expect(r.updated).toBe(1); // alice 的 manager 写入
+    expect(r.markedLeft).toBe(1); // gone 被标离职
+    const goneLeft = updates.find((u) => u.vals.leftAt != null && u.vals.leftAt !== undefined);
+    expect(goneLeft).toBeDefined();
   });
 
   it('无 ou_ 句柄的行跳过并计数（无法查通讯录）', async () => {
@@ -258,5 +260,94 @@ describe('runSyncOrgHierarchy', () => {
     expect(r.created).toBe(2);
     expect(updates).toHaveLength(0);
     expect(inserted).toHaveLength(0);
+  });
+
+  it('离职判定：不在通讯录枚举内的在册行被标 left_at', async () => {
+    const { db, updates } = makeDb({
+      orgRows: [
+        { id: 1, userId: 'ou_a', openId: 'ou_a', userName: 'A', managerSource: 'feishu' },
+        { id: 2, userId: 'ou_b', openId: 'ou_b', userName: 'B', managerSource: 'feishu' },
+        { id: 3, userId: 'ou_gone', openId: 'ou_gone', userName: 'Gone', managerSource: 'feishu' },
+      ],
+    });
+    const contact = makeContact({
+      ou_a: { name: 'A', leaderOpenId: '' },
+      ou_b: { name: 'B', leaderOpenId: '' },
+    });
+
+    const r = await runSyncOrgHierarchy({ db: db as any, contact, now });
+
+    expect(r.safetyValveTriggered).toBe(false);
+    expect(r.markedLeft).toBe(1);
+    const goneLeft = updates.find((u) => u.vals.leftAt != null);
+    expect(goneLeft).toBeDefined();
+  });
+
+  it('复职自愈：已标离职但本次通讯录又出现 → 清 left_at', async () => {
+    const oldLeft = new Date('2026-01-01T00:00:00.000Z');
+    const { db, updates } = makeDb({
+      orgRows: [{ id: 1, userId: 'ou_back', openId: 'ou_back', userName: 'Back', managerSource: 'feishu', leftAt: oldLeft }],
+    });
+    const contact = makeContact({ ou_back: { name: 'Back', leaderOpenId: '' } });
+
+    const r = await runSyncOrgHierarchy({ db: db as any, contact, now });
+
+    expect(r.revived).toBe(1);
+    const revived = updates.find((u) => u.vals.leftAt === null);
+    expect(revived).toBeDefined();
+  });
+
+  it('安全阀：通讯录枚举数 < 在册行数一半 → 跳过离职判定，不误标', async () => {
+    const { db, updates } = makeDb({
+      orgRows: [
+        { id: 1, userId: 'ou_a', openId: 'ou_a', userName: 'A', managerSource: 'feishu' },
+        { id: 2, userId: 'ou_b', openId: 'ou_b', userName: 'B', managerSource: 'feishu' },
+        { id: 3, userId: 'ou_c', openId: 'ou_c', userName: 'C', managerSource: 'feishu' },
+        { id: 4, userId: 'ou_d', openId: 'ou_d', userName: 'D', managerSource: 'feishu' },
+      ],
+    });
+    // 通讯录只枚举到 1 人（模拟飞书 API 半途故障）
+    const contact = makeContact({ ou_a: { name: 'A', leaderOpenId: '' } });
+
+    const r = await runSyncOrgHierarchy({ db: db as any, contact, now });
+
+    expect(r.safetyValveTriggered).toBe(true);
+    expect(r.markedLeft).toBe(0);
+    expect(updates.some((u) => u.vals.leftAt != null)).toBe(false);
+  });
+
+  it('幂等：已离职且仍不在通讯录 → 不重复写 left_at', async () => {
+    const oldLeft = new Date('2026-01-01T00:00:00.000Z');
+    const { db, updates } = makeDb({
+      orgRows: [{ id: 1, userId: 'ou_gone', openId: 'ou_gone', userName: 'Gone', managerSource: 'feishu', leftAt: oldLeft }],
+    });
+    const contact = makeContact({}); // 空通讯录
+
+    const r = await runSyncOrgHierarchy({ db: db as any, contact, now });
+
+    expect(r.markedLeft).toBe(0);
+    expect(r.revived).toBe(0);
+    expect(updates.some((u) => 'leftAt' in u.vals)).toBe(false);
+  });
+
+  it('双命名空间：同一人两行都被标离职', async () => {
+    const { db, updates } = makeDb({
+      orgRows: [
+        { id: 1, userId: 'ou_a', openId: 'ou_a', userName: 'A', managerSource: 'feishu' },
+        { id: 2, userId: 'ou_b', openId: 'ou_b', userName: 'B', managerSource: 'feishu' },
+        { id: 3, userId: 'ou_zhang', openId: 'ou_zhang', userName: '张三', managerSource: 'feishu' },
+        { id: 4, userId: 'emp_zhang', openId: 'ou_zhang', userName: '张三', managerSource: 'feishu' },
+      ],
+    });
+    const contact = makeContact({
+      ou_a: { name: 'A', leaderOpenId: '' },
+      ou_b: { name: 'B', leaderOpenId: '' },
+    });
+
+    const r = await runSyncOrgHierarchy({ db: db as any, contact, now });
+
+    expect(r.safetyValveTriggered).toBe(false);
+    expect(r.markedLeft).toBe(2); // 张三两行都标
+    expect(updates.filter((u) => u.vals.leftAt != null)).toHaveLength(2);
   });
 });
