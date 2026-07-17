@@ -29,6 +29,8 @@ export interface OrgTreeNode {
   manager_name: string | null;
   manager_source: string;
   current_grade: string | null;
+  left_at: string | null;
+  hidden_at: string | null;
 }
 
 /** 行的 ou_ 句柄：manager_user_id 统一存 ou_ open_id（与任务/打分命名空间一致） */
@@ -51,14 +53,30 @@ function buildLookup(rows: any[]): Map<string, any> {
 export class OrgService {
   constructor(private readonly orgRepository: OrgRepository) {}
 
-  /** 组织树数据（全员平铺，前端按 manager 关系组树）。任意登录用户可读；can_edit 按白名单。 */
+  /** 组织树数据。默认只返回在册；管理员传 includeHidden 可见离职/隐藏。任意登录可读。 */
   async getTree(
     requester: OrgRequester,
-  ): Promise<{ users: OrgTreeNode[]; last_feishu_sync_at: string | null; can_edit: boolean }> {
+    includeHidden = false,
+  ): Promise<{
+    users: OrgTreeNode[];
+    last_feishu_sync_at: string | null;
+    can_edit: boolean;
+    hidden_count: number;
+  }> {
     const rows = await this.orgRepository.listAll();
+    const effectiveIncludeHidden = includeHidden && canEditOrg(requester);
+
+    // 手动隐藏人数（按句柄去重，供前端「显示已隐藏 (N)」徽章；离职不计入）
+    const hiddenHandles = new Set<string>();
+    for (const r of rows as any[]) {
+      if (r.hiddenAt) hiddenHandles.add(ouHandle(r));
+    }
 
     let lastSync: Date | null = null;
-    const users: OrgTreeNode[] = rows.map((r: any) => {
+    const visibleRows = (rows as any[]).filter((r) =>
+      effectiveIncludeHidden ? true : !r.leftAt && !r.hiddenAt,
+    );
+    const users: OrgTreeNode[] = visibleRows.map((r: any) => {
       if (r.managerSource === 'feishu' && r.managerUpdatedAt) {
         if (!lastSync || r.managerUpdatedAt > lastSync) lastSync = r.managerUpdatedAt;
       }
@@ -70,6 +88,8 @@ export class OrgService {
         manager_name: r.managerName ?? null,
         manager_source: r.managerSource ?? 'feishu',
         current_grade: r.currentGrade ?? null,
+        left_at: r.leftAt ? new Date(r.leftAt).toISOString() : null,
+        hidden_at: r.hiddenAt ? new Date(r.hiddenAt).toISOString() : null,
       };
     });
 
@@ -77,6 +97,7 @@ export class OrgService {
       users,
       last_feishu_sync_at: lastSync ? (lastSync as Date).toISOString() : null,
       can_edit: canEditOrg(requester),
+      hidden_count: hiddenHandles.size,
     };
   }
 

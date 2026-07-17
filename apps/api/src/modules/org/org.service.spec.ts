@@ -66,6 +66,41 @@ describe('OrgService', () => {
     });
   });
 
+  describe('getTree 离职/隐藏过滤', () => {
+    const rows = [
+      { id: 1, userId: 'ou_a', openId: 'ou_a', userName: 'A', managerSource: 'feishu', leftAt: null, hiddenAt: null },
+      { id: 2, userId: 'ou_left', openId: 'ou_left', userName: 'Left', managerSource: 'feishu', leftAt: new Date(), hiddenAt: null },
+      { id: 3, userId: 'ou_hidden', openId: 'ou_hidden', userName: 'Hidden', managerSource: 'feishu', leftAt: null, hiddenAt: new Date() },
+    ];
+    const makeService = () => {
+      const r = { listAll: vi.fn(async () => rows) } as any;
+      return new OrgService(r);
+    };
+    const admin = { userId: 'ou_dev_harvey', openId: 'ou_dev_harvey' };
+    const plain = { userId: 'ou_a', openId: 'ou_a' };
+
+    it('默认只返回在册（滤离职+隐藏）', async () => {
+      const svc = makeService();
+      const res = await svc.getTree(plain);
+      expect(res.users.map((u) => u.user_id)).toEqual(['ou_a']);
+      expect(res.hidden_count).toBe(1); // 手动隐藏 1 人（离职不算 hidden_count）
+    });
+
+    it('管理员 include_hidden=true 返回全部并带 left_at/hidden_at', async () => {
+      const svc = makeService();
+      const res = await svc.getTree(admin, true);
+      expect(res.users.map((u) => u.user_id).sort()).toEqual(['ou_a', 'ou_hidden', 'ou_left']);
+      const hidden = res.users.find((u) => u.user_id === 'ou_hidden');
+      expect(hidden!.hidden_at).not.toBeNull();
+    });
+
+    it('非管理员传 include_hidden=true 仍只拿在册（防越权）', async () => {
+      const svc = makeService();
+      const res = await svc.getTree(plain, true);
+      expect(res.users.map((u) => u.user_id)).toEqual(['ou_a']);
+    });
+  });
+
   describe('setManager', () => {
     it('非白名单被拒（1002），boss/admin 角色不再自动放行', async () => {
       await expect(service.setManager(OUTSIDER, 'ou_a', 'ou_b')).rejects.toMatchObject({

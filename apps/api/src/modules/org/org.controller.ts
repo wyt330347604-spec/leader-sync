@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser, type CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { OrgService } from './org.service';
@@ -14,8 +14,11 @@ export class OrgController {
    * 组织树数据（全员 + 上下级 + 来源 + can_edit）。任意登录用户可读。
    */
   @Get('tree')
-  getTree(@CurrentUser() user: CurrentUserPayload) {
-    return this.orgService.getTree({ userId: user.user_id, openId: user.open_id });
+  getTree(@CurrentUser() user: CurrentUserPayload, @Query('include_hidden') includeHidden?: string) {
+    return this.orgService.getTree(
+      { userId: user.user_id, openId: user.open_id },
+      includeHidden === '1',
+    );
   }
 
   /**
