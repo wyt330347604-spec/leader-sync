@@ -223,6 +223,25 @@ describe('runScoreWindowSetup', () => {
     expect(inserted[0].rateeUserId).toBe('ou_alice');
   });
 
+  it('leftAt/hiddenAt 的在册成员不生成打分草稿（离职/隐藏计数）', async () => {
+    const { db, inserted } = makeDb({
+      snapshots: [],
+      orgRows: [
+        { userId: 'ou_alice', openId: 'ou_alice', userName: 'Alice', managerUserId: 'ou_boss', scoreExempt: false, leftAt: null, hiddenAt: null },
+        { userId: 'ou_gone', openId: 'ou_gone', userName: 'Gone', managerUserId: 'ou_boss', scoreExempt: false, leftAt: new Date(), hiddenAt: null },
+        { userId: 'ou_hid', openId: 'ou_hid', userName: 'Hid', managerUserId: 'ou_boss', scoreExempt: false, leftAt: null, hiddenAt: new Date() },
+      ],
+    });
+    const feishu = { sendCardMessage: vi.fn() };
+
+    const r = await runScoreWindowSetup({ month: '2026-06', now, sendCards: false, db: db as any, feishu });
+
+    expect(r.draftCount).toBe(1);
+    expect(r.skippedLeftOrHidden).toBe(2);
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].rateeUserId).toBe('ou_alice');
+  });
+
   it('花名册为空时安全返回 0，不抛错', async () => {
     const { db, inserted } = makeDb({ snapshots: [], orgRows: [] });
     const feishu = { sendCardMessage: vi.fn() };

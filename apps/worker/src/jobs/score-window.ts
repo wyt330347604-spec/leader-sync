@@ -62,6 +62,8 @@ export interface ScoreWindowResult {
   skippedNoManager: number;
   /** 因 score_exempt=true（不参与绩效）而跳过的员工数 */
   skippedExempt: number;
+  /** 因离职/隐藏（left_at 或 hidden_at 非空）而跳过的员工数 */
+  skippedLeftOrHidden: number;
   cardsSent: number;
   dryRun: boolean;
 }
@@ -136,6 +138,7 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
     draftCount: 0,
     skippedNoManager: 0,
     skippedExempt: 0,
+    skippedLeftOrHidden: 0,
     cardsSent: 0,
     dryRun,
   };
@@ -199,6 +202,10 @@ export async function runScoreWindowSetup(opts: ScoreWindowOptions): Promise<Sco
   for (const orgRow of orgRows) {
     if (orgRow.scoreExempt) {
       result.skippedExempt++;
+      continue;
+    }
+    if (orgRow.leftAt || orgRow.hiddenAt) {
+      result.skippedLeftOrHidden++;
       continue;
     }
     const raterUserId: string = orgRow.managerUserId ?? '';
