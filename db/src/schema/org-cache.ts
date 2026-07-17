@@ -30,5 +30,11 @@ export const orgCache = pgTable('org_cache', {
   // 由应用层正则 /^T[4-8]\.[0-3]$/ 校验，DB 层不加 CHECK 约束
   // Drizzle 只新增字段，不修改已有字段 — sync-engine 不写此字段，隔离安全
   currentGrade: varchar('current_grade', { length: 8 }),
+  // 成员生命周期（migration 0023）——不物理删除，仅打标记
+  // left_at: 飞书同步自动判定离职（NULL=在职）；sync-engine 之外由 sync-org-hierarchy 写
+  leftAt: timestamp('left_at', { withTimezone: true }),
+  // hidden_at / hidden_by: 管理员手动隐藏（在职但不入目录）
+  hiddenAt: timestamp('hidden_at', { withTimezone: true }),
+  hiddenBy: varchar('hidden_by', { length: 128 }),
   updatedAt: timestamp('updated_at', { withTimezone: true }),
 });
