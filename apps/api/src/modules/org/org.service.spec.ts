@@ -198,7 +198,9 @@ describe('OrgService', () => {
       { id: 11, userId: 'emp_albern', openId: 'ou_albern', userName: 'Albern', managerSource: 'feishu' },
     ];
     const makeService = () => {
-      const setHidden = vi.fn(async () => {});
+      const setHidden = vi.fn<
+        (rowIds: number[], values: { hiddenAt: Date | null; hiddenBy: string | null; updatedAt: Date }) => Promise<void>
+      >(async () => {});
       const repo = { listAll: vi.fn(async () => rows), setHidden } as any;
       return { svc: new OrgService(repo), setHidden };
     };
