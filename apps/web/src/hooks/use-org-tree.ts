@@ -10,6 +10,8 @@ export interface OrgTreeUser {
   readonly manager_name: string | null;
   readonly manager_source: 'feishu' | 'manual' | string;
   readonly current_grade: string | null;
+  readonly left_at?: string | null;
+  readonly hidden_at?: string | null;
 }
 
 export interface OrgTreeData {
@@ -17,10 +19,12 @@ export interface OrgTreeData {
   readonly last_feishu_sync_at: string | null;
   /** 服务端按白名单判定（Harvey/杨平），前端仅做 UI 显隐，强校验在服务端 */
   readonly can_edit: boolean;
+  readonly hidden_count: number;
 }
 
-export function useOrgTree() {
-  return useSWR<OrgTreeData>('/api/v1/org/tree', (key: string) => apiFetch<OrgTreeData>(key));
+export function useOrgTree(includeHidden?: boolean) {
+  const key = includeHidden ? '/api/v1/org/tree?include_hidden=1' : '/api/v1/org/tree';
+  return useSWR<OrgTreeData>(key, (k: string) => apiFetch<OrgTreeData>(k));
 }
 
 export async function setManager(userId: string, managerUserId: string | null): Promise<void> {
@@ -33,5 +37,12 @@ export async function setManager(userId: string, managerUserId: string | null): 
 export async function resetManagerToFeishu(userId: string): Promise<void> {
   await apiFetch(`/api/v1/org/users/${encodeURIComponent(userId)}/manager/reset`, {
     method: 'POST',
+  });
+}
+
+export async function setHidden(userId: string, hidden: boolean): Promise<void> {
+  await apiFetch(`/api/v1/org/users/${encodeURIComponent(userId)}/hidden`, {
+    method: 'PATCH',
+    body: JSON.stringify({ hidden }),
   });
 }
