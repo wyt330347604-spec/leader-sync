@@ -272,6 +272,16 @@ worker job `sync-departments`（每日 07:05）递归 upsert。用途：季度�
 |---|---|---|---|---|---|
 | `joinedAt` | `org_cache.joined_at` | `timestamptz` | 否 | 入职日期：季度新人规则（周期内 ≥2 完整月才参评）。飞书通讯录 `join_time` 同步（sync-departments），拉不到时 HR 手补。sync-engine 不写此字段 | 通讯录同步 / 手动 |
 
+## org_cache 表 — 成员生命周期（离职/隐藏，2026-07-17，migration 0023_org_member_lifecycle）
+
+不物理删除组织成员，用两组独立时间戳标记生命周期。**在册口径（canonical）：`left_at IS NULL AND hidden_at IS NULL`**——凡引用"当前在册/有效成员"的查询均以此为准，禁止另起口径。partial index `idx_org_cache_active ON org_cache (id) WHERE left_at IS NULL AND hidden_at IS NULL` 供高频在册查询（组织树/人员搜索/打分花名册）。
+
+| 字段名 (TS) | 数据库列 | 类型 | 必填 | 含义 | 来源 |
+|---|---|---|---|---|---|
+| `leftAt` | `org_cache.left_at` | `timestamptz` | 否 | 离职时间（NULL=在职）。由 worker `sync-org-hierarchy` 每次全量同步自动判定：本次飞书通讯录枚举中未出现该 ou_ 句柄 → 置 `left_at=now`；句柄重新出现（返场）→ 自动清空（自愈）。**无手动清除入口**，只认同步结果。判定受安全阀 `LEAVE_SAFETY_MIN_RATIO=0.5` 保护，见 enum-dictionary | 通讯录同步（sync-org-hierarchy，系统写） |
+| `hiddenAt` | `org_cache.hidden_at` | `timestamptz` | 否 | 隐藏时间（NULL=未隐藏）。管理员手动隐藏在职但不入目录的账号（如绩效豁免账号/双 ou_ 账号），经 `PATCH /api/v1/org/users/:user_id/hidden`；按 ou_ 句柄连带同一人名下全部行一起置位/清空。与 `left_at` 正交（互不驱动、可同时非空），且**同步不会自动清空此字段** | 手动（ORG_STRUCTURE_ADMINS 白名单，见 permission-matrix.md §7） |
+| `hiddenBy` | `org_cache.hidden_by` | `varchar(128)` | 否 | 隐藏操作人 `user_id`；执行取消隐藏（`hidden=false`）时随 `hidden_at` 一并清空 | 手动 |
+
 ## 绩效模块 P1 — 月度 V1.4（2026-07-08，migration 0018_monthly_v14）
 
 月度打分从「单一系数 0–1」升级为多维系数制：每维度手写系数 × 权重，总分 = Σ（可 >100），红线一票否决。计分数学一律由 `packages/domain-core/src/perf-scoring.ts`（`monthlyTotal`/`monthlyGrade`）计算并回写。

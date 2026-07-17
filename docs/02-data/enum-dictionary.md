@@ -121,6 +121,22 @@
 | `feishu` | 飞书通讯录同步写入（默认） |
 | `manual` | 组织架构图人工拖拽调整（同步不覆盖；「恢复飞书默认」改回 feishu 并立即回填） |
 
+## org_member_lifecycle（组织成员生命周期，`org_cache.left_at` + `hidden_at` 组合派生，非独立 DB 枚举列，migration 0023）
+
+三态由两个可空 timestamptz 字段组合表达，不是单一 enum 列：
+
+| 状态 | 中文 | 判定条件 | 说明 |
+|---|---|---|---|
+| `active` | 在册 | `left_at IS NULL AND hidden_at IS NULL` | canonical 在册口径；出现在组织树默认视图/人员搜索/打分花名册 |
+| `left` | 离职 | `left_at IS NOT NULL` | worker `sync-org-hierarchy` 自动判定 + 自愈（返场自动清空），无手动清除入口 |
+| `hidden` | 隐藏 | `hidden_at IS NOT NULL` | 管理员手动隐藏（`PATCH /org/users/:uid/hidden`，白名单制），与离职正交 |
+
+> 离职（`left_at`）与隐藏（`hidden_at`）是两个正交维度，可同时非空（如离职后又被追加隐藏，或反之）。判断"是否在册"只看两者是否同时为空，不区分具体触发原因；判断"具体因何不在册"需分别读两个字段。
+
+### LEAVE_SAFETY_MIN_RATIO（离职判定安全阀阈值）
+
+`apps/worker/src/jobs/sync-org-hierarchy.ts`，值 `0.5`。每次同步用飞书通讯录全量枚举人数与 org_cache 现有「在册且句柄可解析」行数比较：若 `枚举数 < 0.5 × 在册可解析行数`，判定为本次飞书通讯录 API 拉取异常（而非真实批量离职），**跳过本轮全部离职判定**（不新增 `left_at`，也不清空既有 `left_at`），仅记录 `OrgSyncResult.safetyValveTriggered=true` 并在 worker 日志打印 `safety-valve=true`。防止飞书接口故障导致误判全员离职。
+
 ## user_role（应用角色，`user_role_binding.role`）
 
 应用 RBAC 角色（与绩效打分身份 `perf_role` 两套不混）。定义在 `packages/shared-types/src/enums.ts` `UserRole`。

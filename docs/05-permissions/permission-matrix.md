@@ -116,11 +116,13 @@
 
 | 端点 | 员工 | Leader | 老板 | PMO | Admin | 说明 |
 |---|---|---|---|---|---|---|
-| `GET /api/v1/org/tree` | ✅ | ✅ | ✅ | ✅ | ✅ | 组织树只读，任意登录用户 |
+| `GET /api/v1/org/tree` | ✅ | ✅ | ✅ | ✅ | ✅ | 组织树只读，任意登录用户；默认只返回在册（`left_at`/`hidden_at` 皆空）成员 |
+| `GET /api/v1/org/tree?include_hidden=1` | ❌ | ❌ | ❌ | ❌ | ❌ | **仅对 ORG_STRUCTURE_ADMINS（Harvey/杨平）生效**：非白名单用户即使传该参数，服务端也按普通请求处理（`effectiveIncludeHidden = includeHidden && canEditOrg(requester)`），不返回离职/隐藏成员。白名单用户可见离职/隐藏成员（前端灰态展示），响应额外带 `hidden_count` |
 | `PATCH /api/v1/org/users/:user_id/manager` | ❌ | ❌ | ❌ | ❌ | ❌ | **白名单制（2026-07-02 决策）：仅 Harvey/杨平（user_id/open_id 匹配，不走角色）**。拖拽调整上级（写 manager_source='manual'，防环校验） |
 | `POST /api/v1/org/users/:user_id/manager/reset` | ❌ | ❌ | ❌ | ❌ | ❌ | 同上白名单。恢复飞书默认（下次通讯录同步刷新） |
+| `PATCH /api/v1/org/users/:user_id/hidden` | ❌ | ❌ | ❌ | ❌ | ❌ | **同上白名单制（ORG_STRUCTURE_ADMINS，2026-07-17 新增，migration 0023）**：仅 Harvey/杨平可手动隐藏/取消隐藏成员（`{hidden: boolean}`）。写/清 `hidden_at`+`hidden_by`，按 ou_ 句柄连带同一人全部行。`left_at`（离职）无对应手动端点，仅由 `sync-org-hierarchy` 自动判定/自愈 |
 
-上下级数据来源：飞书通讯录每日 07:00 同步（`sync-org-hierarchy` worker job）；`manual` 行同步不覆盖。该关系是月度绩效打分 rater 的唯一来源（月结 Step 6）。
+上下级数据来源：飞书通讯录每日 07:00 同步（`sync-org-hierarchy` worker job）；`manual` 行同步不覆盖。该关系是月度绩效打分 rater 的唯一来源（月结 Step 6）。同一 worker job 每次同步也顺带做离职判定（自动 + 自愈，安全阀 `LEAVE_SAFETY_MIN_RATIO=0.5`），见 state-machine.md §11 / enum-dictionary.md「org_member_lifecycle」。
 
 组织架构编辑白名单为过渡方案；规划中的**标签体系**（BOSS/HR/PMO 同级最高 > CORE > LEADER，一人多标签、按最高标签生效）落地后由标签接管，见 spec `2026-07-02-monthly-score-org-sync.md` 附录。
 

@@ -214,3 +214,21 @@ stateDiagram-v2
 - **资格判定**：`GET /quarter/promotion-eligibility?ratee_user_id`（本人/直属/管理角色）读该人 published `quarter_result` 的 (quarter, grade) 序列，`promotionEligible` 纯函数判定——**当季总评 S**，或**连续两季 A 及以上**（S 亦算 A 及以上，两季须相邻）。
 
 > `mergeSoft` 四分支口径（硬化1）：缺席方（管理层/同事）权重并入直属，见 enum-dictionary.md「soft_weights_group」与 spec §4。
+
+## 11. 组织成员生命周期（org_cache —— 2026-07-17，migration 0023）
+
+成员生命周期由两个正交维度组成：**离职（自动、自愈）** 与 **隐藏（手动）**。判定/写入逻辑见 `apps/worker/src/jobs/sync-org-hierarchy.ts`（离职）与 `apps/api/src/modules/org/org.service.ts` `setHidden`（隐藏）。枚举/字段口径见 enum-dictionary.md「org_member_lifecycle」、field-dictionary.md「org_cache 表 — 成员生命周期」。
+
+```mermaid
+stateDiagram-v2
+    [*] --> 在职: 通讯录同步发现/创建（left_at=NULL）
+    在职 --> 离职: sync-org-hierarchy 判定（句柄未出现在本次飞书通讯录枚举中）→ left_at=now
+    离职 --> 在职: sync-org-hierarchy 自愈（句柄重新出现）→ left_at=NULL
+    在职 --> 隐藏: 管理员手动隐藏（PATCH /org/users/:uid/hidden）→ hidden_at=now
+    隐藏 --> 在职: 管理员取消隐藏 → hidden_at=NULL
+```
+
+- **在职 ↔ 离职**：完全由 worker `sync-org-hierarchy` 每次全量同步自动判定，**无人工写入/清除 `left_at` 的入口**。判定方式：本次飞书通讯录全量枚举（部门递归 + 成员分页）与 org_cache 现有在册行做差集——句柄不在枚举结果中 → 标记离职；此前已离职的句柄重新出现 → 自愈复职（清空 `left_at`）。受安全阀 `LEAVE_SAFETY_MIN_RATIO=0.5` 保护：枚举数过低（疑似飞书 API 故障）时整体跳过本轮判定，不误伤。
+- **隐藏 ↔ 取消隐藏**：完全由管理员手动触发（`PATCH /api/v1/org/users/:user_id/hidden`，仅 `ORG_STRUCTURE_ADMINS` 白名单），按 ou_ 句柄连带同一人名下全部行；**无自动逻辑会置位或清空 `hidden_at`**，同步流程不触碰此字段。
+- **两个维度正交、可组合**：离职与隐藏互不驱动，同一行可以同时 `left_at` 与 `hidden_at` 都非空（如离职后又被追加隐藏，或反之）。在册口径统一为「两者皆空」，不因组合方式而有例外。
+- **对下游的影响**：不在册（离职或隐藏，任一非空）的成员从组织树默认视图（`GET /org/tree`）、人员搜索（`GET /users/search`）、月度打分开窗花名册（score-window `skippedLeftOrHidden`）三处过滤消失；管理员可用 `?include_hidden=1` 在组织树里看到全部（不在册的以灰态展示，并返回 `hidden_count`）。**历史任务数据、历史打分记录不受影响、不做过滤**（保留原样，符合「历史不动」原则）。
