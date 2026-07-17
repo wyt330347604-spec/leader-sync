@@ -30,7 +30,10 @@ export class UserController {
     // ILIKE alone misses pinyin / english abbreviations).
     const allUsers = await this.db.select().from(orgCache);
 
-    const matched = allUsers.filter((u) => {
+    // 在册口径：离职/隐藏成员不进人员目录（协作人/负责人/PIC 选择器共用）
+    const rosterUsers = allUsers.filter((u: any) => !u.leftAt && !u.hiddenAt);
+
+    const matched = rosterUsers.filter((u) => {
       if (!u.userName) return false;
       const name = u.userName.toLowerCase();
       if (name.includes(q)) return true;
