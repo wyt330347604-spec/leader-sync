@@ -7,7 +7,6 @@ import type { OrgTreeDatum } from './org-layout';
 
 export interface OrgNodeActions {
   canEdit: boolean;
-  collapsed: boolean;
   onToggle: (key: string) => void;
   onReset: (userId: string) => void;
   onSetHidden: (userId: string, hidden: boolean) => void;

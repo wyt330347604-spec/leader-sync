@@ -7,7 +7,6 @@ import {
   MiniMap,
   type Node,
   type Edge,
-  type NodeMouseHandler,
   type OnNodeDrag,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -37,7 +36,7 @@ export function OrgCanvas({ users, canEdit, onSetManager, onReset, onSetHidden }
   }, []);
 
   const actions: OrgNodeActions = useMemo(
-    () => ({ canEdit, collapsed: false, onToggle: toggle, onReset, onSetHidden }),
+    () => ({ canEdit, onToggle: toggle, onReset, onSetHidden }),
     [canEdit, toggle, onReset, onSetHidden],
   );
 
@@ -59,15 +58,16 @@ export function OrgCanvas({ users, canEdit, onSetManager, onReset, onSetHidden }
       const forbidden = subtreeIds(users, node.id);
       const dropX = node.position.x;
       const dropY = node.position.y;
-      // 找与拖拽终点重叠、且不在自己子树里的节点作为新上级
-      const target = nodes.find(
-        (n) =>
-          n.id !== node.id &&
-          !forbidden.has(n.id) &&
-          Math.abs(n.position.x - dropX) < 200 &&
-          Math.abs(n.position.y - dropY) < 60,
-      );
-      if (target) onSetManager(node.id, target.id);
+      let best: { id: string; dist: number } | null = null;
+      for (const n of nodes) {
+        if (n.id === node.id || forbidden.has(n.id)) continue;
+        const dx = n.position.x - dropX;
+        const dy = n.position.y - dropY;
+        if (Math.abs(dx) >= 200 || Math.abs(dy) >= 60) continue; // within tolerance box
+        const dist = dx * dx + dy * dy;
+        if (!best || dist < best.dist) best = { id: n.id, dist };
+      }
+      if (best) onSetManager(node.id, best.id);
     },
     [canEdit, users, nodes, onSetManager],
   );
