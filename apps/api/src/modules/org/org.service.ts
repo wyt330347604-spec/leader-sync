@@ -182,6 +182,39 @@ export class OrgService {
     return { user_id: target.userId, manager_source: 'feishu' };
   }
 
+  /**
+   * 手动隐藏/取消隐藏成员（在职但不入目录，如豁免账号/双账号）。仅白名单。
+   * 按 ou_ 句柄连带同一人的所有行（Albern 式双账号）。
+   */
+  async setHidden(
+    requester: OrgRequester,
+    targetUserId: string,
+    hidden: boolean,
+  ): Promise<{ user_id: string; hidden: boolean }> {
+    this.assertOrgAdmin(requester);
+
+    const rows = await this.orgRepository.listAll();
+    const target = buildLookup(rows).get(targetUserId);
+    if (!target) {
+      throw new BusinessException(
+        ErrorCode.ORG_USER_NOT_FOUND,
+        `用户 ${targetUserId} 不在组织缓存中`,
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const handle = ouHandle(target);
+    const rowIds = rows.filter((r: any) => ouHandle(r) === handle).map((r: any) => r.id);
+    const now = new Date();
+    await this.orgRepository.setHidden(rowIds, {
+      hiddenAt: hidden ? now : null,
+      hiddenBy: hidden ? requester.userId : null,
+      updatedAt: now,
+    });
+
+    return { user_id: target.userId, hidden };
+  }
+
   private assertOrgAdmin(requester: OrgRequester): void {
     if (!canEditOrg(requester)) {
       throw new BusinessException(

@@ -2,7 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { DATABASE_TOKEN } from '../../database.module';
 import type { Database } from '@leader-sync/db';
 import { orgCache } from '@leader-sync/db';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 export interface SetManagerValues {
   managerUserId: string | null;
@@ -47,5 +47,17 @@ export class OrgRepository {
         updatedAt,
       })
       .where(eq(orgCache.id, rowId));
+  }
+
+  /** 按行 id 批量写隐藏标记（同句柄多行连带，值由 service 仲裁好） */
+  async setHidden(
+    rowIds: number[],
+    values: { hiddenAt: Date | null; hiddenBy: string | null; updatedAt: Date },
+  ): Promise<void> {
+    if (rowIds.length === 0) return;
+    await this.db
+      .update(orgCache)
+      .set({ hiddenAt: values.hiddenAt, hiddenBy: values.hiddenBy, updatedAt: values.updatedAt })
+      .where(inArray(orgCache.id, rowIds));
   }
 }

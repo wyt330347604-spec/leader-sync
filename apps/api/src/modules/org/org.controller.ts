@@ -3,6 +3,7 @@ import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser, type CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { OrgService } from './org.service';
 import { SetManagerDto } from './dto/set-manager.dto';
+import { SetHiddenDto } from './dto/set-hidden.dto';
 
 @Controller('api/v1/org')
 @UseGuards(AuthGuard)
@@ -45,5 +46,18 @@ export class OrgController {
   @Post('users/:user_id/manager/reset')
   resetManager(@CurrentUser() user: CurrentUserPayload, @Param('user_id') targetUserId: string) {
     return this.orgService.resetManagerToFeishu({ userId: user.user_id, openId: user.open_id }, targetUserId);
+  }
+
+  /**
+   * PATCH /api/v1/org/users/:user_id/hidden
+   * 手动隐藏/取消隐藏成员。仅白名单（Harvey/杨平）。
+   */
+  @Patch('users/:user_id/hidden')
+  setHidden(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('user_id') targetUserId: string,
+    @Body() dto: SetHiddenDto,
+  ) {
+    return this.orgService.setHidden({ userId: user.user_id, openId: user.open_id }, targetUserId, dto.hidden);
   }
 }

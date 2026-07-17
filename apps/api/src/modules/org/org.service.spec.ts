@@ -189,6 +189,53 @@ describe('OrgService', () => {
     });
   });
 
+  describe('setHidden 手动隐藏', () => {
+    const admin = { userId: 'ou_dev_harvey', openId: 'ou_dev_harvey' };
+    const plain = { userId: 'ou_a', openId: 'ou_a' };
+    // Albern 式双账号：同一 open_id 两行
+    const rows = [
+      { id: 10, userId: 'ou_albern', openId: 'ou_albern', userName: 'Albern', managerSource: 'feishu' },
+      { id: 11, userId: 'emp_albern', openId: 'ou_albern', userName: 'Albern', managerSource: 'feishu' },
+    ];
+    const makeService = () => {
+      const setHidden = vi.fn(async () => {});
+      const repo = { listAll: vi.fn(async () => rows), setHidden } as any;
+      return { svc: new OrgService(repo), setHidden };
+    };
+
+    it('非白名单 → 抛 UNAUTHORIZED(403)', async () => {
+      const { svc } = makeService();
+      await expect(svc.setHidden(plain, 'ou_albern', true)).rejects.toMatchObject({
+        businessCode: ErrorCode.UNAUTHORIZED,
+      });
+    });
+
+    it('隐藏：写 hidden_at/hidden_by，按句柄连带双行', async () => {
+      const { svc, setHidden } = makeService();
+      const res = await svc.setHidden(admin, 'ou_albern', true);
+      expect(res).toEqual({ user_id: 'ou_albern', hidden: true });
+      const [rowIds, values] = setHidden.mock.calls[0];
+      expect(rowIds.sort()).toEqual([10, 11]);
+      expect(values.hiddenAt).toBeInstanceOf(Date);
+      expect(values.hiddenBy).toBe('ou_dev_harvey');
+    });
+
+    it('取消隐藏：清 hidden_at/hidden_by', async () => {
+      const { svc, setHidden } = makeService();
+      await svc.setHidden(admin, 'ou_albern', false);
+      const [, values] = setHidden.mock.calls[0];
+      expect(values.hiddenAt).toBeNull();
+      expect(values.hiddenBy).toBeNull();
+    });
+
+    it('目标不存在 → ORG_USER_NOT_FOUND(404)', async () => {
+      const { svc } = makeService();
+      await expect(svc.setHidden(admin, 'ou_ghost', true)).rejects.toMatchObject({
+        businessCode: ErrorCode.ORG_USER_NOT_FOUND,
+      });
+    });
+  });
+
   describe('resetManagerToFeishu', () => {
     it('翻转来源为 feishu（保留现值），带审计', async () => {
       repo.listAll.mockResolvedValue([
