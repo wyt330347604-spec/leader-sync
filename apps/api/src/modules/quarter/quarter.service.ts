@@ -144,6 +144,8 @@ export class QuarterService {
         managerUserId: r.managerUserId,
         joinedAt: r.joinedAt,
         scoreExempt: r.scoreExempt,
+        leftAt: r.leftAt,
+        hiddenAt: r.hiddenAt,
       })),
       perfRoles: perfRoles.map((r: any) => ({ userId: r.userId, openId: r.openId, isLeader: r.isLeader })),
       peers: peers.map((p: any) => ({ rateeUserId: p.rateeUserId, peerUserId: p.peerUserId, peerName: p.peerName })),

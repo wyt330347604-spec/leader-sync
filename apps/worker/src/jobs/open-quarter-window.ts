@@ -136,6 +136,8 @@ export async function runOpenQuarterWindow(opts: OpenQuarterWindowOptions = {}):
       managerUserId: r.managerUserId,
       joinedAt: r.joinedAt,
       scoreExempt: r.scoreExempt,
+      leftAt: r.leftAt,
+      hiddenAt: r.hiddenAt,
     })),
     perfRoles: (perfRoles as any[]).map((r) => ({ userId: r.userId, openId: r.openId, isLeader: r.isLeader })),
     peers: (peers as any[]).map((p) => ({ rateeUserId: p.rateeUserId, peerUserId: p.peerUserId, peerName: p.peerName })),

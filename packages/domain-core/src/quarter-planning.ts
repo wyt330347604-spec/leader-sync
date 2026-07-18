@@ -151,6 +151,8 @@ export interface RawOrgRow {
   readonly managerUserId: string | null;
   readonly joinedAt: Date | null;
   readonly scoreExempt: boolean;
+  readonly leftAt: Date | null;
+  readonly hiddenAt: Date | null;
 }
 
 export interface RawPerfRoleRow {
@@ -180,9 +182,9 @@ function canonicalId(row: { userId: string; openId: string | null }): string {
 
 /**
  * 由 org_cache / perf_role / peer_assignment 原始行装配开窗成员名单（纯函数）。
- *   - 剔除 score_exempt；按规范 id 去重（同一人 emp_/ou_ 双行合并，字段取非空）。
+ *   - 剔除 score_exempt / 离职（left_at）/ 隐藏（hidden_at）；按规范 id 去重（同一人 emp_/ou_ 双行合并，字段取非空）。
  *   - isLeader 来自 perf_role（任一 id 形态命中）。
- *   - 直属姓名从全量 org 行查找（即便直属被豁免评分也要能查名）。
+ *   - 直属姓名从全量 org 行查找（即便直属被豁免评分/离职/隐藏也要能查名）。
  *   - 指定同事从 peer_assignment 按规范被评人 id 解析。
  * 注：mgmt_required 的员工勾选在开窗后由 API PATCH 单独设置，此处一律 leader 恒 true、员工默认 false。
  */
@@ -221,8 +223,8 @@ export function assembleQuarterMembers(input: AssembleQuarterInput): QuarterMemb
 
   const members: QuarterMemberInput[] = [];
   for (const [cid, rows] of groups) {
-    // 任一行豁免则整组豁免
-    if (rows.some((r) => r.scoreExempt)) continue;
+    // 任一行豁免/离职/隐藏则整组不进花名册
+    if (rows.some((r) => r.scoreExempt || r.leftAt || r.hiddenAt)) continue;
     const firstNonNull = <T>(pick: (r: RawOrgRow) => T | null | undefined): T | null => {
       for (const r of rows) {
         const v = pick(r);

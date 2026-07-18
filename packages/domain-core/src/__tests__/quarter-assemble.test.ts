@@ -9,6 +9,8 @@ function org(o: Partial<RawOrgRow>): RawOrgRow {
     managerUserId: null,
     joinedAt: null,
     scoreExempt: false,
+    leftAt: null,
+    hiddenAt: null,
     ...o,
   };
 }
@@ -64,5 +66,32 @@ describe('assembleQuarterMembers', () => {
     const alice = members.find((m) => m.userId === 'ou_alice')!;
     expect(alice.peerUserId).toBe('ou_bob');
     expect(alice.peerName).toBe('Bob');
+  });
+
+  it('剔除离职（left_at）/隐藏（hidden_at）成员，对齐月度口径；直属仍可查名', () => {
+    const orgRows: RawOrgRow[] = [
+      org({ userId: 'ou_alice', openId: 'ou_alice', userName: 'Alice', managerUserId: 'ou_boss' }),
+      org({
+        userId: 'ou_left',
+        openId: 'ou_left',
+        userName: 'Left',
+        managerUserId: 'ou_boss',
+        leftAt: new Date('2026-06-01'),
+      }),
+      org({
+        userId: 'ou_hidden',
+        openId: 'ou_hidden',
+        userName: 'Hidden',
+        managerUserId: 'ou_boss',
+        hiddenAt: new Date('2026-06-15'),
+      }),
+      org({ userId: 'ou_boss', openId: 'ou_boss', userName: 'Boss', managerUserId: null }),
+    ];
+    const members = assembleQuarterMembers({ orgRows, perfRoles: [], peers: [] });
+
+    // 只剩在职未隐藏的 alice + boss；离职/隐藏成员不进花名册
+    expect(members.map((m) => m.userId).sort()).toEqual(['ou_alice', 'ou_boss']);
+    const alice = members.find((m) => m.userId === 'ou_alice')!;
+    expect(alice.managerName).toBe('Boss');
   });
 });
