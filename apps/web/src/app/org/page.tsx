@@ -66,6 +66,7 @@ export default function OrgPage() {
           onSetManager={(uid, mid) => run(() => setManager(uid, mid))}
           onReset={(uid) => run(() => resetManagerToFeishu(uid))}
           onSetHidden={(uid, hidden) => run(() => setHidden(uid, hidden))}
+          onSetRoot={(uid) => run(() => setManager(uid, null))}
         />
       )}
     </div>

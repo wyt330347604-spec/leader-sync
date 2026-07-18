@@ -19,11 +19,12 @@ interface Props {
   onSetManager: (userId: string, managerId: string | null) => void;
   onReset: (userId: string) => void;
   onSetHidden: (userId: string, hidden: boolean) => void;
+  onSetRoot: (userId: string) => void;
 }
 
 const nodeTypes = { orgCard: OrgNodeCard };
 
-export function OrgCanvas({ users, canEdit, onSetManager, onReset, onSetHidden }: Props) {
+export function OrgCanvas({ users, canEdit, onSetManager, onReset, onSetHidden, onSetRoot }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const toggle = useCallback((key: string) => {
@@ -36,8 +37,8 @@ export function OrgCanvas({ users, canEdit, onSetManager, onReset, onSetHidden }
   }, []);
 
   const actions: OrgNodeActions = useMemo(
-    () => ({ canEdit, onToggle: toggle, onReset, onSetHidden }),
-    [canEdit, toggle, onReset, onSetHidden],
+    () => ({ canEdit, onToggle: toggle, onReset, onSetHidden, onSetRoot }),
+    [canEdit, toggle, onReset, onSetHidden, onSetRoot],
   );
 
   const { nodes, edges } = useMemo(() => {

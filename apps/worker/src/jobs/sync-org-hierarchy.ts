@@ -319,11 +319,13 @@ export async function runSyncOrgHierarchy(opts: OrgSyncOptions = {}): Promise<Or
   //    安全阀：枚举数不足在册可解析行数一半 → 判定飞书 API 故障，跳过标记，防误判全员离职。
   const activeHandles = new Set<string>(fetched.keys());
   const resolvable = orgRows.filter((r) => ouHandle(r) !== null);
-  const resolvableActive = resolvable.filter((r) => r.leftAt == null);
-  if (fetched.size < resolvableActive.length * LEAVE_SAFETY_MIN_RATIO) {
+  const resolvableActiveHandles = new Set<string>(
+    resolvable.filter((r) => r.leftAt == null).map((r) => ouHandle(r)!),
+  );
+  if (fetched.size < resolvableActiveHandles.size * LEAVE_SAFETY_MIN_RATIO) {
     result.safetyValveTriggered = true;
     console.warn(
-      `  [sync-org] SAFETY VALVE: directory=${fetched.size} < ${LEAVE_SAFETY_MIN_RATIO} * active=${resolvableActive.length} → 跳过离职判定`,
+      `  [sync-org] SAFETY VALVE: directory=${fetched.size} < ${LEAVE_SAFETY_MIN_RATIO} * active=${resolvableActiveHandles.size} → 跳过离职判定`,
     );
   } else {
     for (const row of resolvable) {

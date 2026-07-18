@@ -1,7 +1,7 @@
 'use client';
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { ChevronDown, ChevronRight, RotateCcw, EyeOff, Eye } from 'lucide-react';
+import { ChevronDown, ChevronRight, RotateCcw, EyeOff, Eye, Unlink } from 'lucide-react';
 import { getAvatar } from '@/lib/avatar';
 import type { OrgTreeDatum } from './org-layout';
 
@@ -10,6 +10,7 @@ export interface OrgNodeActions {
   onToggle: (key: string) => void;
   onReset: (userId: string) => void;
   onSetHidden: (userId: string, hidden: boolean) => void;
+  onSetRoot: (userId: string) => void;
 }
 
 /** React Flow 自定义节点：一个人的卡片。actions 经 node.data.__actions 注入。 */
@@ -96,6 +97,16 @@ function OrgNodeCardImpl({ data }: NodeProps) {
           title={isHidden ? '取消隐藏' : '隐藏（不入目录）'}
         >
           {isHidden ? <Eye className="size-3" /> : <EyeOff className="size-3" />}
+        </button>
+      )}
+      {actions.canEdit && !isLeft && !!u.manager_user_id && (
+        <button
+          type="button"
+          onClick={() => actions.onSetRoot(u.user_id)}
+          className="nodrag shrink-0 rounded border border-[var(--border)] p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+          title="设为根节点（无上级）"
+        >
+          <Unlink className="size-3" />
         </button>
       )}
       {hasChildren && (

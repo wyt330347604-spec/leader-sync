@@ -316,6 +316,34 @@ describe('runSyncOrgHierarchy', () => {
     expect(updates.some((u) => u.vals.leftAt != null)).toBe(false);
   });
 
+  it('安全阀分母按人（distinct handle）去重，不被同一人多行冲高', async () => {
+    // person1 有 3 行共享 ou_p1（历史多账号残留），person2/person3 各 1 行，全部在职。
+    // 通讯录只枚举到 ou_p1 + ou_p2（person3 已离职，飞书通讯录查不到）。
+    //
+    // 旧代码（行数分母）：resolvableActive.length = 5（3+1+1）
+    //   fetched.size(2) < 5*0.5=2.5 → true → 安全阀误触发 → markedLeft 应为 0（本测试要证伪的错误行为）
+    // 新代码（distinct handle 分母）：resolvableActiveHandles.size = 3（ou_p1/ou_p2/ou_p3）
+    //   fetched.size(2) < 3*0.5=1.5 → false → 不触发 → 正常走离职判定 → person3 唯一一行被标离职 markedLeft=1
+    const { db, updates } = makeDb({
+      orgRows: [
+        { id: 1, userId: 'ou_p1', openId: 'ou_p1', userName: 'P1', managerSource: 'feishu' },
+        { id: 2, userId: 'emp_p1_a', openId: 'ou_p1', userName: 'P1', managerSource: 'feishu' },
+        { id: 3, userId: 'emp_p1_b', openId: 'ou_p1', userName: 'P1', managerSource: 'feishu' },
+        { id: 4, userId: 'ou_p2', openId: 'ou_p2', userName: 'P2', managerSource: 'feishu' },
+        { id: 5, userId: 'ou_p3', openId: 'ou_p3', userName: 'P3', managerSource: 'feishu' },
+      ],
+    });
+    const contact = makeContact({
+      ou_p1: { name: 'P1', leaderOpenId: '' },
+      ou_p2: { name: 'P2', leaderOpenId: '' },
+    });
+
+    const r = await runSyncOrgHierarchy({ db: db as any, contact, now });
+
+    expect(r.safetyValveTriggered).toBe(false);
+    expect(r.markedLeft).toBe(1);
+  });
+
   it('幂等：已离职且仍不在通讯录 → 不重复写 left_at', async () => {
     const oldLeft = new Date('2026-01-01T00:00:00.000Z');
     const { db, updates } = makeDb({

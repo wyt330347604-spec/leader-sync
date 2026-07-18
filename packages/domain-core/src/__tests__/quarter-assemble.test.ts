@@ -94,4 +94,50 @@ describe('assembleQuarterMembers', () => {
     const alice = members.find((m) => m.userId === 'ou_alice')!;
     expect(alice.managerName).toBe('Boss');
   });
+
+  it('离职/隐藏成员的姓名解析不受花名册剔除影响：其在职下属仍能查到其上级名', () => {
+    // 名字解析（orgByAnyId/nameOf）必须覆盖全量 org 行，不能被"剔除离职/隐藏"的花名册过滤逻辑连带过滤，
+    // 否则一个在职成员的上级如果已离职/隐藏，管理链姓名会解析不出来。
+    const orgRows: RawOrgRow[] = [
+      // reportsToLeft 在职，上级是已离职的 ou_left
+      org({
+        userId: 'ou_reports_to_left',
+        openId: 'ou_reports_to_left',
+        userName: 'ReportsToLeft',
+        managerUserId: 'ou_left',
+      }),
+      org({
+        userId: 'ou_left',
+        openId: 'ou_left',
+        userName: 'Left',
+        managerUserId: null,
+        leftAt: new Date('2026-06-01'),
+      }),
+      // reportsToHidden 在职，上级是已隐藏的 ou_hidden
+      org({
+        userId: 'ou_reports_to_hidden',
+        openId: 'ou_reports_to_hidden',
+        userName: 'ReportsToHidden',
+        managerUserId: 'ou_hidden',
+      }),
+      org({
+        userId: 'ou_hidden',
+        openId: 'ou_hidden',
+        userName: 'Hidden',
+        managerUserId: null,
+        hiddenAt: new Date('2026-06-15'),
+      }),
+    ];
+    const members = assembleQuarterMembers({ orgRows, perfRoles: [], peers: [] });
+
+    // 两个在职成员都应进入花名册（他们本人未离职未隐藏）
+    expect(members.map((m) => m.userId).sort()).toEqual([
+      'ou_reports_to_hidden',
+      'ou_reports_to_left',
+    ]);
+    const reportsToLeft = members.find((m) => m.userId === 'ou_reports_to_left')!;
+    expect(reportsToLeft.managerName).toBe('Left'); // 上级已离职，姓名仍能解析
+    const reportsToHidden = members.find((m) => m.userId === 'ou_reports_to_hidden')!;
+    expect(reportsToHidden.managerName).toBe('Hidden'); // 上级已隐藏，姓名仍能解析
+  });
 });
