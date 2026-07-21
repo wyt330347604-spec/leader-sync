@@ -64,7 +64,7 @@ export class DashboardController {
     @CurrentUser() user: CurrentUserPayload,
     @Query('month') month?: string,
   ) {
-    return this.dashboardService.getLeaderMonthly(user.user_id, user.user_name, month);
+    return this.dashboardService.getLeaderMonthly(user.user_id, user.user_name, month, user.open_id);
   }
 
   /**
@@ -78,7 +78,7 @@ export class DashboardController {
     @Param('member_user_id') memberUserId: string,
     @Query('month') month?: string,
   ) {
-    return this.dashboardService.getLeaderMemberTasks(user.user_id, memberUserId, month);
+    return this.dashboardService.getLeaderMemberTasks(user.user_id, memberUserId, month, user.open_id);
   }
 
   /**
@@ -87,7 +87,7 @@ export class DashboardController {
    */
   @Get('leader/weekly')
   async leaderWeekly(@CurrentUser() user: CurrentUserPayload) {
-    return this.dashboardService.getLeaderWeekly(user.user_id, user.user_name);
+    return this.dashboardService.getLeaderWeekly(user.user_id, user.user_name, user.open_id);
   }
 
   /**

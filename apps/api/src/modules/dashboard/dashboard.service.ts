@@ -20,6 +20,14 @@ function getCurrentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// 任务行上的 leader 标识存在两套命名空间（员工 user_id / 飞书 ou_ open_id），
+// 判定"同一人"须两者任一命中。配合 getLeaderMonthly/getLeaderMemberDetail 的
+// leaderOpenId 参数使用（该参数可为空，为空时只按 user_id 比对）。
+function isSameUser(value: string | null | undefined, userId: string, openId?: string | null): boolean {
+  if (!value) return false;
+  return value === userId || (Boolean(openId) && value === openId);
+}
+
 function getMonthBuckets(period: DashboardPeriod): readonly string[] {
   if (period.type === 'year' && period.value) {
     return Array.from({ length: 12 }, (_, i) => `${period.value}-${String(i + 1).padStart(2, '0')}`);
@@ -775,7 +783,7 @@ export class DashboardService {
   // NEW: getLeaderMonthly — §2.1
   // Returns aggregated monthly stats for all members under the given leader.
   // ---------------------------------------------------------------------------
-  async getLeaderMonthly(leaderId: string, leaderName: string, month?: string) {
+  async getLeaderMonthly(leaderId: string, leaderName: string, month?: string, leaderOpenId?: string | null) {
     const bucket = month || getCurrentMonth();
 
     // 归属月份区间口径：含被继承走的任务（回看上月时不丢）。详见 belongsToMonths 注释。
@@ -789,9 +797,9 @@ export class DashboardService {
 
     // Filter to tasks that belong to the requesting leader (primary or extra)
     const leaderTasks = allTasks.filter((t) => {
-      if (t.leaderUserId === leaderId) return true;
+      if (isSameUser(t.leaderUserId, leaderId, leaderOpenId)) return true;
       const extras = extraLeadersMap.get(t.taskUid) ?? [];
-      return extras.some((e) => e.leaderUserId === leaderId);
+      return extras.some((e) => isSameUser(e.leaderUserId, leaderId, leaderOpenId));
     });
 
     // 累计口径（与驾驶舱顶部/月结一致，#4）：仅 due_at ≤ 月末 且非 shelved 计入分母。
@@ -853,6 +861,7 @@ export class DashboardService {
     requestingLeaderId: string,
     memberUserId: string,
     month?: string,
+    requestingLeaderOpenId?: string | null,
   ) {
     const bucket = month || getCurrentMonth();
 
@@ -873,9 +882,9 @@ export class DashboardService {
 
     // Permission check: at least one task must be under the requesting leader
     const hasAccess = memberTasks.some((t) => {
-      if (t.leaderUserId === requestingLeaderId) return true;
+      if (isSameUser(t.leaderUserId, requestingLeaderId, requestingLeaderOpenId)) return true;
       const extras = extraLeadersMap.get(t.taskUid) ?? [];
-      return extras.some((e) => e.leaderUserId === requestingLeaderId);
+      return extras.some((e) => isSameUser(e.leaderUserId, requestingLeaderId, requestingLeaderOpenId));
     });
 
     if (!hasAccess) {
@@ -919,7 +928,7 @@ export class DashboardService {
   // Returns weekly progress for all members under the requesting leader.
   // "This week" is Mon 00:00 to Sun 23:59:59 Asia/Shanghai.
   // ---------------------------------------------------------------------------
-  async getLeaderWeekly(leaderId: string, leaderName: string) {
+  async getLeaderWeekly(leaderId: string, leaderName: string, leaderOpenId?: string | null) {
     const thisMonday = getThisWeekMondayShanghai();
     const thisSunday = getThisWeekSundayShanghai(thisMonday);
 
@@ -934,9 +943,9 @@ export class DashboardService {
 
     // Filter to tasks that belong to the requesting leader
     const leaderTasks = allTasks.filter((t) => {
-      if (t.leaderUserId === leaderId) return true;
+      if (isSameUser(t.leaderUserId, leaderId, leaderOpenId)) return true;
       const extras = extraLeadersMap.get(t.taskUid) ?? [];
-      return extras.some((e) => e.leaderUserId === leaderId);
+      return extras.some((e) => isSameUser(e.leaderUserId, leaderId, leaderOpenId));
     });
 
     // Aggregate per member

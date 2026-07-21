@@ -191,6 +191,26 @@ describe('DashboardService.getLeaderMonthly', () => {
     expect(result.total).toBe(1);
     expect(result.members).toHaveLength(1);
   });
+
+  it('leaderUserId 存的是 open_id 时按 open_id 兜底匹配（双命名空间，避免领导看不到下属）', async () => {
+    // 任务行上 leaderUserId 落在飞书 ou_ 命名空间，而登录者的 user_id 是员工号。
+    // 仅当把登录者的 open_id 传入时，才能命中——这正是控制器必须透传 open_id 的原因。
+    const taskUnderOpenId = makeTask({
+      taskUid: 'task_ns',
+      leaderUserId: 'ou_harvey',
+      leaderName: 'Harvey',
+      assigneeUserId: 'user_alice',
+      assigneeName: '张三',
+    });
+
+    db.where
+      .mockResolvedValueOnce([taskUnderOpenId])
+      .mockResolvedValueOnce([]);
+
+    const result = await service.getLeaderMonthly('emp_harvey', 'Harvey', '2026-05', 'ou_harvey');
+    expect(result.total).toBe(1);
+    expect(result.members).toHaveLength(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -252,6 +272,22 @@ describe('DashboardService.getLeaderMemberTasks', () => {
     await expect(
       service.getLeaderMemberTasks('user_harvey', 'user_alice', '2026-05'),
     ).rejects.toBeInstanceOf(BusinessException);
+  });
+
+  it('权限：leaderUserId 是 open_id 时，登录者靠 open_id 兜底命中，放行（不误抛 1002）', async () => {
+    const t = makeTask({
+      taskUid: 'task_ns',
+      assigneeUserId: 'user_alice',
+      leaderUserId: 'ou_harvey', // 存在飞书命名空间
+    });
+
+    db.where
+      .mockResolvedValueOnce([t])
+      .mockResolvedValueOnce([]);
+
+    // 登录者 user_id='emp_harvey'（员工号），open_id='ou_harvey'
+    const result = await service.getLeaderMemberTasks('emp_harvey', 'user_alice', '2026-05', 'ou_harvey');
+    expect(result.tasks).toHaveLength(1);
   });
 
   it('grants access when member is linked via task_leader (extra leader)', async () => {

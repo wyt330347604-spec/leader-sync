@@ -2,7 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { DATABASE_TOKEN } from '../../database.module';
 import type { Database } from '@leader-sync/db';
 import { incident, incidentUser, orgCache, task } from '@leader-sync/db';
-import { eq, and, sql, inArray, ilike } from 'drizzle-orm';
+import { eq, and, sql, inArray, ilike, or } from 'drizzle-orm';
 
 export interface IncidentListFilter {
   severity?: string;
@@ -141,11 +141,11 @@ export class IncidentRepository {
     return result ?? null;
   }
 
-  async findOrgUser(userId: string) {
+  async findOrgUser(id: string) {
     const [result] = await this.db
       .select()
       .from(orgCache)
-      .where(eq(orgCache.userId, userId));
+      .where(or(eq(orgCache.userId, id), eq(orgCache.openId, id)));
     return result ?? null;
   }
 
