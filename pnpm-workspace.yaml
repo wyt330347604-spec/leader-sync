@@ -2,3 +2,10 @@ packages:
   - "apps/*"
   - "packages/*"
   - "db"
+# pnpm 10.26+ 起默认不跑依赖的安装脚本（供应链安全）。这里对被拦下的四个包逐一表态：
+# 只放行「真正需要脚本」的（原生二进制/图像库），其余明确忽略。
+allowBuilds:
+  '@nestjs/core': false # postinstall 仅打印赞助信息，无功能作用
+  esbuild: true # 需要 postinstall 安装对应平台的原生二进制
+  protobufjs: false # postinstall 非运行时必需
+  sharp: true # 原生图像处理库，需要构建绑定
