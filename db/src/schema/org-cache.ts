@@ -33,6 +33,9 @@ export const orgCache = pgTable('org_cache', {
   // 成员生命周期（migration 0023）——不物理删除，仅打标记
   // left_at: 飞书同步自动判定离职（NULL=在职）；sync-engine 之外由 sync-org-hierarchy 写
   leftAt: timestamp('left_at', { withTimezone: true }),
+  // 离职来源：'feishu'=通讯录同步自动判定（可被复职自愈清除）| 'manual'=管理员手动标记（同步永不复活）
+  // NULL 视同历史 'feishu'。migration 0024
+  leftSource: varchar('left_source', { length: 16 }),
   // hidden_at / hidden_by: 管理员手动隐藏（在职但不入目录）
   hiddenAt: timestamp('hidden_at', { withTimezone: true }),
   hiddenBy: varchar('hidden_by', { length: 128 }),
