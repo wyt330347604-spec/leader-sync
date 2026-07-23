@@ -101,6 +101,45 @@ describe('OrgService', () => {
     });
   });
 
+  describe('getTree business_line 分组', () => {
+    const rows = [
+      { id: 1, userId: '2d2adg26', openId: null, userName: 'Tobi', managerUserId: null, leftAt: null, hiddenAt: null },
+      { id: 2, userId: 'ou_a', openId: 'ou_a', userName: 'A', managerUserId: '2d2adg26', leftAt: null, hiddenAt: null },
+      {
+        id: 3,
+        userId: 'ou_b23684cac81e32b5631dfcee7dbe4e27',
+        openId: 'ou_b23684cac81e32b5631dfcee7dbe4e27',
+        userName: '祁雁飞',
+        managerUserId: null,
+        leftAt: null,
+        hiddenAt: null,
+      },
+      {
+        id: 4,
+        userId: 'ou_c',
+        openId: 'ou_c',
+        userName: 'C',
+        managerUserId: 'ou_b23684cac81e32b5631dfcee7dbe4e27',
+        leftAt: null,
+        hiddenAt: null,
+      },
+      { id: 5, userId: 'ou_orphan', openId: 'ou_orphan', userName: 'Orphan', managerUserId: 'ou_missing', leftAt: null, hiddenAt: null },
+    ];
+    const makeService = () => {
+      const r = { listAll: vi.fn(async () => rows) } as any;
+      return new OrgService(r);
+    };
+
+    it('Tobi 子树=xt，祁雁飞子树=dfw，断链=ungrouped', async () => {
+      const svc = makeService();
+      const res = await svc.getTree({ userId: 'ou_dev_harvey', openId: 'ou_dev_harvey' });
+      const byId = Object.fromEntries(res.users.map((u) => [u.user_id, u.business_line]));
+      expect(byId['ou_a']).toBe('xt');
+      expect(byId['ou_c']).toBe('dfw');
+      expect(byId['ou_orphan']).toBe('ungrouped');
+    });
+  });
+
   describe('setManager', () => {
     it('非白名单被拒（1002），boss/admin 角色不再自动放行', async () => {
       await expect(service.setManager(OUTSIDER, 'ou_a', 'ou_b')).rejects.toMatchObject({

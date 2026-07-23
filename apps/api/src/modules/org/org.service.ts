@@ -2,6 +2,7 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import { BusinessException } from '../../common/exceptions/business.exception';
 import { OrgRepository } from './org.repository';
 import { ErrorCode } from '@leader-sync/shared-types';
+import { resolveBusinessLine } from './org-business-line';
 
 // 组织架构调整白名单（用户决策 2026-07-02：暂仅 Harvey 与 HR 杨平，不走角色；
 // 后期由标签体系（BOSS/HR/PMO > CORE > Leader，最高权限生效）接管，见 spec）
@@ -31,6 +32,7 @@ export interface OrgTreeNode {
   current_grade: string | null;
   left_at: string | null;
   hidden_at: string | null;
+  business_line: 'xt' | 'dfw' | 'ungrouped';
 }
 
 /** 行的 ou_ 句柄：manager_user_id 统一存 ou_ open_id（与任务/打分命名空间一致） */
@@ -76,6 +78,7 @@ export class OrgService {
     const visibleRows = (rows as any[]).filter((r) =>
       effectiveIncludeHidden ? true : !r.leftAt && !r.hiddenAt,
     );
+    const lookup = buildLookup(rows as any[]);
     const users: OrgTreeNode[] = visibleRows.map((r: any) => {
       if (r.managerSource === 'feishu' && r.managerUpdatedAt) {
         if (!lastSync || r.managerUpdatedAt > lastSync) lastSync = r.managerUpdatedAt;
@@ -90,6 +93,7 @@ export class OrgService {
         current_grade: r.currentGrade ?? null,
         left_at: r.leftAt ? new Date(r.leftAt).toISOString() : null,
         hidden_at: r.hiddenAt ? new Date(r.hiddenAt).toISOString() : null,
+        business_line: resolveBusinessLine(r, lookup, ouHandle),
       };
     });
 
