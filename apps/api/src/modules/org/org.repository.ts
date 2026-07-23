@@ -60,4 +60,38 @@ export class OrgRepository {
       .set({ hiddenAt: values.hiddenAt, hiddenBy: values.hiddenBy, updatedAt: values.updatedAt })
       .where(inArray(orgCache.id, rowIds));
   }
+
+  /** 按行 id 批量写离职标记（同句柄多行连带，值由 service 仲裁好） */
+  async setLeft(
+    rowIds: number[],
+    values: { leftAt: Date | null; leftSource: 'manual' | null; updatedAt: Date },
+  ): Promise<void> {
+    if (rowIds.length === 0) return;
+    await this.db
+      .update(orgCache)
+      .set({ leftAt: values.leftAt, leftSource: values.leftSource, updatedAt: values.updatedAt })
+      .where(inArray(orgCache.id, rowIds));
+  }
+
+  /** 自动上并：把若干下属行的上级改到新句柄，并标 manual（防同步覆盖） */
+  async reparentChildren(
+    childRowIds: number[],
+    newManagerHandle: string | null,
+    newManagerName: string | null,
+    updatedAt: Date,
+    updatedBy: string,
+  ): Promise<void> {
+    if (childRowIds.length === 0) return;
+    await this.db
+      .update(orgCache)
+      .set({
+        managerUserId: newManagerHandle,
+        managerName: newManagerName,
+        managerSource: 'manual',
+        managerUpdatedAt: updatedAt,
+        managerUpdatedBy: updatedBy,
+        updatedAt,
+      })
+      .where(inArray(orgCache.id, childRowIds));
+  }
 }

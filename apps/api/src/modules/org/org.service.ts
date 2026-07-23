@@ -215,6 +215,51 @@ export class OrgService {
     return { user_id: target.userId, hidden };
   }
 
+  /**
+   * 手动标记/撤销离职（人工，left_source='manual'，通讯录同步不复活）。仅白名单。
+   * 标离职时：按句柄连带同一人所有行；并把其直属下属自动上并到离职者的上级
+   * （children.manager -> P.manager，置 manual 防同步覆盖）。顶端离职则下属上级置空。
+   */
+  async setLeft(
+    requester: OrgRequester,
+    targetUserId: string,
+    left: boolean,
+  ): Promise<{ user_id: string; left: boolean; reparented: number }> {
+    this.assertOrgAdmin(requester);
+
+    const rows = await this.orgRepository.listAll();
+    const target = buildLookup(rows).get(targetUserId);
+    if (!target) {
+      throw new BusinessException(
+        ErrorCode.ORG_USER_NOT_FOUND,
+        `用户 ${targetUserId} 不在组织缓存中`,
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const handle = ouHandle(target);
+    const rowIds = (rows as any[]).filter((r) => ouHandle(r) === handle).map((r) => r.id);
+    const now = new Date();
+
+    if (!left) {
+      await this.orgRepository.setLeft(rowIds, { leftAt: null, leftSource: null, updatedAt: now });
+      return { user_id: target.userId, left: false, reparented: 0 };
+    }
+
+    // 自动上并：直属下属（manager 命中 P 的任一 id）改挂到 P 的上级
+    const childRowIds = (rows as any[])
+      .filter((r) => r.managerUserId && (r.managerUserId === target.userId || r.managerUserId === target.openId))
+      .map((r) => r.id);
+    const managerRow = target.managerUserId ? buildLookup(rows).get(target.managerUserId) : null;
+    const newManagerHandle = managerRow ? ouHandle(managerRow) : null;
+    const newManagerName = managerRow?.userName ?? null;
+
+    await this.orgRepository.setLeft(rowIds, { leftAt: now, leftSource: 'manual', updatedAt: now });
+    await this.orgRepository.reparentChildren(childRowIds, newManagerHandle, newManagerName, now, requester.userId);
+
+    return { user_id: target.userId, left: true, reparented: childRowIds.length };
+  }
+
   private assertOrgAdmin(requester: OrgRequester): void {
     if (!canEditOrg(requester)) {
       throw new BusinessException(

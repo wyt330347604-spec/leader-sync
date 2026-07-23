@@ -238,6 +238,76 @@ describe('OrgService', () => {
     });
   });
 
+  describe('setLeft 手动标记离职', () => {
+    const admin = { userId: 'ou_dev_harvey', openId: 'ou_dev_harvey' };
+    const stranger = { userId: 'ou_stranger', openId: 'ou_stranger' };
+
+    const makeService = (rows: any[]) => {
+      const setLeft = vi.fn(async () => {});
+      const reparentChildren = vi.fn(async () => {});
+      const repo = { listAll: vi.fn(async () => rows), setLeft, reparentChildren } as any;
+      const svc = new OrgService(repo);
+      return { svc, setLeft, reparentChildren };
+    };
+
+    it('非管理员 → 抛 UNAUTHORIZED(403)', async () => {
+      const { svc } = makeService([]);
+      await expect(svc.setLeft(stranger, 'ou_a', true)).rejects.toMatchObject({
+        businessCode: ErrorCode.UNAUTHORIZED,
+      });
+    });
+
+    it('标离职：写 leftSource=manual，并把下属上并到离职者的上级', async () => {
+      // P(ou_p) 上级 ou_boss；C(ou_c) 上级 ou_p
+      const rows = [
+        mkRow({ id: 1, userId: 'ou_p', openId: 'ou_p', userName: 'P', managerUserId: 'ou_boss' }),
+        mkRow({ id: 2, userId: 'ou_c', openId: 'ou_c', userName: 'C', managerUserId: 'ou_p' }),
+        mkRow({ id: 3, userId: 'ou_boss', openId: 'ou_boss', userName: 'Boss', managerUserId: null }),
+      ];
+      const { svc, setLeft, reparentChildren } = makeService(rows);
+
+      const r = await svc.setLeft(admin, 'ou_p', true);
+
+      expect(r).toEqual({ user_id: 'ou_p', left: true, reparented: 1 });
+      expect(setLeft).toHaveBeenCalledWith([1], expect.objectContaining({ leftSource: 'manual' }));
+      expect(reparentChildren).toHaveBeenCalledWith([2], 'ou_boss', 'Boss', expect.any(Date), 'ou_dev_harvey');
+    });
+
+    it('顶端离职：下属上级置空（成新顶端）', async () => {
+      const rows = [
+        mkRow({ id: 1, userId: 'ou_top', openId: 'ou_top', userName: 'Top', managerUserId: null }),
+        mkRow({ id: 2, userId: 'ou_c', openId: 'ou_c', userName: 'C', managerUserId: 'ou_top' }),
+      ];
+      const { svc, reparentChildren } = makeService(rows);
+
+      const r = await svc.setLeft(admin, 'ou_top', true);
+
+      expect(r.reparented).toBe(1);
+      expect(reparentChildren).toHaveBeenCalledWith([2], null, null, expect.any(Date), 'ou_dev_harvey');
+    });
+
+    it('撤销离职：清 leftAt/leftSource，不动下属', async () => {
+      const rows = [
+        mkRow({
+          id: 1,
+          userId: 'ou_p',
+          openId: 'ou_p',
+          userName: 'P',
+          managerUserId: null,
+          leftAt: new Date(),
+          leftSource: 'manual',
+        }),
+      ];
+      const { svc, setLeft, reparentChildren } = makeService(rows);
+
+      const r = await svc.setLeft(admin, 'ou_p', false);
+
+      expect(r).toEqual({ user_id: 'ou_p', left: false, reparented: 0 });
+      expect(setLeft).toHaveBeenCalledWith([1], expect.objectContaining({ leftAt: null, leftSource: null }));
+      expect(reparentChildren).not.toHaveBeenCalled();
+    });
+  });
+
   describe('resetManagerToFeishu', () => {
     it('翻转来源为 feishu（保留现值），带审计', async () => {
       repo.listAll.mockResolvedValue([

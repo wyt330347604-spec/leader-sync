@@ -4,6 +4,7 @@ import { CurrentUser, type CurrentUserPayload } from '../../common/decorators/cu
 import { OrgService } from './org.service';
 import { SetManagerDto } from './dto/set-manager.dto';
 import { SetHiddenDto } from './dto/set-hidden.dto';
+import { SetLeftDto } from './dto/set-left.dto';
 
 @Controller('api/v1/org')
 @UseGuards(AuthGuard)
@@ -59,5 +60,18 @@ export class OrgController {
     @Body() dto: SetHiddenDto,
   ) {
     return this.orgService.setHidden({ userId: user.user_id, openId: user.open_id }, targetUserId, dto.hidden);
+  }
+
+  /**
+   * PATCH /api/v1/org/users/:user_id/left
+   * 手动标记/撤销离职（人工，同步不复活；标记时自动上并下属）。仅白名单。
+   */
+  @Patch('users/:user_id/left')
+  setLeft(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('user_id') targetUserId: string,
+    @Body() dto: SetLeftDto,
+  ) {
+    return this.orgService.setLeft({ userId: user.user_id, openId: user.open_id }, targetUserId, dto.left);
   }
 }
