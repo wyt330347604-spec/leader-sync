@@ -12,6 +12,7 @@ export interface OrgTreeUser {
   readonly current_grade: string | null;
   readonly left_at?: string | null;
   readonly hidden_at?: string | null;
+  readonly business_line?: 'xt' | 'dfw' | 'ungrouped';
 }
 
 export interface OrgTreeData {
@@ -44,5 +45,12 @@ export async function setHidden(userId: string, hidden: boolean): Promise<void> 
   await apiFetch(`/api/v1/org/users/${encodeURIComponent(userId)}/hidden`, {
     method: 'PATCH',
     body: JSON.stringify({ hidden }),
+  });
+}
+
+export async function setLeft(userId: string, left: boolean): Promise<void> {
+  await apiFetch(`/api/v1/org/users/${encodeURIComponent(userId)}/left`, {
+    method: 'PATCH',
+    body: JSON.stringify({ left }),
   });
 }

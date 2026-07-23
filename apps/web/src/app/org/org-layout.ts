@@ -11,6 +11,7 @@ export interface OrgUser {
   current_grade: string | null;
   left_at?: string | null;
   hidden_at?: string | null;
+  business_line?: 'xt' | 'dfw' | 'ungrouped';
 }
 
 export interface OrgTreeDatum {

@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { useOrgTree, setManager, resetManagerToFeishu, setHidden } from '@/hooks/use-org-tree';
+import { useOrgTree, setManager, resetManagerToFeishu, setHidden, setLeft } from '@/hooks/use-org-tree';
 import { OrgCanvas } from './org-canvas';
 import type { OrgUser } from './org-layout';
 
@@ -67,6 +67,7 @@ export default function OrgPage() {
           onReset={(uid) => run(() => resetManagerToFeishu(uid))}
           onSetHidden={(uid, hidden) => run(() => setHidden(uid, hidden))}
           onSetRoot={(uid) => run(() => setManager(uid, null))}
+          onSetLeft={(uid, left) => run(() => setLeft(uid, left))}
         />
       )}
     </div>

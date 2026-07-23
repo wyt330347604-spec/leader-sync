@@ -1,7 +1,7 @@
 'use client';
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { ChevronDown, ChevronRight, RotateCcw, EyeOff, Eye, Unlink } from 'lucide-react';
+import { ChevronDown, ChevronRight, RotateCcw, EyeOff, Eye, Unlink, UserMinus, UserPlus } from 'lucide-react';
 import { getAvatar } from '@/lib/avatar';
 import type { OrgTreeDatum } from './org-layout';
 
@@ -11,6 +11,7 @@ export interface OrgNodeActions {
   onReset: (userId: string) => void;
   onSetHidden: (userId: string, hidden: boolean) => void;
   onSetRoot: (userId: string) => void;
+  onSetLeft: (userId: string, left: boolean) => void;
 }
 
 /** React Flow 自定义节点：一个人的卡片。actions 经 node.data.__actions 注入。 */
@@ -107,6 +108,16 @@ function OrgNodeCardImpl({ data }: NodeProps) {
           title="设为根节点（无上级）"
         >
           <Unlink className="size-3" />
+        </button>
+      )}
+      {actions.canEdit && (
+        <button
+          type="button"
+          onClick={() => actions.onSetLeft(u.user_id, !isLeft)}
+          className="nodrag shrink-0 rounded border border-[var(--border)] p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+          title={isLeft ? '撤销离职（人回到组织图）' : '标记离职（人走了，不参与绩效；同步不会复活）'}
+        >
+          {isLeft ? <UserPlus className="size-3" /> : <UserMinus className="size-3" />}
         </button>
       )}
       {hasChildren && (
