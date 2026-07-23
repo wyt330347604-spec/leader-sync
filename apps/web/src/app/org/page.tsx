@@ -6,6 +6,7 @@ import type { OrgUser } from './org-layout';
 
 export default function OrgPage() {
   const [includeHidden, setIncludeHidden] = useState(false);
+  const [line, setLine] = useState<'xt' | 'dfw' | 'ungrouped'>('xt');
   const { data, error, isLoading, mutate } = useOrgTree(includeHidden);
   const canEdit = data?.can_edit ?? false;
   const [errMsg, setErrMsg] = useState<string | null>(null);
@@ -20,7 +21,9 @@ export default function OrgPage() {
     }
   };
 
-  const users = (data?.users ?? []) as OrgUser[];
+  const allUsers = (data?.users ?? []) as OrgUser[];
+  const countBy = (l: string) => allUsers.filter((u) => (u.business_line ?? 'ungrouped') === l).length;
+  const users = allUsers.filter((u) => (u.business_line ?? 'ungrouped') === line);
 
   return (
     <div className="pb-6">
@@ -45,6 +48,23 @@ export default function OrgPage() {
         )}
       </div>
 
+      <div className="mb-3 flex gap-1">
+        {([['xt', '虾条'], ['dfw', '曙条'], ['ungrouped', '未分组']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setLine(key)}
+            className={`rounded-lg px-3 py-1.5 text-xs ${
+              line === key
+                ? 'bg-[var(--accent-blue)] text-white'
+                : 'border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            {label} ({countBy(key)})
+          </button>
+        ))}
+      </div>
+
       {errMsg && (
         <div className="mb-3 rounded-lg border border-[var(--accent-red)] bg-[color-mix(in_srgb,var(--accent-red)_10%,transparent)] px-3 py-2 text-xs text-[var(--accent-red)]">
           {errMsg}
@@ -53,9 +73,15 @@ export default function OrgPage() {
 
       {isLoading && <p className="text-sm text-[var(--text-secondary)]">加载中…</p>}
       {error && <p className="text-sm text-[var(--accent-red)]">组织数据加载失败，请刷新重试</p>}
-      {!isLoading && !error && users.length === 0 && (
+      {!isLoading && !error && allUsers.length === 0 && (
         <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]">
           暂无组织数据。成员首次登录系统或飞书通讯录同步后会出现在这里。
+        </div>
+      )}
+
+      {!isLoading && !error && allUsers.length > 0 && users.length === 0 && (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]">
+          此业务线暂无成员。
         </div>
       )}
 
