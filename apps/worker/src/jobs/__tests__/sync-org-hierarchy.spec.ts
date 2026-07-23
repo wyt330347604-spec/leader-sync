@@ -358,6 +358,85 @@ describe('runSyncOrgHierarchy', () => {
     expect(updates.some((u) => 'leftAt' in u.vals)).toBe(false);
   });
 
+  it('离职判定：手动标记粘性 — left_source=manual 且人仍在通讯录 → 不复活（保留 leftAt）', async () => {
+    const manualLeft = new Date('2026-07-01T00:00:00.000Z');
+    const { db, updates } = makeDb({
+      orgRows: [
+        {
+          id: 1,
+          userId: 'ou_x',
+          openId: 'ou_x',
+          userName: 'X',
+          managerSource: 'feishu',
+          leftAt: manualLeft,
+          leftSource: 'manual',
+        },
+      ],
+    });
+    const contact = makeContact({ ou_x: { name: 'X', leaderOpenId: '' } }); // 仍在通讯录
+
+    const r = await runSyncOrgHierarchy({ db: db as any, contact, now });
+
+    expect(r.revived).toBe(0);
+    expect(updates.find((u) => u.vals.leftAt === null)).toBeUndefined(); // 没有清 leftAt 的写
+  });
+
+  it('离职判定：手动标记粘性 — left_source=feishu 且人回到通讯录 → 复活（清 leftAt）', async () => {
+    const autoLeft = new Date('2026-07-01T00:00:00.000Z');
+    const { db, updates } = makeDb({
+      orgRows: [
+        {
+          id: 2,
+          userId: 'ou_y',
+          openId: 'ou_y',
+          userName: 'Y',
+          managerSource: 'feishu',
+          leftAt: autoLeft,
+          leftSource: 'feishu',
+        },
+      ],
+    });
+    const contact = makeContact({ ou_y: { name: 'Y', leaderOpenId: '' } });
+
+    const r = await runSyncOrgHierarchy({ db: db as any, contact, now });
+
+    expect(r.revived).toBe(1);
+    const revived = updates.find((u) => u.vals.leftAt === null);
+    expect(revived).toBeDefined();
+    expect(revived!.vals.leftSource).toBeNull();
+  });
+
+  it('离职判定：手动标记粘性 — 自动标离职写 left_source=feishu', async () => {
+    // 另加两个仍在通讯录的活跃行，避免分母过低触发安全阀（同现有'不在通讯录枚举内'用例的结构）。
+    const { db, updates } = makeDb({
+      orgRows: [
+        { id: 1, userId: 'ou_a', openId: 'ou_a', userName: 'A', managerSource: 'feishu', leftAt: null, leftSource: null },
+        { id: 2, userId: 'ou_b', openId: 'ou_b', userName: 'B', managerSource: 'feishu', leftAt: null, leftSource: null },
+        {
+          id: 3,
+          userId: 'ou_z',
+          openId: 'ou_z',
+          userName: 'Z',
+          managerSource: 'feishu',
+          leftAt: null,
+          leftSource: null,
+        },
+      ],
+    });
+    const contact = makeContact({
+      ou_a: { name: 'A', leaderOpenId: '' },
+      ou_b: { name: 'B', leaderOpenId: '' },
+    }); // ou_z 不在通讯录 → 应标离职
+
+    const r = await runSyncOrgHierarchy({ db: db as any, contact, now });
+
+    expect(r.safetyValveTriggered).toBe(false);
+    expect(r.markedLeft).toBe(1);
+    const marked = updates.find((u) => u.vals.leftSource === 'feishu');
+    expect(marked).toBeDefined();
+    expect(marked!.vals.leftAt).toEqual(now);
+  });
+
   it('双命名空间：同一人两行都被标离职', async () => {
     const { db, updates } = makeDb({
       orgRows: [

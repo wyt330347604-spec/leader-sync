@@ -331,11 +331,20 @@ export async function runSyncOrgHierarchy(opts: OrgSyncOptions = {}): Promise<Or
     for (const row of resolvable) {
       const h = ouHandle(row)!;
       const isActive = activeHandles.has(h);
-      if (isActive && row.leftAt != null) {
-        if (!dryRun) await db.update(orgCache).set({ leftAt: null, updatedAt: now }).where(eq(orgCache.id, row.id));
+      if (isActive && row.leftAt != null && row.leftSource !== 'manual') {
+        // 仅自动标记(feishu/历史null)可复活；人工标记永不自动复活
+        if (!dryRun)
+          await db
+            .update(orgCache)
+            .set({ leftAt: null, leftSource: null, updatedAt: now })
+            .where(eq(orgCache.id, row.id));
         result.revived++;
       } else if (!isActive && row.leftAt == null) {
-        if (!dryRun) await db.update(orgCache).set({ leftAt: now, updatedAt: now }).where(eq(orgCache.id, row.id));
+        if (!dryRun)
+          await db
+            .update(orgCache)
+            .set({ leftAt: now, leftSource: 'feishu', updatedAt: now })
+            .where(eq(orgCache.id, row.id));
         result.markedLeft++;
       }
     }
