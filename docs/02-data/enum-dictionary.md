@@ -258,3 +258,13 @@
 | 缺 | 缺 | 1.00 | — | — |
 
 > 缺席判定：mgmt 缺席 = 非 mgmt_required / `mgmtAverage` 为 null / 全排除回退；peer 缺席 = 未指定同事 / 同事 sheet 未提交（含 `peer_skipped`）。`self_skipped` / `peer_skipped` 为 boolean 放行标记（非枚举），门控中视同该环节已完成。
+
+### org_business_line（`GET /api/v1/org/tree` 派生字段 `users[].business_line`）
+
+组织树按汇报链顶端归类的业务线。服务端实时计算（`apps/api/src/modules/org/org-business-line.ts` 的 `ROOT_TO_LINE` 配置沿 manager 链爬到顶端归类），**非落库字段**；加新公司改配置一行。
+
+| 值 | 含义 | 说明 |
+|---|---|---|
+| `xt` | 虾条 XT | 汇报链顶端 = Tobi（2 账号） |
+| `dfw` | 曙条 DFW | 汇报链顶端 = 孔德俊 / 祁雁飞 |
+| `ungrouped` | 未分组 | 汇报链爬不到任一已知顶端（断链 / 孤儿），兜底 |
